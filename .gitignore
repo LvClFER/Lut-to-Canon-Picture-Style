@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+dist/
+*.spec
+WORK/
+OUTPUT/
+*.log
+MANUAL_REPORT_*.json
+*.RP_BLOCK1_8192.bin
+*.RP_PAYLOAD_16752.bin
+*.zip
+.DS_Store
+Thumbs.db

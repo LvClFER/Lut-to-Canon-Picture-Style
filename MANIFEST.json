@@ -1,0 +1,34 @@
+{
+  "version": "2.3-generic-lut-adjustments",
+  "cameraValidated": ["Canon EOS RP"],
+  "mode": "manual EOS Utility registration + outgoing payload interception",
+  "acceptedInputs": [".cube", ".tif", ".tiff", ".pf3"],
+  "rpPayload": {
+    "size": 16752,
+    "prefixSize": 368,
+    "block1Offset": 368,
+    "block1Size": 8192,
+    "block2Size": 8192,
+    "nameFields": [8, 44],
+    "property0x00000115": "observe only; never patch"
+  },
+  "adjustments": [
+    "Highlight",
+    "Shadow",
+    "Color",
+    "Color Chrome-style",
+    "Blue Chrome-style"
+  ],
+  "notLutControls": [
+    "Dynamic Range",
+    "White Balance",
+    "ISO",
+    "Noise Reduction",
+    "Sharpness"
+  ],
+  "unsupportedSpatialEffects": ["Clarity", "Grain"],
+  "repeatedRegistrationRecommendation": "restart EOS Utility between presets",
+  "stockStandaloneArbitraryLutPf3": false,
+  "directProtected0x01000203Write": false,
+  "redistributesCanonDlls": false
+}

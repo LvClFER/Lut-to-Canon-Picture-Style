@@ -1,0 +1,4 @@
+frida
+numpy
+Pillow
+tifffile

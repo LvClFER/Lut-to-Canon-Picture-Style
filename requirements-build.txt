@@ -1,0 +1,5 @@
+frida
+numpy
+Pillow
+tifffile
+pyinstaller

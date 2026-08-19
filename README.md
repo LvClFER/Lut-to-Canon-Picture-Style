@@ -1,43 +1,106 @@
-# Canon Style Studio Public Alpha
+# LUT to Canon Picture Style
 
-Version **1.0.0-alpha.1** · Build **2026-08-16-PUBLIC-ALPHA-1**
+Experimental tooling and reverse-engineering for carrying full 3D LUT transforms into Canon Picture Styles, with a currently validated workflow for the **Canon EOS RP**.
 
-Canon Style Studio is an experimental Windows editor for developing Canon RAW files through the Canon DPP4Lib runtime installed with Picture Style Editor, building sequential LUT stacks, previewing Canon's 33³/12-bit LUT result and exporting PF3 Picture Style files.
+## Current build: EOS RP Manual LUT Loader v2.3
+
+The current practical workflow accepts:
+
+- `.cube`
+- Hald `.tif` / `.tiff`
+- `.pf3`
+
+For LUT/Hald input, v2.3 also provides optional, generic LUT adjustments:
+
+- Highlight
+- Shadow
+- Color
+- Color Chrome-style
+- Blue Chrome-style
+
+Adjustment sets can be saved and loaded as JSON presets and applied to any source LUT. The app is not tied to a specific film simulation or recipe.
+
+> **Status:** experimental, but usable on the EOS RP in the tested workflow. This is **not** a stock standalone-PF3 solution: the loader must be active during EOS Utility registration.
+
+## How the RP workflow works
+
+```text
+.cube / Hald TIFF / PF3
+        ↓
+Canon dense 33³ representation
+        ↓
+Canon compiler path
+        ↓
+validated legacy 8192-byte LUT block
+        ↓
+EOS RP 16752-byte carrier payload
+        ↓
+normal EOS Utility Picture Style registration
+        ↓
+intercept outgoing 0x01000203 payload
+        ↓
+EOS RP
+```
+
+The final camera registration intentionally uses Canon's normal EOS Utility transaction. Direct third-party writes to the protected RP `0x01000203` property are not the supported path.
 
 ## Requirements
 
-- Windows 10 or 11, 64-bit.
-- Canon **Picture Style Editor** installed. The app discovers standard 64-bit and 32-bit Canon install locations; use **Locate PSE…** if it is installed elsewhere.
-- Canon Digital Photo Professional is **not required**.
+- Windows 10/11
+- Canon **EOS Utility 3** installed
+- Canon EOS RP connected by USB
+- Python 3 for the current development package
+- Dependencies from `requirements.txt`
 
-The Windows x64 standalone build includes its own Python runtime and application dependencies. Testers do **not** need to install Python or packages.
+Canon DLLs are **not** distributed by this repository. The loader uses Canon components from the user's own installed Canon software.
 
-The distribution contains no Canon DLL, executable, ICC/ICM profile, PF3 base, RAW image or internal Canon resource. At runtime it uses DPP4Lib and an input profile from the user's own local Picture Style Editor installation. Generated working PF3 data and caches are stored under `%LOCALAPPDATA%\CanonStyleStudio`.
+## Recommended install workflow
 
-## Start
+1. Connect the EOS RP by USB.
+2. Start the loader.
+3. Select a `.cube`, Hald TIFF, or `.pf3`.
+4. Optionally apply generic LUT adjustments.
+5. Generate the working PF3.
+6. Arm the chosen User Def. slot in the loader.
+7. In EOS Utility open **Camera settings → Register Picture Style File**.
+8. Select the same User Def. slot, open the PF3 shown by the loader, and confirm.
+9. Wait for the loader to confirm the patched `0x01000203` write returned `rc=0`.
 
-1. Extract the entire ZIP to a normal writable folder.
-2. Run `CanonStyleStudio.exe` (or `START_CANON_STYLE_STUDIO.bat`).
-3. In the app, press **Test** beside RAW engine. If PSE was not found, press **Locate PSE…** and select the folder containing `PSEditor.exe` and `DPP4Lib`.
+### Important reliability note
 
-Without PSE, JPEG/PNG/TIFF and LUT work remains available. Canon RAW rendering and PF3 export clearly report that Picture Style Editor is required; LibRaw remains only a fallback.
+For repeated preset registrations, the most reliable workflow currently is to **fully close EOS Utility after each successful preset and reopen it before registering the next one**. The loader itself can remain open.
 
-## Main workflow
+## Important safety fix: `0x00000115`
 
-- Open CR3/CR2, JPEG, PNG or TIFF references.
-- Adjust Canon-native Exposure, fixed/Kelvin White Balance, WB Shift, Picture Style, Contrast, Saturation and Color Tone for RAW files.
-- Add `.cube` or Hald LUTs, reorder layers and set opacity. LUT-only changes reuse the cached Canon development.
-- Switch to **Canon 33³ Preview** to simulate only the final sequential LUT stack quantized to Canon's 33³/12-bit table.
-- Export a validated PF3. No Picture Style is applied a second time by Canon 33³ Preview.
+`0x00000115` is a **32-byte binary camera state/control blob**, not a Picture Style name string. It is observed for diagnostics but **never modified** in current builds.
 
-Fit, zoom and pan share stable view state. Zooming a RAW requests validated higher-detail Canon output where safe; portrait RAW is developed using the validated landscape-stage pipeline and returned in portrait orientation.
+The camera-facing name is handled through the validated name fields inside the RP 16752-byte payload.
 
-## Privacy-safe reports
+## What is intentionally not in the adjustment UI
 
-Use **Create Test Report** in the top bar when reporting a problem. It includes app/runtime versions, camera model, dimensions, settings, LUT metadata and sanitized logs. Usernames and personal paths are replaced. The original RAW is **off by default** and is included only after two explicit confirmations.
+Camera-side settings such as Dynamic Range, White Balance, ISO, Noise Reduction, and Sharpness are not LUT-generation controls, so they are not shown there.
 
-See [TESTING_GUIDE.md](TESTING_GUIDE.md) for the tester matrix and bug-report format, and [PUBLIC_ALPHA_RELEASE_NOTES.md](PUBLIC_ALPHA_RELEASE_NOTES.md) for validated and experimental boundaries.
+Spatial effects such as Clarity and Grain cannot be represented honestly by an RGB→RGB 3D LUT, so they are not approximated.
 
-## Legal notice
+## Source tree vs. release bundle
 
-Canon Style Studio is independent experimental software and is not affiliated with or endorsed by Canon. Canon, DPP, Picture Style Editor and related names are trademarks of their respective owners. Users must install and license Canon software separately.
+This repository keeps the public source and documentation small. The current experimental loader also uses compact binary fixtures captured/generated during the reverse-engineering work. Those fixtures are **not committed to the source tree**; use the packaged release bundle for a ready-to-run build.
+
+See [`fixtures/README.md`](fixtures/README.md) for the expected fixture names and hashes.
+
+## Documentation
+
+- [Usage / troubleshooting](docs/USAGE.md)
+- [Technical notes](docs/TECHNICAL_NOTES.md)
+- [Current research status](docs/RESEARCH_STATUS.md)
+- [v2.3 release notes](RELEASE_NOTES_v2.3.md)
+
+## Compatibility
+
+The practical loader-assisted registration path is currently validated on **EOS RP**. Historical encoder research also used an EOS 1300D, but the RP and 1300D compiled payload formats are not the same and should not be conflated.
+
+## Legal
+
+This is independent experimental software and is not affiliated with or endorsed by Canon or Fujifilm. Canon, EOS Utility, Picture Style Editor, Fujifilm, and related names are trademarks of their respective owners.
+
+No Canon proprietary DLL is distributed in this repository. Users must install and license Canon software separately.
