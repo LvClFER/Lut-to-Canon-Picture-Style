@@ -103,7 +103,8 @@ function hookEdsdk() {
       this.param = args[2].toInt32();
       this.n = args[3].toUInt32();
       this.didPatchPayload = false;
-      const selectedParam = 32 + armedSlot;
+      const observedSlot = this.param - 32;
+      const isUserDefSlot = observedSlot >= 1 && observedSlot <= 3;
 
       if (this.prop === 0x01000203) {
         emit({
@@ -113,18 +114,35 @@ function hookEdsdk() {
       }
 
       // 0x00000115 is binary state/control data. Observe only; do not modify.
-      if (this.prop === 0x00000115 && this.param === selectedParam) {
+      if (this.prop === 0x00000115 && armed && isUserDefSlot) {
         emit({
           type: 'control115_seen', slot: this.param - 32,
           size: this.n, untouched: true
         });
       }
 
-      if (!armed || this.param !== selectedParam) return;
+      if (!armed) return;
       if (this.prop !== 0x01000203) return;
+      if (!isUserDefSlot) return;
       if (this.n !== 16752) {
+        // Unknown camera carrier: capture it for offline research, but never
+        // replace the pointer/size or attempt a best-effort write.
+        if (this.n > 0 && this.n <= 1048576 && !args[4].isNull()) {
+          try {
+            const nativePayload = args[4].readByteArray(this.n);
+            emit({
+              type: 'native_payload_captured', slot: this.param - 32,
+              inParam: this.param, size: this.n, readOnly: true
+            }, nativePayload);
+          } catch (error) {
+            emit({
+              type: 'native_payload_capture_error', slot: this.param - 32,
+              size: this.n, error: String(error)
+            });
+          }
+        }
         emit({
-          type: 'install_error', reason: 'Native RP registration payload was not 16752 bytes',
+          type: 'install_error', reason: 'Native registration payload did not match the validated EOS RP size',
           size: this.n, slot: this.param - 32
         });
         return;
@@ -156,7 +174,7 @@ function hookEdsdk() {
       });
       if (!this.didPatchPayload) return;
       if (rc === 0) {
-        const completedSlot = armedSlot;
+        const completedSlot = this.param - 32;
         armed = false;
         armedPayload = null;
         emit({
@@ -199,12 +217,15 @@ rpc.exports = {
     const payload = hexToBytes(payloadHex);
     if (payload.length !== 16752) throw new Error('payload must be 16752 bytes');
     const selectedSlot = parseInt(slot);
-    if (selectedSlot < 1 || selectedSlot > 3) throw new Error('slot must be 1..3');
+    if (selectedSlot < 0 || selectedSlot > 3) throw new Error('slot must be 0..3');
     armedPayload = payload.buffer;
     armedSlot = selectedSlot;
     armedName = String(styleName || 'PICTURE STYLE').substring(0, 31);
     armed = true;
-    emit({ type: 'armed', slot: selectedSlot, styleName: armedName, payloadSize: payload.length });
+    emit({
+      type: 'armed', slot: selectedSlot || null, slotPolicy: 'dynamic-user-def-1-to-3',
+      styleName: armedName, payloadSize: payload.length
+    });
     return true;
   },
   disarm: function() {

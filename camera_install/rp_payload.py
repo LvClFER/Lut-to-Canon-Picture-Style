@@ -100,9 +100,11 @@ def validate_agent_source(source: str) -> None:
     if "this.prop === 0x00000115" not in source or "untouched: true" not in source:
         raise RuntimeError("Camera agent no longer contains the 0x00000115 observation guard")
     start = source.index("// 0x00000115 is binary state/control data")
-    end = source.index("if (!armed || this.param !== selectedParam)", start)
+    end = source.index("if (!armed) return", start)
     observation = source[start:end]
     if "args[3] =" in observation or "args[4] =" in observation or "writeByteArray" in observation:
         raise RuntimeError("Unsafe 0x00000115 mutation detected in the camera agent")
     if "this.prop === 0x01000203" not in source or "this.n !== 16752" not in source:
         raise RuntimeError("Camera agent does not enforce the validated 0x01000203 payload contract")
+    if "if (!isUserDefSlot) return" not in source or "this.param !== selectedParam" in source:
+        raise RuntimeError("Camera agent does not use dynamic EOS Utility User Def. slot selection")

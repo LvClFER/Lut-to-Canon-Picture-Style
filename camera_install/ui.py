@@ -89,12 +89,9 @@ class CameraInstallDialog(QDialog):
 
         target_row = QHBoxLayout()
         target_row.addWidget(QLabel("Target"))
-        self.target = QLabel("EOS RP · loader-assisted 0x01000203 payload")
+        self.target = QLabel("EOS RP install · unvalidated-camera payload capture")
         target_row.addWidget(self.target, 1)
-        target_row.addWidget(QLabel("User Def."))
-        self.slot = QComboBox()
-        self.slot.addItems(["1", "2", "3"])
-        target_row.addWidget(self.slot)
+        target_row.addWidget(QLabel("Choose User Def. 1, 2 or 3 in EOS Utility"))
         layout.addLayout(target_row)
 
         name_row = QHBoxLayout()
@@ -111,7 +108,9 @@ class CameraInstallDialog(QDialog):
         self.requirements.setWordWrap(True)
         layout.addWidget(self.requirements)
 
-        self.confirm_rp = QCheckBox("I confirm that the connected camera is an EOS RP")
+        self.confirm_rp = QCheckBox(
+            "I understand EOS RP is the only validated write target; unknown payload layouts are captured without patching"
+        )
         self.confirm_rp.toggled.connect(self.update_prepare_enabled)
         layout.addWidget(self.confirm_rp)
 
@@ -139,7 +138,7 @@ class CameraInstallDialog(QDialog):
         self.eos_button.clicked.connect(self.open_eos_utility)
         buttons.addWidget(self.eos_button)
         buttons.addStretch()
-        self.prepare_button = QPushButton("Prepare and Arm EOS RP")
+        self.prepare_button = QPushButton("Prepare / Capture")
         self.prepare_button.setObjectName("AccentButton")
         self.prepare_button.clicked.connect(self.start_prepare)
         buttons.addWidget(self.prepare_button)
@@ -300,7 +299,7 @@ class CameraInstallDialog(QDialog):
             ]
             controls = dict(self.main.controls_dict())
             style_name = canon_style_name(self.style_name.text(), self.main.project_name.text())
-            slot = int(self.slot.currentText())
+            slot = 0  # The genuine EOS Utility transaction determines the slot.
             base_style = self.main.base_combo.currentText()
         except Exception as exc:
             QMessageBox.critical(self, "Cannot prepare EOS RP", str(exc))
@@ -334,7 +333,7 @@ class CameraInstallDialog(QDialog):
                 "pf3":pf3_path.name, "pf3Size":size, "pf3Sha256":digest,
                 "basePictureStyle":base_style, "baseTemplateValidated":True,
                 "basePf3Sha256":base_info.get("sha256"),
-                "cameraTarget":"EOS RP", "slot":slot,
+                "cameraTarget":"EOS RP", "slot":None, "slotPolicy":"dynamicUserDef1To3",
             }
             pf3_path.with_suffix(".manifest.json").write_text(
                 json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
@@ -368,9 +367,16 @@ class CameraInstallDialog(QDialog):
         elif kind == "ready":
             self.append("EdsCFParse + EDSDK hook ready inside EOS Utility.")
         elif kind == "armed":
-            self.append(f"Hook armed for User Def. {event.get('slot')}.")
+            self.append("Hook armed · choose User Def. 1, 2 or 3 in EOS Utility.")
         elif kind == "registration_seen":
             self.append(f"Genuine registration seen · User Def. {event.get('slot')} · {event.get('size')} bytes")
+        elif kind == "native_payload_captured":
+            self.append(
+                f"Read-only diagnostic capture saved · {event.get('captureFile')} · "
+                f"SHA-256 {event.get('binarySha256')}"
+            )
+        elif kind == "native_payload_capture_error":
+            self.append("ERROR: Could not capture native registration payload · " + str(event.get("error")))
         elif kind == "control115_seen":
             self.append(f"0x00000115 observed ({event.get('size')} bytes) · UNTOUCHED")
         elif kind == "payload_patched":
@@ -401,7 +407,7 @@ class CameraInstallDialog(QDialog):
         self.append(f"PF3: {Path(result['pf3']).name}")
         self.append(f"Install report: {Path(result['reportPath']).name}")
         self.steps.setText(
-            f"FINAL STEP — In EOS Utility, register the generated PF3 normally to User Def. {result['slot']}. "
+            "FINAL STEP — In EOS Utility, register the generated PF3 normally to User Def. 1, 2 or 3. "
             f"Expected camera name: {result['styleName']}. The app is waiting for the genuine 0x01000203 write. "
             "Do not close this window until success or until you intentionally disarm."
         )

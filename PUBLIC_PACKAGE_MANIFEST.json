@@ -1,8 +1,8 @@
 {
-  "name": "CanonStyleStudio_Public_Alpha_1.0.0-alpha.9",
-  "version": "1.0.0-alpha.9",
-  "build_id": "2026-09-03-QT-RUNTIME-PACKAGING-ALPHA-9",
-  "created_utc": "2026-09-03T22:42:22.6467634+00:00",
+  "name": "CanonStyleStudio_Public_Alpha_1.0.0-alpha.10",
+  "version": "1.0.0-alpha.10",
+  "build_id": "2026-09-04-DYNAMIC-SLOT-AND-PAYLOAD-CAPTURE-ALPHA-10",
+  "created_utc": "2026-09-03T23:43:09.8987116+00:00",
   "legal": "No Canon DLL, executable, ICC/ICM, PF3, RAW or internal resource is distributed.",
   "camera_install": {
     "validated_bodies": [
@@ -49,8 +49,8 @@
     },
     {
       "path": "canon_runtime.py",
-      "bytes": 11258,
-      "sha256": "1134dbbb3ff81e165dfc2220d083d06e9329b5469e1a57d59f1d21fc7f4d898d"
+      "bytes": 11272,
+      "sha256": "5621c17910b6b1b85a917cdc26299cead0d3a050da72a03ba774b97ae1122e28"
     },
     {
       "path": "creative_controls.py",
@@ -89,8 +89,8 @@
     },
     {
       "path": "REGRESSION_TESTS.py",
-      "bytes": 40334,
-      "sha256": "2ee950e6698d456d3ee30392541af41427fc91d505913ba21c7bd4352b0e0c34"
+      "bytes": 41727,
+      "sha256": "25a7a677b5364caac56bc285ca84c5f66e2ec5dae4338addd7695d24e22b049b"
     },
     {
       "path": "PUBLIC_ALPHA_REGRESSION.py",
@@ -99,8 +99,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 6258,
-      "sha256": "8a2a64572c276089f4ede1db1a29ef441d71ca5e7d733be42bd80514bb491456"
+      "bytes": 6272,
+      "sha256": "ff0008692aa3f8faaf972be35badcf248be18149031ecfbb75e4ff88d2f6687f"
     },
     {
       "path": "TESTING_GUIDE.md",
@@ -129,23 +129,23 @@
     },
     {
       "path": "camera_install/rp_payload.py",
-      "bytes": 4412,
-      "sha256": "6cd6085b5ef649fcaf2c2886aaa766c191c2a04ecf6e87ae2af25a1ede47a968"
+      "bytes": 4583,
+      "sha256": "cc1dd0e1b22048e791284579056432fe4a16cacb97dc4ca32d1d4b930a628d8d"
     },
     {
       "path": "camera_install/eos_hook.py",
-      "bytes": 13424,
-      "sha256": "ac8f66c317e75b088f8904baee995e9b048ac72431ee2790eff587f799d39855"
+      "bytes": 14444,
+      "sha256": "fcf2f307bb9a1db5f7b9bce737931ff0a2d9433104e31b71fb957ca5f2b5b36f"
     },
     {
       "path": "camera_install/ui.py",
-      "bytes": 21430,
-      "sha256": "152070eddfec58be1fb2149a522fd73b4a6d743ab07ede22e7c207a000d7a429"
+      "bytes": 21895,
+      "sha256": "aa6518622a6431c23882cb9c8df5a3adc4eb1b581059f6abc2238c6cbfb6455b"
     },
     {
       "path": "camera_install/rp_loader_agent.js",
-      "bytes": 7389,
-      "sha256": "88393198f34438b764d70388a62b8c31a069848f0664f563db9539f4ea4b5c8a"
+      "bytes": 8227,
+      "sha256": "468fbae193547230dbee8a4634d279700c899dd5dc1b0f52aac01434dad35486"
     },
     {
       "path": "example_luts/hald_identity_8.png",

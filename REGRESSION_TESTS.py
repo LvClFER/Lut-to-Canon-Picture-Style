@@ -136,7 +136,32 @@ class CoreRegressionTests(unittest.TestCase):
     def test_camera_agent_keeps_0x115_observation_only(self):
         agent=(HERE/"camera_install"/"rp_loader_agent.js").read_text(encoding="utf-8")
         validate_agent_source(agent)
-        self.assertIn("if (!armed || this.param !== selectedParam) return",agent)
+        self.assertIn("if (!isUserDefSlot) return",agent)
+        self.assertNotIn("this.param !== selectedParam",agent)
+        self.assertIn("native_payload_captured",agent)
+        self.assertIn("args[4].readByteArray(this.n)",agent)
+
+    def test_unknown_camera_payload_capture_is_read_only_and_persistent(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);events=[]
+            installer=object.__new__(EosRpInstaller)
+            installer.event_callback=events.append
+            installer._lock=threading.RLock()
+            installer._report={"status":"ARMED","events":[]}
+            installer._report_path=root/"EOS_RP_INSTALL_REPORT.json"
+            installer.armed=True
+            installer._ready=threading.Event()
+            raw=bytes((index*29+7)&0xff for index in range(83076))
+            installer._on_message(
+                {"type":"send","payload":{"type":"native_payload_captured","slot":3,
+                                               "inParam":35,"size":len(raw),"readOnly":True}},raw
+            )
+            capture=root/"NATIVE_01000203_SLOT3_83076.bin"
+            self.assertEqual(capture.read_bytes(),raw)
+            saved=installer._report["nativePayloadCapture"]
+            self.assertEqual(saved["sha256"],hashlib.sha256(raw).hexdigest())
+            self.assertTrue(saved["readOnly"]);self.assertFalse(saved["argumentsModified"])
+            self.assertEqual(events[-1]["captureFile"],capture.name)
 
     def test_external_eos_rp_support_assets_when_configured(self):
         folder=os.environ.get("CANON_STYLE_STUDIO_RP_ASSETS")

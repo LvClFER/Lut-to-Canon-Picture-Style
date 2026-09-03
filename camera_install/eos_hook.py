@@ -122,7 +122,23 @@ class EosRpInstaller:
             event["binarySha256"] = sha256_bytes(raw)
         with self._lock:
             if self._report is not None:
-                # Reports store hashes and sizes, never outgoing/control bytes.
+                # Reports store hashes and sizes. An unknown native 0x01000203
+                # carrier is persisted separately for read-only research.
+                if kind == "native_payload_captured" and raw and self._report_path is not None:
+                    slot = int(event.get("slot", 0))
+                    capture_name = f"NATIVE_01000203_SLOT{slot}_{len(raw)}.bin"
+                    capture_path = self._report_path.parent / capture_name
+                    _atomic_bytes(capture_path, raw)
+                    event["captureFile"] = capture_name
+                    self._report["nativePayloadCapture"] = {
+                        "property": "0x01000203",
+                        "slot": slot,
+                        "size": len(raw),
+                        "sha256": sha256_bytes(raw),
+                        "file": capture_name,
+                        "readOnly": True,
+                        "argumentsModified": False,
+                    }
                 self._report.setdefault("events", []).append(dict(event))
                 if kind == "payload_patched" and raw:
                     self._report["actualOutgoingPayloadSha256"] = sha256_bytes(raw)
@@ -207,8 +223,8 @@ class EosRpInstaller:
         if len(header) < 7 or header[4:7] != b"PSP":
             raise RuntimeError("The camera-install input does not have a valid Canon PF3 header")
         slot = int(slot)
-        if slot not in (1, 2, 3):
-            raise RuntimeError("EOS RP User Def. slot must be 1, 2 or 3")
+        if slot not in (0, 1, 2, 3):
+            raise RuntimeError("EOS RP User Def. slot policy must be dynamic or 1..3")
         style_name = canon_style_name(style_name, pf3_path.stem)
         output_dir = Path(output_dir).resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -250,7 +266,8 @@ class EosRpInstaller:
             "rawCompatibilityDoesNotImplyCameraCompatibility": True,
             "sourcePf3": pf3_path.name,
             "sourcePf3Sha256": sha256_bytes(pf3_path.read_bytes()),
-            "slot": slot,
+            "slot": slot or None,
+            "slotPolicy": "dynamicUserDef1To3" if slot == 0 else "legacySuggestedSlot",
             "pictureStyleName": style_name,
             "compilerSelfTest": {
                 "exact": True, "blockSha256": selftest_hash, "meta": selftest_meta,
@@ -281,7 +298,7 @@ class EosRpInstaller:
             self._report_path = report_path
             self._save_report()
 
-        self._emit({"type": "stage", "message": f"Arming User Def. {slot}…"})
+        self._emit({"type": "stage", "message": "Arming dynamic User Def. 1–3 selection…"})
         armed = self.script.exports_sync.arm(slot, payload.hex(), style_name)
         if not armed:
             raise RuntimeError("EOS Utility hook did not arm")
