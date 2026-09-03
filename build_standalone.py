@@ -23,6 +23,7 @@ CANON_FORBIDDEN_NAMES=(
     "rp_superia_template_16752.bin","1300d_camera_id.bin","1300d_descriptor_7772.bin",
 )
 FORBIDDEN_SUFFIXES={".icc",".icm",".pf3",".cr2",".cr3",".crw",".dmp",".log",".py",".pyc"}
+INCOMPATIBLE_COLLECTED_QT_DLLS=("icuuc.dll","icudt78.dll")
 
 
 def run(command):
@@ -69,6 +70,14 @@ def build(output_root):
              HERE/"canon_style_studio.py"])
         built=main_dist/"CanonStyleStudio"
         if not (built/"CanonStyleStudio.exe").is_file():raise RuntimeError("Standalone application was not generated")
+        # Qt6Core on the supported Windows versions uses the Windows ICU
+        # forwarding DLLs.  PyInstaller can accidentally resolve icuuc.dll to
+        # an unrelated ICU 78 binary on the build machine and copy it beside
+        # the executable.  That binary lacks Qt's required unversioned exports
+        # and makes ``from PySide6 import QtCore`` fail with WinError 127.
+        for dll_name in INCOMPATIBLE_COLLECTED_QT_DLLS:
+            collected=built/"runtime"/dll_name
+            if collected.is_file():collected.unlink()
         shutil.copytree(built,release)
     for name in ("README.md","TESTING_GUIDE.md","PUBLIC_ALPHA_RELEASE_NOTES.md","ARCHITECTURE_STATUS.md"):
         shutil.copy2(HERE/name,release/name)

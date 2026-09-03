@@ -10,6 +10,18 @@ from datetime import datetime
 from collections import OrderedDict
 from pathlib import Path
 
+
+# PyInstaller's one-directory layout keeps the Qt and Shiboken native DLLs in
+# sibling folders under ``sys._MEIPASS``.  Register them before the first
+# PySide6 import so the standalone build does not depend on a system Python or
+# on DLL search paths left behind by another Qt installation.
+_FROZEN_DLL_DIRECTORY_HANDLES = []
+if os.name == "nt" and getattr(sys, "frozen", False):
+    _frozen_runtime = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+    for _dll_dir in (_frozen_runtime / "PySide6", _frozen_runtime / "shiboken6", _frozen_runtime):
+        if _dll_dir.is_dir():
+            _FROZEN_DLL_DIRECTORY_HANDLES.append(os.add_dll_directory(str(_dll_dir)))
+
 import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 

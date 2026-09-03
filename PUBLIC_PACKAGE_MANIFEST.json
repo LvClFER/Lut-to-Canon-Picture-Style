@@ -1,8 +1,8 @@
 {
-  "name": "CanonStyleStudio_Public_Alpha_1.0.0-alpha.8",
-  "version": "1.0.0-alpha.8",
-  "build_id": "2026-09-03-RECIPE-CONTROLS-ALPHA-8",
-  "created_utc": "2026-09-03T15:52:07.325384+00:00",
+  "name": "CanonStyleStudio_Public_Alpha_1.0.0-alpha.9",
+  "version": "1.0.0-alpha.9",
+  "build_id": "2026-09-03-QT-RUNTIME-PACKAGING-ALPHA-9",
+  "created_utc": "2026-09-03T22:42:22.6467634+00:00",
   "legal": "No Canon DLL, executable, ICC/ICM, PF3, RAW or internal resource is distributed.",
   "camera_install": {
     "validated_bodies": [
@@ -19,8 +19,8 @@
   "files": [
     {
       "path": "canon_style_studio.py",
-      "bytes": 123962,
-      "sha256": "9e5b18353c33f918af10b87c48db5af50f10fd137176f9a5ff12d84b64b0657f"
+      "bytes": 124653,
+      "sha256": "24784e509e64a35268d597fb182cd237a2b45463b4c460c1ba47a44e34d196f4"
     },
     {
       "path": "canon_engine.py",
@@ -49,8 +49,8 @@
     },
     {
       "path": "canon_runtime.py",
-      "bytes": 11253,
-      "sha256": "a57cce898ccf75fd02f5ba08abea06ceffd8834f3ac96a07de58178e37a0d738"
+      "bytes": 11258,
+      "sha256": "1134dbbb3ff81e165dfc2220d083d06e9329b5469e1a57d59f1d21fc7f4d898d"
     },
     {
       "path": "creative_controls.py",
@@ -99,8 +99,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 6253,
-      "sha256": "2962d8475d6ba5f8ee48377b7d28fd2016caa2d9a6bdbeb05b6c7d0ce5a0067e"
+      "bytes": 6258,
+      "sha256": "8a2a64572c276089f4ede1db1a29ef441d71ca5e7d733be42bd80514bb491456"
     },
     {
       "path": "TESTING_GUIDE.md",
