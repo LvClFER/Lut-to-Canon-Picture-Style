@@ -1,0 +1,161 @@
+{
+  "name": "CanonStyleStudio_Public_Alpha_1.0.0-alpha.8",
+  "version": "1.0.0-alpha.8",
+  "build_id": "2026-09-03-RECIPE-CONTROLS-ALPHA-8",
+  "created_utc": "2026-09-03T15:52:07.325384+00:00",
+  "legal": "No Canon DLL, executable, ICC/ICM, PF3, RAW or internal resource is distributed.",
+  "camera_install": {
+    "validated_bodies": [
+      "EOS RP"
+    ],
+    "external_support_assets_required": true,
+    "support_assets_bundled": false
+  },
+  "portable_storage": {
+    "settings": "app_data",
+    "support": "camera_support",
+    "camera_exports": "exported_styles"
+  },
+  "files": [
+    {
+      "path": "canon_style_studio.py",
+      "bytes": 123962,
+      "sha256": "9e5b18353c33f918af10b87c48db5af50f10fd137176f9a5ff12d84b64b0657f"
+    },
+    {
+      "path": "canon_engine.py",
+      "bytes": 45152,
+      "sha256": "b17024ca7ada07869b25da5bd5f84ae468b21d16f94a090b544ceab6ffe135dd"
+    },
+    {
+      "path": "canon_dpp_worker.py",
+      "bytes": 18468,
+      "sha256": "a1d9709d02699e1ff4a199b676c4094fbb72d75490cd2a74765fe8b5002138dc"
+    },
+    {
+      "path": "dpp_client.py",
+      "bytes": 10345,
+      "sha256": "da27de3cc32980068b54a4df8c4375c5c612ac05e97efea6ec0743b67c6a01ad"
+    },
+    {
+      "path": "project_state.py",
+      "bytes": 14674,
+      "sha256": "35d563ed747f6b98df3ad7a68cf56e4df773c40de0c5ffef6d018ef9e937c875"
+    },
+    {
+      "path": "render_geometry.py",
+      "bytes": 1322,
+      "sha256": "8dd6659d077a596e664676118428fcfd74b5d917c231f3d440209709006c2ac4"
+    },
+    {
+      "path": "canon_runtime.py",
+      "bytes": 11253,
+      "sha256": "a57cce898ccf75fd02f5ba08abea06ceffd8834f3ac96a07de58178e37a0d738"
+    },
+    {
+      "path": "creative_controls.py",
+      "bytes": 12077,
+      "sha256": "13ab668f966b01fee6af4cb1cdbdc5947aee054d309cb84202c0270b192f63dc"
+    },
+    {
+      "path": "test_report.py",
+      "bytes": 3619,
+      "sha256": "748c5221c98e5439b8b426bf25ac9375b86b7dc47caa9b8a1f52f2594434188f"
+    },
+    {
+      "path": "bootstrap.py",
+      "bytes": 1919,
+      "sha256": "253af65443aa5f902e000b5cd4a2eb6e568f24a01a3cf7cee73b7ccec51bc7b6"
+    },
+    {
+      "path": "launch_guard.py",
+      "bytes": 2426,
+      "sha256": "7472e433816d8fda4fec71bb867331656cd205d525f8df8654ab48f78886139d"
+    },
+    {
+      "path": "START_CANON_STYLE_STUDIO.bat",
+      "bytes": 1566,
+      "sha256": "cf3bc2d387302b9467f2d0b7a6825ee9b0df560a683db934fb1fcf68d366e367"
+    },
+    {
+      "path": "requirements.txt",
+      "bytes": 50,
+      "sha256": "80a348ba6dcbc1c2ca5f3a5ebf32c52109c916fe0db627afb61a6f2d50e51438"
+    },
+    {
+      "path": "SELF_TEST.py",
+      "bytes": 2670,
+      "sha256": "0e6d7df13049f301cd4faca3b166527c138d1760016cabaa0196a22fd80fb7e9"
+    },
+    {
+      "path": "REGRESSION_TESTS.py",
+      "bytes": 40334,
+      "sha256": "2ee950e6698d456d3ee30392541af41427fc91d505913ba21c7bd4352b0e0c34"
+    },
+    {
+      "path": "PUBLIC_ALPHA_REGRESSION.py",
+      "bytes": 6500,
+      "sha256": "d7332c1f27881e2cf7fa813561e154b5fd8507c32887a0e90931d366b1b8be0a"
+    },
+    {
+      "path": "README.md",
+      "bytes": 6253,
+      "sha256": "2962d8475d6ba5f8ee48377b7d28fd2016caa2d9a6bdbeb05b6c7d0ce5a0067e"
+    },
+    {
+      "path": "TESTING_GUIDE.md",
+      "bytes": 6219,
+      "sha256": "27209ad8e778e3754a94ffd1a11d6695b52dec93980de354f4ebbe90e68d6c57"
+    },
+    {
+      "path": "PUBLIC_ALPHA_RELEASE_NOTES.md",
+      "bytes": 11212,
+      "sha256": "edc5b4eb8f2312c01a44ac626064de606653fc7657e58c62de07397112e559ab"
+    },
+    {
+      "path": "ARCHITECTURE_STATUS.md",
+      "bytes": 5504,
+      "sha256": "e58f4e86ae45b867f6fc3dd5998a11e7ede03ef72dc0aa28225a19ee60b2a469"
+    },
+    {
+      "path": "camera_install/__init__.py",
+      "bytes": 722,
+      "sha256": "6e8db746f46d44e91aa6cb9624d1fc03fc17c86650a7c5317f95bfc411a8fd53"
+    },
+    {
+      "path": "camera_install/rp_assets.py",
+      "bytes": 9151,
+      "sha256": "62ab8d89d60263f4871965cda75c1a12d496a2a7409674e871be07d203799101"
+    },
+    {
+      "path": "camera_install/rp_payload.py",
+      "bytes": 4412,
+      "sha256": "6cd6085b5ef649fcaf2c2886aaa766c191c2a04ecf6e87ae2af25a1ede47a968"
+    },
+    {
+      "path": "camera_install/eos_hook.py",
+      "bytes": 13424,
+      "sha256": "ac8f66c317e75b088f8904baee995e9b048ac72431ee2790eff587f799d39855"
+    },
+    {
+      "path": "camera_install/ui.py",
+      "bytes": 21430,
+      "sha256": "152070eddfec58be1fb2149a522fd73b4a6d743ab07ede22e7c207a000d7a429"
+    },
+    {
+      "path": "camera_install/rp_loader_agent.js",
+      "bytes": 7389,
+      "sha256": "88393198f34438b764d70388a62b8c31a069848f0664f563db9539f4ea4b5c8a"
+    },
+    {
+      "path": "example_luts/hald_identity_8.png",
+      "bytes": 4053,
+      "sha256": "3fe7a0ef06c69477c4064b4f57fa73ac83702522f141e34a01f0feea285856e4"
+    },
+    {
+      "path": "example_luts/Lightroom_Hald_Template_512_64cube_sRGB_16bit.tif",
+      "bytes": 511299,
+      "sha256": "aef7c32f09a1a7ead2715396c336f2bbfb6ff3b4ed76219b4268d0b185ede882"
+    }
+  ]
+}

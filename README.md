@@ -1,120 +1,59 @@
-EOS RP Custom LUT / Picture Style Loader — v2.3 Alpha
+# Canon Style Studio Public Alpha
 
-This release marks the first practical version of the project where arbitrary LUTs can be converted and used as in-camera Picture Styles on the Canon EOS RP.
+Version **1.0.0-alpha.8** · Build **2026-09-03-RECIPE-CONTROLS-ALPHA-8**
 
-Canon's newer cameras compile Picture Styles differently from older DSLR models. During testing, I found that the EOS 1300D compilation path preserves the custom dense LUT information, while the EOS RP's normal compilation path produces a different representation that does not preserve the same custom LUT data.
+Canon Style Studio is an experimental Windows editor for developing Canon RAW files through the Canon DPP4Lib runtime installed with Picture Style Editor, building sequential LUT stacks, previewing Canon's 33³/12-bit LUT result and exporting PF3 Picture Style files.
 
-The current loader works around this by compiling the LUT through the legacy Picture Style path, extracting the resulting LUT block, and injecting that block into a valid EOS RP Picture Style payload during the normal EOS Utility registration process.
+## Requirements
 
-What works
-Import standard .cube 3D LUTs
-Import Hald CLUT TIFFs
-Load compatible .pf3 files
-Convert LUTs into Canon's internal 33×33×33 Picture Style LUT representation
-Compile the LUT through Canon's legacy Picture Style compiler
-Inject the resulting LUT block into an EOS RP registration payload
-Register the final Picture Style through EOS Utility
-Custom Picture Style names
-Generic LUT adjustments before conversion:
-Highlight
-Shadow
-Color
-Color Chrome-style
-Blue Chrome-style
-Save and load reusable LUT-adjustment presets
-Basic workflow
-Connect the EOS RP to the computer.
-Open the loader.
-Select a .cube, Hald TIFF or compatible .pf3.
-Optionally apply LUT adjustments.
-Generate the Picture Style.
-Prepare the installation.
-Register the generated PF3 normally through EOS Utility.
-The loader detects the registration and replaces the appropriate LUT block before EOS Utility sends it to the camera.
+- Windows 10 or 11, 64-bit.
+- Canon **Picture Style Editor** installed. The app discovers standard 64-bit and 32-bit Canon install locations; use **Locate PSE…** if it is installed elsewhere.
+- Canon Digital Photo Professional is **not required**.
+- **Send to Camera** additionally requires EOS Utility 3 and the externally supplied, hash-validated Manual Loader v2.4 EOS RP support folder.
 
-The resulting look can then be selected and used in-camera like a normal Custom Picture Style.
+The Windows x64 standalone build includes its own Python runtime and application dependencies. Testers do **not** need to install Python or packages.
 
-Important
+## Portable storage
 
-This is currently a loader-assisted solution.
+Application-owned files stay beside `CanonStyleStudio.exe`: `app_data/` contains settings, caches and logs; `camera_support/` contains the user's private imported support copy; and `exported_styles/` permanently retains each camera preparation PF3, manifest, Block1, payload and report in a unique timestamped folder. Moving the complete application folder therefore carries this state to another writable location/computer. The former `%LOCALAPPDATA%\CanonStyleStudio` settings are read once for non-destructive migration and are never deleted.
 
-It does not yet generate a completely standalone arbitrary .pf3 that can simply be loaded onto newer Canon cameras without the helper running.
+The distribution contains no Canon DLL, executable, ICC/ICM profile, PF3 base, RAW image, native carrier, descriptor or captured payload. At runtime it uses DPP4Lib and an input profile from the user's own local Picture Style Editor installation. Generated working PF3 data and caches are stored under `%LOCALAPPDATA%\CanonStyleStudio`.
 
-EOS Utility is still used to perform the actual camera registration because the EOS RP requires additional internal state/transaction behaviour that has not yet been reproduced through direct EDSDK calls.
+## Start
 
-EOS Utility restart
+1. Extract the entire ZIP to a normal writable folder.
+2. Run `CanonStyleStudio.exe` (or `START_CANON_STYLE_STUDIO.bat`).
+3. In the app, press **Test** beside RAW engine. If PSE was not found, press **Locate PSE…** and select the folder containing `PSEditor.exe` and `DPP4Lib`.
 
-For repeated Picture Style registrations, the most reliable workflow currently is:
+Without PSE, JPEG/PNG/TIFF and LUT work remains available. Canon RAW rendering and PF3 export clearly report that Picture Style Editor is required; LibRaw remains only a fallback.
 
-Close EOS Utility completely after installing a Picture Style and reopen it before installing the next one.
+## Main workflow
 
-The loader itself can remain open.
+- Open CR3/CR2, JPEG, PNG or TIFF references.
+- Adjust Canon-native Exposure, fixed/Kelvin White Balance, WB Shift, Picture Style, Contrast, Saturation and Color Tone for RAW files.
+- Add `.cube` or Hald LUTs, reorder layers and set opacity. LUT-only changes reuse the cached Canon development.
+- Use recipe-style Highlight and Shadow controls from -2 to +4 and Color from -4 to +4; shape a five-point monotonic Tone Curve; tune Red, Yellow, Green, Cyan, Blue and Magenta Hue/Saturation/Luminance axes; and add experimental Color Chrome-style or Blue Chrome-style density. These controls are baked after the LUT stack and reuse the cached Canon development.
+- Save a portable `.canonstyleproject` archive containing every editor setting and all CUBE/Hald LUTs used by the current edit or snapshots. Reference photographs are deliberately not embedded; only their filenames are retained as reconnect hints.
+- Switch to **Canon 33³ Preview** to simulate only the final sequential LUT stack quantized to Canon's 33³/12-bit table.
+- Export PF3 through Canon's locally installed EdsCFParse serializer. No Picture Style is applied a second time by Canon 33³ Preview.
+- Use **Send to Camera** for the integrated, loader-assisted EOS RP workflow. The app exports the current editor state, runs the exact compiler self-test, builds Block1/carrier, arms the hook and then waits while you perform a normal EOS Utility registration.
 
-Supported camera
-Tested
-Canon EOS RP
+The editor records `basePictureStyle` in projects and PF3 manifests. Public releases do not contain extracted Canon base PF3 files. When a hash-validated local base set is available, select it with **Bases…**; otherwise generated PSE/EdsCFParse templates are clearly labelled experimental before export.
 
-The legacy compilation process has also been extensively tested against the EOS 1300D, which was used to reverse-engineer the older LUT representation.
+Highlight, Shadow, Color, Tone Curve, Six Color-Axes and both Chrome-style controls are LUT-baked creative transforms, not claimed Canon-native PF3 controls. Working Preview applies them as a responsive 33³ creative stage after the full LUT stack. Canon 33³ Preview recomposes the complete LUT stack plus creative stage into the final 33³/12-bit transform, matching PF3 table export.
 
-Other Canon cameras have not yet been validated. DIGIC 8 or similarly structured cameras may potentially use a related format, but compatibility should not be assumed.
+Portable projects validate embedded LUT sizes and SHA-256 hashes before extraction, reject unsafe archive paths, and remain backward-compatible with the earlier plain-JSON project format. Local Canon PF3/DLL/ICC resources and RAW/JPEG/TIFF references are never embedded. An Imported PF3 must be selected again on the destination computer.
 
-LUT adjustments
+**Send to Camera is physically validated only on EOS RP.** It remains a separate `camera_install` layer even though it is coordinated by the same UI. Opening a RAW from another body does not validate camera installation for that body, and a valid PF3 is not equivalent to a validated EDSDK registration transaction. The button will not arm without exact support assets, a validated PF3 base and explicit EOS RP confirmation.
 
-The application only exposes adjustments that can actually be represented as RGB → RGB transformations inside a 3D LUT:
+Fit, zoom and pan share stable view state. Zooming a RAW requests validated higher-detail Canon output where safe; portrait RAW is developed using the validated landscape-stage pipeline and returned in portrait orientation.
 
-Highlight
-Shadow
-Color
-Color Chrome-style
-Blue Chrome-style
+## Privacy-safe reports
 
-Camera-side parameters such as ISO, Dynamic Range, White Balance, sharpening and noise reduction are intentionally not included.
+Use **Create Test Report** in the top bar when reporting a problem. It includes app/runtime versions, camera model, dimensions, settings, LUT metadata and sanitized logs. Usernames and personal paths are replaced. The original RAW is **off by default** and is included only after two explicit confirmations.
 
-Spatial effects such as grain and clarity cannot be represented correctly by a 3D LUT and are also not included.
+See [TESTING_GUIDE.md](TESTING_GUIDE.md) for the tester matrix and bug-report format, and [PUBLIC_ALPHA_RELEASE_NOTES.md](PUBLIC_ALPHA_RELEASE_NOTES.md) for validated and experimental boundaries.
 
-The Color Chrome-style controls are experimental transforms inspired by color-density behaviour and are not claimed to reproduce Fujifilm's proprietary Color Chrome processing exactly.
+## Legal notice
 
-Technical progress
-
-A few major findings made this release possible:
-
-Canon Picture Styles can contain dense 33³ RGB LUTs.
-The EOS 1300D compiler converts these into a compact legacy LUT representation.
-The compiler output was validated against physical camera captures.
-The EOS RP uses a 16,752-byte compiled Picture Style payload.
-The primary LUT transformation is carried by the first 8192-byte LUT block in the tested EOS RP payload.
-Replacing that block with a correctly compiled legacy LUT allows the EOS RP to execute the custom transformation.
-Canon property 0x00000115 is treated as binary state/control data and is never modified by the loader.
-
-The compiler self-test included in the loader checks the known Superia reference block before allowing an installation.
-
-Known limitations
-Windows only for now.
-Canon EOS Utility is required.
-EOS RP is currently the only modern camera validated.
-The installation still requires manually registering the generated PF3 through EOS Utility.
-Direct EDSDK installation is not yet working because the camera rejects the compiled payload outside Canon's internal registration transaction.
-Some LUTs may require adjustment because Canon's image-processing pipeline is not identical to the pipeline the LUT was originally designed for.
-Very extreme transforms may clip or behave differently from their original implementation.
-Experimental software
-
-This project is based on reverse engineering and is still experimental.
-
-Back up anything important and use it at your own risk.
-
-This project is not affiliated with or endorsed by Canon, Fujifilm, Adobe, or any other camera/software manufacturer.
-
-No proprietary Canon DLLs are distributed with the project.
-
-What's next
-
-Current areas of investigation include:
-
-compatibility with other modern Canon bodies;
-removing the need for the loader during registration;
-reproducing the EOS Utility transaction directly through EDSDK;
-improving LUT colour-management and input/output pipeline handling;
-additional Picture Style controls;
-further analysis of Canon's compact LUT representation.
-
-If you test this on another Canon camera, please open an issue and include the camera model, EOS Utility version, and loader report.
+Canon Style Studio is independent experimental software and is not affiliated with or endorsed by Canon. Canon, DPP, Picture Style Editor and related names are trademarks of their respective owners. Users must install and license Canon software separately.

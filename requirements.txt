@@ -1,4 +1,7 @@
-frida
-numpy
+PySide6
 Pillow
+numpy
+rawpy
 tifffile
+imageio
+frida

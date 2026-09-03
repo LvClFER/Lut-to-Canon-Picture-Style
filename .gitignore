@@ -14,3 +14,17 @@ MANUAL_REPORT_*.json
 *.zip
 .DS_Store
 Thumbs.db
+app_data/
+bases/
+camera_support/
+canon_resources/
+exported_styles/
+native_probe_results/
+samples/
+*.dll
+*.icc
+*.icm
+*.pf3
+*.cr2
+*.cr3
+*.crw
