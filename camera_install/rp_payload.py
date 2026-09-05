@@ -100,11 +100,38 @@ def validate_agent_source(source: str) -> None:
     if "this.prop === 0x00000115" not in source or "untouched: true" not in source:
         raise RuntimeError("Camera agent no longer contains the 0x00000115 observation guard")
     start = source.index("// 0x00000115 is binary state/control data")
-    end = source.index("if (!armed) return", start)
+    legacy_boundary = source.find("if (!armed) return", start)
+    dynamic_boundary = source.find("if (!armed ||", start)
+    candidates = [value for value in (legacy_boundary, dynamic_boundary) if value >= 0]
+    if not candidates:
+        raise RuntimeError("Camera agent no longer has a fail-closed armed-state boundary")
+    end = min(candidates)
     observation = source[start:end]
     if "args[3] =" in observation or "args[4] =" in observation or "writeByteArray" in observation:
         raise RuntimeError("Unsafe 0x00000115 mutation detected in the camera agent")
-    if "this.prop === 0x01000203" not in source or "this.n !== 16752" not in source:
-        raise RuntimeError("Camera agent does not enforce the validated 0x01000203 payload contract")
-    if "if (!isUserDefSlot) return" not in source or "this.param !== selectedParam" in source:
+    if "this.prop === 0x01000203" not in source:
+        raise RuntimeError("Camera agent does not guard the 0x01000203 transaction")
+    if "armdynamic" in source:
+        required = (
+            "capturedCameraId", "capturedDescriptor", "EdsCfpGetPropertySize",
+            "validateNativeRoundTrip", "CAMERA_FAMILY_REGISTRY",
+            "meaningfulDifferences", "Canon compiler output is identical",
+            "armedLegacyBlock1", "legacy-dual-8192-block-carrier",
+            "sizes: [78980]", "sizes: [83076]", "sizes: [431616]",
+            "modern-78980-pf3-table-encoder-v1", "modern-83076-pf3-table-encoder-v1",
+            "modern-full33-paired", "native_payload_captured",
+            "0x40001070", "0x40001071", "0x1F00", "0x1022", "0x1F02",
+            "preservedRegions: ['0x1F01', '0x102A']",
+            "args[3] =", "args[4] =",
+        )
+        missing = [value for value in required if value not in source]
+        if missing:
+            raise RuntimeError("Dynamic camera agent is missing safety guards: " + ", ".join(missing))
+        if "this.n !== 16752" in source:
+            raise RuntimeError("Dynamic camera agent still contains an EOS RP-only payload-size guard")
+        if "api.Set(ref, 0x01000203" in source:
+            raise RuntimeError("Dynamic camera agent feeds the native carrier back into the PF3 compiler")
+    elif "this.n !== 16752" not in source:
+        raise RuntimeError("Legacy EOS RP agent does not enforce its validated 16752-byte contract")
+    if "!isUserDefSlot" not in source or "this.param !== selectedParam" in source:
         raise RuntimeError("Camera agent does not use dynamic EOS Utility User Def. slot selection")

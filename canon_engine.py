@@ -19,7 +19,10 @@ import numpy as np
 from PIL import Image, ImageFilter, ImageEnhance, ImageOps, ImageCms
 
 from canon_runtime import cache_dir as runtime_cache_dir, discover_pse
-from creative_controls import creative_lut_entry, normalize_creative_controls
+from creative_controls import (
+    creative_lut_entry, normalize_creative_controls,
+    normalize_recipe_wb, recipe_wb_lut_entry,
+)
 
 try:
     import tifffile
@@ -831,6 +834,8 @@ def export_pf3(dll_path,base_path,output_path,lut_entries,controls,title,log=lam
         for prop,expected in PROPERTY_ORDER: props[prop]=api.get_property(src,prop,expected)
         props[0x00000115]=modify_basic_0115(props[0x00000115],controls["contrast"],controls["saturation"],controls["color_tone"],controls.get("sharpness_override",False),controls.get("sharp_strength",0),controls.get("fineness",2),controls.get("threshold",4))
         effective=list(lut_entries)
+        recipe_wb=recipe_wb_lut_entry(controls.get("recipe_wb"),size=33)
+        if recipe_wb:effective.insert(0,recipe_wb)
         creative=creative_lut_entry(controls.get("creative"),size=33)
         if creative:effective.append(creative)
         enabled=[e for e in effective if e.get("enabled") and e.get("opacity",0)>0]
@@ -865,10 +870,10 @@ def export_pf3(dll_path,base_path,output_path,lut_entries,controls,title,log=lam
 class CanonRenderEngine:
     """Shared state-free rendering/cache layer used by both V0.3.6 and V0.4.x UI."""
     def __init__(self):
-        self.base_cache={}; self.pillow_cache={}; self.composite_cache={}; self.stack33_cache={}; self.creative_cache={}
+        self.base_cache={}; self.pillow_cache={}; self.composite_cache={}; self.stack33_cache={}; self.creative_cache={}; self.recipe_wb_cache={}
 
     def clear(self):
-        self.base_cache.clear(); self.pillow_cache.clear(); self.composite_cache.clear(); self.stack33_cache.clear(); self.creative_cache.clear()
+        self.base_cache.clear(); self.pillow_cache.clear(); self.composite_cache.clear(); self.stack33_cache.clear(); self.creative_cache.clear(); self.recipe_wb_cache.clear()
 
     def load_base(self,dll_path,base_path):
         key=(file_fingerprint(Path(dll_path)),file_fingerprint(Path(base_path)))
@@ -890,6 +895,13 @@ class CanonRenderEngine:
 
     def effective_luts(self,luts,controls):
         effective=list(luts)
+        normalized_wb=normalize_recipe_wb((controls or {}).get("recipe_wb"))
+        wb_key=json.dumps(normalized_wb,sort_keys=True,separators=(",",":"))
+        if wb_key not in self.recipe_wb_cache:
+            self.recipe_wb_cache[wb_key]=recipe_wb_lut_entry(normalized_wb,size=33)
+            if len(self.recipe_wb_cache)>24:self.recipe_wb_cache.pop(next(iter(self.recipe_wb_cache)))
+        recipe_wb=self.recipe_wb_cache[wb_key]
+        if recipe_wb:effective.insert(0,recipe_wb)
         normalized=normalize_creative_controls((controls or {}).get("creative"))
         key=json.dumps(normalized,sort_keys=True,separators=(",",":"))
         if key not in self.creative_cache:

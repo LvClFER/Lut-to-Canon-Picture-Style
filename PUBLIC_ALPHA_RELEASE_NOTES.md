@@ -1,3 +1,12 @@
+# Canon Style Studio 1.0.0-alpha.17
+
+Build: `2026-09-05-FUJI-WB-CALIBRATION-PF3-ALPHA-17`
+
+- Replaced the symmetric Fuji-style Recipe WB estimate with asymmetric curves measured from the controlled X-T1/Provia/5000 K `0`, `±5` and `±9` reference sequence. Error against the eight published reference JPEGs is reduced by 32–85%.
+- Corrected normal PF3 export in standalone builds to default to `exported_styles/` beside the application instead of PyInstaller's internal runtime folder.
+- PF3 export now adds the `.pf3` extension when omitted. Automated UI export validation covers the 434,511-byte PF3, sidecar and manifest.
+- Includes the current dynamic Canon carrier-family registry. Camera installation remains fail-closed and experimental outside physically tested paths.
+
 # Canon Style Studio 1.0.0-alpha.7
 
 Build: `2026-08-23-PORTABLE-STORAGE-ALPHA-7`

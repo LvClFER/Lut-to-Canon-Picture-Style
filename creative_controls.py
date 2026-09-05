@@ -34,6 +34,32 @@ DEFAULT_CREATIVE_CONTROLS = {
     "color_chrome_fx_blue": "Off",
 }
 
+DEFAULT_RECIPE_WB = {
+    "red": 0,
+    "blue": 0,
+}
+
+# Effective linear-sRGB gains measured from the controlled Fujifilm X-T1
+# sequence published by Fuji X Weekly: one RAW, in-camera reprocessing,
+# Provia/DR200/5000 K, and only the R/B WB Shift changed.  The response is
+# strongly asymmetric and accelerates near +/-9, so four independent curves
+# are more faithful than the former symmetric two-to-one opponent model.
+FUJI_RECIPE_WB_POSITIONS = np.asarray([-9.0, -5.0, 0.0, 5.0, 9.0], dtype=np.float64)
+FUJI_RECIPE_WB_RED_GAINS = np.asarray([
+    [0.188858, 1.196842, 1.042204],
+    [0.698804, 1.037310, 0.998874],
+    [1.000000, 1.000000, 1.000000],
+    [1.289562, 0.968002, 1.010467],
+    [2.010597, 0.890971, 1.042498],
+], dtype=np.float64)
+FUJI_RECIPE_WB_BLUE_GAINS = np.asarray([
+    [1.115436, 1.245454, 0.391217],
+    [1.002373, 1.041436, 0.765947],
+    [1.000000, 1.000000, 1.000000],
+    [1.001225, 0.966940, 1.168587],
+    [1.012330, 0.888464, 1.636794],
+], dtype=np.float64)
+
 
 def _clampi(value, minimum, maximum):
     return max(minimum, min(maximum, int(round(float(value)))))
@@ -75,6 +101,19 @@ def normalize_creative_controls(settings=None):
     }
 
 
+def normalize_recipe_wb(settings=None):
+    source = settings if isinstance(settings, dict) else {}
+    return {
+        "red": _clampi(source.get("red", 0), -9, 9),
+        "blue": _clampi(source.get("blue", 0), -9, 9),
+    }
+
+
+def recipe_wb_is_neutral(settings=None):
+    controls = normalize_recipe_wb(settings)
+    return controls["red"] == 0 and controls["blue"] == 0
+
+
 def creative_is_neutral(settings=None):
     normalized = normalize_creative_controls(settings)
     if any(normalized[key] for key in ("recipe_highlight", "recipe_shadow", "recipe_color")):
@@ -102,6 +141,56 @@ def srgb_to_linear(rgb):
 def linear_to_srgb(rgb):
     rgb = np.asarray(rgb, dtype=np.float64)
     return np.where(rgb <= 0.0031308, 12.92 * rgb, 1.055 * np.maximum(rgb, 0.0) ** (1.0 / 2.4) - 0.055)
+
+
+def _interpolate_fuji_recipe_wb_gains(value, anchors):
+    value = float(np.clip(value, FUJI_RECIPE_WB_POSITIONS[0], FUJI_RECIPE_WB_POSITIONS[-1]))
+    return np.exp2(np.asarray([
+        np.interp(value, FUJI_RECIPE_WB_POSITIONS, np.log2(anchors[:, channel]))
+        for channel in range(3)
+    ], dtype=np.float64))
+
+
+def recipe_wb_linear_gains(settings=None):
+    """Return an empirical Fujifilm-style R/B shift in linear sRGB.
+
+    The four directions are independently calibrated to a controlled X-T1
+    Provia/5000 K reference sequence at 0, +/-5 and +/-9. Interpolation is
+    logarithmic between measured anchors. It remains an approximation when
+    applied after a Canon render because Fuji performs WB earlier in its own
+    camera/color pipeline.
+    """
+    controls = normalize_recipe_wb(settings)
+    red_gains = _interpolate_fuji_recipe_wb_gains(controls["red"], FUJI_RECIPE_WB_RED_GAINS)
+    blue_gains = _interpolate_fuji_recipe_wb_gains(controls["blue"], FUJI_RECIPE_WB_BLUE_GAINS)
+    return red_gains * blue_gains
+
+
+def _compress_linear_gamut(rgb):
+    """Compress chroma toward linear-light luminance instead of hard clipping."""
+    rgb = np.asarray(rgb, dtype=np.float64)
+    weights = np.asarray([0.2126, 0.7152, 0.0722], dtype=np.float64)
+    center = np.clip(np.sum(rgb * weights, axis=-1), 0.0, 1.0)
+    delta = rgb - center[..., None]
+    scale = np.ones_like(center)
+    for channel in range(3):
+        component = delta[..., channel]
+        positive = component > 1e-12
+        negative = component < -1e-12
+        upper = np.divide(1.0 - center, component, out=np.ones_like(center), where=positive)
+        lower = np.divide(center, -component, out=np.ones_like(center), where=negative)
+        scale = np.minimum(scale, np.where(positive, upper, 1.0))
+        scale = np.minimum(scale, np.where(negative, lower, 1.0))
+    return np.clip(center[..., None] + delta * np.clip(scale[..., None], 0.0, 1.0), 0.0, 1.0)
+
+
+def apply_recipe_wb_rgb(rgb, settings=None):
+    controls = normalize_recipe_wb(settings)
+    rgb = np.clip(np.asarray(rgb, dtype=np.float64), 0.0, 1.0)
+    if recipe_wb_is_neutral(controls):
+        return rgb.copy()
+    shifted = srgb_to_linear(rgb) * recipe_wb_linear_gains(controls)
+    return np.clip(linear_to_srgb(_compress_linear_gamut(shifted)), 0.0, 1.0)
 
 
 def linear_srgb_to_oklab(rgb):
@@ -293,3 +382,33 @@ def creative_lut_entry(settings=None, size=65):
     if creative_is_neutral(controls):
         return None
     return {"id": "creative-controls", "cube": creative_cube(controls, size), "enabled": True, "opacity": 1.0}
+
+
+def recipe_wb_cube(settings=None, size=65):
+    controls = normalize_recipe_wb(settings)
+    size = int(size)
+    if not 2 <= size <= 65:
+        raise ValueError("Recipe WB LUT size must be between 2 and 65")
+    grid = np.indices((size, size, size), dtype=np.float64)
+    rgb = np.stack([grid[2], grid[1], grid[0]], axis=-1).reshape(-1, 3) / float(size - 1)
+    output = apply_recipe_wb_rgb(rgb, controls).astype(np.float32)
+    encoded = json.dumps(controls, sort_keys=True, separators=(",", ":"))
+    fingerprint = hashlib.sha256((encoded + f"|{size}|fuji-recipe-wb-v2-xt1-provia").encode("utf-8")).hexdigest()
+    return {
+        "path": None,
+        "title": "Fuji-style Recipe WB",
+        "size": size,
+        "domain_min": [0.0, 0.0, 0.0],
+        "domain_max": [1.0, 1.0, 1.0],
+        "values": output.reshape(-1),
+        "source": "generated_fuji_recipe_wb",
+        "fingerprint": "recipe-wb:" + fingerprint,
+        "recipeWhiteBalance": deepcopy(controls),
+    }
+
+
+def recipe_wb_lut_entry(settings=None, size=65):
+    controls = normalize_recipe_wb(settings)
+    if recipe_wb_is_neutral(controls):
+        return None
+    return {"id": "fuji-recipe-wb", "cube": recipe_wb_cube(controls, size), "enabled": True, "opacity": 1.0}

@@ -4,7 +4,7 @@ from pathlib import Path
 from dataclasses import dataclass, field, asdict
 
 from canon_runtime import app_data_dir, legacy_app_data_dir
-from creative_controls import DEFAULT_CREATIVE_CONTROLS
+from creative_controls import DEFAULT_CREATIVE_CONTROLS, DEFAULT_RECIPE_WB
 
 APP_DIR_NAME = "CanonStyleStudio"
 PORTABLE_FORMAT = "canon-style-studio-portable-project"
@@ -94,6 +94,7 @@ class EditState:
     wb_gm_shift: int = 0
     custom_wb_mult: list | None = None
     preview_quality_mode: str = "working"
+    recipe_wb: dict = field(default_factory=lambda: copy.deepcopy(DEFAULT_RECIPE_WB))
     creative: dict = field(default_factory=lambda: copy.deepcopy(DEFAULT_CREATIVE_CONTROLS))
     luts: list = field(default_factory=list)
 

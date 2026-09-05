@@ -42,7 +42,7 @@ class CameraInstallDialog(QDialog):
     def __init__(self, main, parent=None):
         super().__init__(parent)
         self.main = main
-        self.setWindowTitle("Send to Camera · EOS RP validated workflow")
+        self.setWindowTitle("Send to Camera · Dynamic Canon workflow")
         self.resize(760, 680)
         self.setMinimumSize(680, 600)
         self.pool = QThreadPool(self)
@@ -54,20 +54,20 @@ class CameraInstallDialog(QDialog):
         self.assets = None
 
         layout = QVBoxLayout(self)
-        title = QLabel("Send to Camera · EOS RP")
+        title = QLabel("Send to Camera · Canon Dynamic")
         title.setStyleSheet("font-size:18pt;font-weight:700;")
         layout.addWidget(title)
         warning = QLabel(
-            "Physically validated only on EOS RP. RAW compatibility with another Canon model does not "
-            "validate its registration payload. EOS Utility remains the transaction owner; this app never "
-            "auto-clicks its interface."
+            "The dynamic method is physically validated first on EOS RP; other bodies remain experimental "
+            "until tested. The app uses the live Canon camera ID, descriptor and carrier, and writes only "
+            "after strict native-size/header validation. EOS Utility remains the transaction owner."
         )
         warning.setWordWrap(True)
         warning.setStyleSheet("color:#FFB86B;font-weight:600;")
         layout.addWidget(warning)
 
         assets_row = QHBoxLayout()
-        assets_row.addWidget(QLabel("EOS RP support files"))
+        assets_row.addWidget(QLabel("Canon compiler self-test files"))
         self.assets_status = QLabel("Not configured")
         self.assets_status.setWordWrap(True)
         assets_row.addWidget(self.assets_status, 1)
@@ -79,9 +79,9 @@ class CameraInstallDialog(QDialog):
         assets_row.addWidget(self.import_zip_button)
         layout.addLayout(assets_row)
         support_help = QLabel(
-            "Required package: CANON_RP_MANUAL_LOADER_V2_4_0_BASE_STYLE.zip. It contains five exact "
-            "compiler/carrier fixtures plus the validated Canon base PF3 files. These captured/Canon-derived "
-            "binaries are not redistributed in the public app; import your existing ZIP here."
+            "The existing Manual Loader support set is retained only for the exact fail-closed Canon compiler "
+            "self-test and validated base PF3 files. Camera-specific payloads are now obtained dynamically "
+            "from the live EOS Utility transaction."
         )
         support_help.setWordWrap(True)
         support_help.setObjectName("Muted")
@@ -89,7 +89,7 @@ class CameraInstallDialog(QDialog):
 
         target_row = QHBoxLayout()
         target_row.addWidget(QLabel("Target"))
-        self.target = QLabel("EOS RP install · unvalidated-camera payload capture")
+        self.target = QLabel("Automatic Canon camera-family detection")
         target_row.addWidget(self.target, 1)
         target_row.addWidget(QLabel("Choose User Def. 1, 2 or 3 in EOS Utility"))
         layout.addLayout(target_row)
@@ -109,15 +109,15 @@ class CameraInstallDialog(QDialog):
         layout.addWidget(self.requirements)
 
         self.confirm_rp = QCheckBox(
-            "I understand EOS RP is the only validated write target; unknown payload layouts are captured without patching"
+            "I understand non-RP camera installation is experimental and will proceed only if every dynamic validation passes"
         )
         self.confirm_rp.toggled.connect(self.update_prepare_enabled)
         layout.addWidget(self.confirm_rp)
 
         self.steps = QLabel(
-            "Workflow: export the current editor state → exact Canon compiler self-test → compile Block1 → "
-            "build the validated 16752-byte RP payload → arm the hook → you perform a normal registration "
-            "in EOS Utility. Property 0x00000115 remains untouched."
+            "Workflow: export PF3 → exact Canon compiler self-test → capture the connected camera's live ID, "
+            "descriptor and genuine carrier → Canon-native PF3 recompilation for that family → size/header/sentinel "
+            "validation → replace only 0x01000203. Property 0x00000115 remains untouched."
         )
         self.steps.setWordWrap(True)
         layout.addWidget(self.steps)
@@ -248,7 +248,7 @@ class CameraInstallDialog(QDialog):
         if not bool((self.main.base_resolution or {}).get("validated")):
             reasons.append("Select a hash-validated Canon base PF3 (the imported ZIP supplies these bases)")
         if not self.confirm_rp.isChecked():
-            reasons.append("Confirm that the connected camera is an EOS RP")
+            reasons.append("Confirm the experimental dynamic-camera safety notice")
         return reasons
 
     def update_prepare_enabled(self):
@@ -258,7 +258,7 @@ class CameraInstallDialog(QDialog):
             self.requirements.setText("Before preparing:\n• " + "\n• ".join(reasons))
             self.requirements.setStyleSheet("color:#FFB86B;font-weight:600;")
         else:
-            self.requirements.setText("✓ Ready to prepare and arm the validated EOS RP workflow")
+            self.requirements.setText("✓ Ready to prepare the dynamic Canon camera workflow")
             self.requirements.setStyleSheet("color:#72D58A;font-weight:600;")
         # Keep the button clickable while prerequisites are missing so a click
         # explains the blockers instead of appearing to do nothing. Safety is
@@ -273,7 +273,7 @@ class CameraInstallDialog(QDialog):
         try:
             import subprocess
             subprocess.Popen([str(executable)], cwd=str(executable.parent))
-            self.append("EOS Utility 3 opened. Connect the EOS RP and leave EOS Utility running.")
+            self.append("EOS Utility 3 opened. Connect the Canon camera and leave EOS Utility running.")
         except Exception as exc:
             QMessageBox.critical(self, "EOS Utility", str(exc))
 
@@ -282,7 +282,7 @@ class CameraInstallDialog(QDialog):
         if reasons:
             message = "Camera installation is not ready:\n\n• " + "\n• ".join(reasons)
             self.append(message.replace("\n\n", " ").replace("\n", " "))
-            QMessageBox.warning(self, "Cannot prepare EOS RP", message)
+            QMessageBox.warning(self, "Cannot prepare camera installation", message)
             return
         try:
             assets = validate_rp_asset_folder(self.main.settings.data.get("camera_assets_folder") or "")
@@ -302,7 +302,7 @@ class CameraInstallDialog(QDialog):
             slot = 0  # The genuine EOS Utility transaction determines the slot.
             base_style = self.main.base_combo.currentText()
         except Exception as exc:
-            QMessageBox.critical(self, "Cannot prepare EOS RP", str(exc))
+            QMessageBox.critical(self, "Cannot prepare camera installation", str(exc))
             return
 
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -333,14 +333,15 @@ class CameraInstallDialog(QDialog):
                 "pf3":pf3_path.name, "pf3Size":size, "pf3Sha256":digest,
                 "basePictureStyle":base_style, "baseTemplateValidated":True,
                 "basePf3Sha256":base_info.get("sha256"),
-                "cameraTarget":"EOS RP", "slot":None, "slotPolicy":"dynamicUserDef1To3",
+                "cameraTarget":"Dynamic Canon family", "slot":None, "slotPolicy":"dynamicUserDef1To3",
             }
             pf3_path.with_suffix(".manifest.json").write_text(
                 json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
             )
             self.worker.signals.event.emit({"type":"pf3_ready", "size":size, "sha256":digest})
             return self.installer.prepare_and_arm(
-                pf3_path, slot, style_name, output_dir, launch_eos=True
+                pf3_path, slot, style_name, output_dir, launch_eos=True,
+                base_pf3_path=base,
             )
 
         self.worker = CameraPrepareWorker(work)
@@ -364,12 +365,32 @@ class CameraInstallDialog(QDialog):
             self.append("EOS Utility 3 started. Waiting for Canon modules…")
         elif kind == "selftest_pass":
             self.append("Compiler self-test: EXACT 8192-byte match.")
+        elif kind == "target_oracle_pass":
+            self.append(
+                "Current PF3 camera block validated · "
+                f"{event.get('differenceCount')} bytes differ from the Canon base block."
+            )
         elif kind == "ready":
-            self.append("EdsCFParse + EDSDK hook ready inside EOS Utility.")
+            self.append("Canon dynamic compiler + EDSDK hook ready inside EOS Utility.")
         elif kind == "armed":
-            self.append("Hook armed · choose User Def. 1, 2 or 3 in EOS Utility.")
+            self.append("Dynamic hook armed · choose User Def. 1, 2 or 3 in EOS Utility.")
+        elif kind == "compiler_input_captured":
+            if event.get("input") == "cameraId":
+                self.append(f"Live Canon camera ID captured · {event.get('cameraIdHex')}")
+            else:
+                self.append(f"Live Canon descriptor captured · {event.get('size')} bytes")
+        elif kind == "compiler_input_error":
+            self.append("ERROR: Could not capture a live Canon compiler input · " + str(event.get("error")))
         elif kind == "registration_seen":
             self.append(f"Genuine registration seen · User Def. {event.get('slot')} · {event.get('size')} bytes")
+        elif kind == "carrier_family_detected":
+            state = "enabled" if event.get("installEnabled") else "diagnostic capture only"
+            self.append(
+                f"Carrier family detected · {event.get('familyId')} · {state} · "
+                f"{event.get('familyStatus')}"
+            )
+        elif kind == "native_payload_observed":
+            self.append(f"Genuine Canon carrier observed · {event.get('size')} bytes · retained only as a report hash")
         elif kind == "native_payload_captured":
             self.append(
                 f"Read-only diagnostic capture saved · {event.get('captureFile')} · "
@@ -380,13 +401,19 @@ class CameraInstallDialog(QDialog):
         elif kind == "control115_seen":
             self.append(f"0x00000115 observed ({event.get('size')} bytes) · UNTOUCHED")
         elif kind == "payload_patched":
-            self.append("Outgoing 0x01000203 payload replaced with validated EOS RP payload.")
+            compiler = event.get("compiler") or {}
+            self.append(
+                "Outgoing 0x01000203 replaced with Canon-native dynamic payload · "
+                f"{event.get('size')} bytes · camera ID {compiler.get('cameraIdHex')} · "
+                f"{compiler.get('meaningfulDifferences')} PF3-data byte differences · "
+                f"{compiler.get('strategy')}"
+            )
         elif kind == "registration_return":
             self.append(f"0x01000203 returned rc={event.get('rc')} · patched={event.get('patched')}")
         elif kind == "install_success":
             self.completed = True
             self.progress.setValue(5)
-            self.append(f"✓ EOS RP accepted User Def. {event.get('slot')}.")
+            self.append(f"✓ Canon camera accepted User Def. {event.get('slot')}.")
             self.steps.setText(
                 "Installation completed. Close EOS Utility completely and reopen it before preparing the next "
                 "preset; repeated transactions have shown state-related reliability problems."
@@ -403,12 +430,12 @@ class CameraInstallDialog(QDialog):
         self.progress.setValue(4)
         self.assets_button.setEnabled(True)
         self.import_zip_button.setEnabled(True)
-        self.append(f"✓ ARMED · compiler/self-test and payload validation passed")
+        self.append("✓ ARMED · exact compiler self-test passed; live camera-family validation is waiting")
         self.append(f"PF3: {Path(result['pf3']).name}")
         self.append(f"Install report: {Path(result['reportPath']).name}")
         self.steps.setText(
             "FINAL STEP — In EOS Utility, register the generated PF3 normally to User Def. 1, 2 or 3. "
-            f"Expected camera name: {result['styleName']}. The app is waiting for the genuine 0x01000203 write. "
+            f"Expected camera name: {result['styleName']}. The app will capture and validate the native family before writing. "
             "Do not close this window until success or until you intentionally disarm."
         )
         try:
@@ -428,13 +455,13 @@ class CameraInstallDialog(QDialog):
             self.installer.close()
             self.installer = None
         self.update_prepare_enabled()
-        QMessageBox.critical(self, "EOS RP installation blocked", message)
+        QMessageBox.critical(self, "Canon camera installation blocked", message)
 
     def _shutdown(self, confirm=True):
         if self.installer and self.installer.armed and not self.completed:
             if confirm:
                 answer = QMessageBox.question(
-                    self, "Disarm EOS RP installation",
+                    self, "Disarm Canon camera installation",
                     "The EOS Utility hook is armed. Close this window and disarm it?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,

@@ -16,7 +16,8 @@ from canon_runtime import BUILD_ID, PUBLIC_VERSION
 
 
 HERE=Path(__file__).resolve().parent
-RELEASE_NAME=f"CanonStyleStudio_Public_Alpha_{PUBLIC_VERSION}_Windows_x64"
+PUBLIC_RELEASE_NAME=f"CanonStyleStudio_Public_Alpha_{PUBLIC_VERSION}_Windows_x64"
+PRIVATE_RELEASE_NAME=f"CanonStyleStudio_{PUBLIC_VERSION}_PRIVATE_MULTI_CAMERA_TEST"
 CANON_FORBIDDEN_NAMES=(
     "dppcore.dll","edscfparse.dll","pseditor.exe","dppviewer.exe",
     "superia_selftest.pf3","superia_expected_block_8192.bin",
@@ -38,19 +39,25 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def audit(root):
+def audit(root, allow_private_support=False):
     problems=[]
     for path in root.rglob("*"):
         if not path.is_file():continue
+        if allow_private_support:
+            try:
+                if path.is_relative_to(root/"camera_support"):continue
+            except ValueError:
+                pass
         lower=path.name.lower()
         if lower in CANON_FORBIDDEN_NAMES or path.suffix.lower() in FORBIDDEN_SUFFIXES:problems.append(str(path.relative_to(root)))
         if any(part.lower()=="__pycache__" for part in path.parts):problems.append(str(path.relative_to(root)))
     return sorted(set(problems))
 
 
-def build(output_root):
+def build(output_root, private_multi_camera=False):
     output_root=output_root.resolve();output_root.mkdir(parents=True,exist_ok=True)
-    release=output_root/RELEASE_NAME
+    release_name=PRIVATE_RELEASE_NAME if private_multi_camera else PUBLIC_RELEASE_NAME
+    release=output_root/release_name
     if release.exists():shutil.rmtree(release)
     with tempfile.TemporaryDirectory(prefix="canon_style_build_",dir=output_root) as temp_name:
         temp=Path(temp_name);worker_dist=temp/"worker_dist";main_dist=temp/"main_dist"
@@ -67,6 +74,7 @@ def build(output_root):
              "--add-data",f"{HERE/'example_luts'/'hald_identity_8.png'}{separator}example_luts",
              "--add-data",f"{HERE/'example_luts'/'Lightroom_Hald_Template_512_64cube_sRGB_16bit.tif'}{separator}example_luts",
              "--add-data",f"{HERE/'camera_install'/'rp_loader_agent.js'}{separator}camera_install",
+             "--add-data",f"{HERE/'camera_install'/'dynamic_camera_agent.js'}{separator}camera_install",
              HERE/"canon_style_studio.py"])
         built=main_dist/"CanonStyleStudio"
         if not (built/"CanonStyleStudio.exe").is_file():raise RuntimeError("Standalone application was not generated")
@@ -83,19 +91,31 @@ def build(output_root):
         shutil.copy2(HERE/name,release/name)
     (release/"START_CANON_STYLE_STUDIO.bat").write_text(
         '@echo off\r\ncd /d "%~dp0"\r\nstart "" "CanonStyleStudio.exe"\r\n',encoding="ascii")
-    manifest={"name":RELEASE_NAME,"version":PUBLIC_VERSION,"build_id":BUILD_ID,
+    if private_multi_camera:
+        support=HERE/"camera_support"
+        if not support.is_dir():raise RuntimeError("Private camera support folder is unavailable")
+        shutil.copytree(support,release/"camera_support")
+        (release/"PRIVATE_TEST_PACKAGE.txt").write_text(
+            "Private multi-camera compatibility build. Canon/Manual Loader research fixtures are included.\n"
+            "Do not publish or redistribute this folder publicly.\n",encoding="utf-8")
+    manifest={"name":release_name,"version":PUBLIC_VERSION,"build_id":BUILD_ID,
               "created_utc":datetime.now(timezone.utc).isoformat(),"architecture":"Windows x64",
               "python_required":False,"pse_required_for_canon_raw":True,
-              "canon_resources_bundled":False,"entrypoint":"CanonStyleStudio.exe",
-              "camera_install":{"validated_bodies":["EOS RP"],"external_support_assets_required":True,"support_assets_bundled":False},
+              "canon_resources_bundled":bool(private_multi_camera),"entrypoint":"CanonStyleStudio.exe",
+              "distribution":"private compatibility testing only; do not publish" if private_multi_camera else "public",
+              "camera_install":{"method":"validated oracle block plus guarded carrier-family registry","physically_validated_bodies":["EOS RP"],"physically_exercised_bodies":["EOS R8 (83076/Aerochrome)"],"enabled_carrier_sizes":[16744,16752,78980,83076],"capture_only_carrier_sizes":[8164,8168,8528,16720,431616],"experimental_bodies":"all bodies not physically validated","external_selftest_assets_required":not private_multi_camera,"support_assets_bundled":bool(private_multi_camera)},
               "portable_storage":{"settings":"app_data","support":"camera_support","camera_exports":"exported_styles"}}
     (release/"STANDALONE_MANIFEST.json").write_text(json.dumps(manifest,indent=2),encoding="utf-8")
-    problems=audit(release)
+    problems=audit(release,allow_private_support=private_multi_camera)
     if problems:raise RuntimeError("Standalone audit found forbidden files:\n"+"\n".join(problems))
-    zip_path=output_root/f"{RELEASE_NAME}.zip";temp_zip=zip_path.with_suffix(".zip.tmp")
+    if private_multi_camera:
+        print(f"[PASS] {release}")
+        print("[PASS] Private folder only; no ZIP generated")
+        return release,None
+    zip_path=output_root/f"{release_name}.zip";temp_zip=zip_path.with_suffix(".zip.tmp")
     if temp_zip.exists():temp_zip.unlink()
     with zipfile.ZipFile(temp_zip,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=9,allowZip64=True) as archive:
-        for path in sorted(p for p in release.rglob("*") if p.is_file()):archive.write(path,f"{RELEASE_NAME}/{path.relative_to(release).as_posix()}")
+        for path in sorted(p for p in release.rglob("*") if p.is_file()):archive.write(path,f"{release_name}/{path.relative_to(release).as_posix()}")
     temp_zip.replace(zip_path)
     with zipfile.ZipFile(zip_path) as archive:
         bad=archive.testzip()
@@ -108,7 +128,8 @@ def build(output_root):
 
 def main(argv=None):
     parser=argparse.ArgumentParser();parser.add_argument("--output-root",type=Path,default=HERE.parent/"PUBLIC_ALPHA_STANDALONE")
-    args=parser.parse_args(argv);build(args.output_root);return 0
+    parser.add_argument("--private-multi-camera",action="store_true")
+    args=parser.parse_args(argv);build(args.output_root,private_multi_camera=args.private_multi_camera);return 0
 
 
 if __name__=="__main__":raise SystemExit(main())

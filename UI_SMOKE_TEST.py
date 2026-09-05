@@ -18,8 +18,8 @@ from canon_style_studio import CanonStyleStudioQt, ExportDialog, app_stylesheet
 from camera_install.ui import CameraInstallDialog
 
 
+RAW=Path(r"C:\Users\Filipe\Documents\canon rp\IMG_2748.CR3")
 HERE=Path(__file__).resolve().parent
-RAW=Path(os.environ.get("CANON_STYLE_STUDIO_TEST_PORTRAIT",HERE/"test_files"/"IMG_2748.CR3"))
 
 
 def structure_correlation(reference,candidate):
@@ -55,6 +55,7 @@ def main():
             window.zoom_combo.setCurrentText("100%")
             window.viewer.setViewState(0.37,0.61,0.44,"100%")
             before=(tuple(window.viewer.center),window.viewer.split,window.viewer.zoom_mode)
+            window.recipe_wb_red.setValue(4);window.recipe_wb_blue.setValue(-5)
             window.exposure.setValue(1.2);window.ab_shift.setValue(3);window.gm_shift.setValue(-2)
             # Programmatic slider changes do not emit sliderReleased; mirror the
             # real interaction so the native-detail render is scheduled.
@@ -73,6 +74,7 @@ def main():
             assert abs(window.last_canon_settings["exposure"]-1.2)<1e-6,window.last_canon_settings
             assert window.last_canon_settings["wb_ab_shift"]==3.0,window.last_canon_settings
             assert window.last_canon_settings["wb_gm_shift"]==-2.0,window.last_canon_settings
+            assert window.controls_dict()["recipe_wb"]=={"red":4,"blue":-5},window.controls_dict()
             assert "Fast preview" not in window.status.text(),window.status.text()
             state["working_view"]=after
         except Exception:

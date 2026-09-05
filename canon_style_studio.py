@@ -48,13 +48,14 @@ from render_geometry import fit_size_within_box, oriented_native_size
 from canon_runtime import (
     PUBLIC_NAME, PUBLIC_VERSION, BUILD_ID, discover_pse, ensure_runtime_input_profile,
     runtime_environment, sanitize_path, system_summary, reports_dir, logs_dir, sha256_file,
+    exported_styles_dir,
 )
 from test_report import create_test_report_zip
 from camera_install.ui import CameraInstallDialog
 from camera_install.rp_assets import discover_rp_assets
 from creative_controls import (
-    AXIS_NAMES, DEFAULT_CREATIVE_CONTROLS, IDENTITY_TONE_CURVE,
-    evaluate_tone_curve, normalize_creative_controls,
+    AXIS_NAMES, DEFAULT_CREATIVE_CONTROLS, DEFAULT_RECIPE_WB, IDENTITY_TONE_CURVE,
+    evaluate_tone_curve, normalize_creative_controls, normalize_recipe_wb,
 )
 
 HERE = Path(__file__).resolve().parent
@@ -671,11 +672,12 @@ class ExportDialog(QDialog):
     def refresh(self):
         s=self.main.edit_state_dict(); active=[x for x in self.main.luts if x.get("enabled") and x.get("opacity",0)>0]
         validity="validated local template" if s.get("baseTemplateValidated") else "EXPERIMENTAL generated template"
+        recipe_wb=normalize_recipe_wb(s.get("recipe_wb"));recipe_wb_text=f"R{recipe_wb['red']:+d} / B{recipe_wb['blue']:+d}" if any(recipe_wb.values()) else "neutral"
         creative=s.get("creative") or {};axes=creative.get("color_axes") or {};active_axes=sum(1 for value in axes.values() if any(value.values()))
         recipe_active=any(int(creative.get(key,0) or 0) for key in ("recipe_highlight","recipe_shadow","recipe_color"))
         creative_active=recipe_active or active_axes or creative.get("color_chrome")!="Off" or creative.get("color_chrome_fx_blue")!="Off" or creative.get("tone_curve")!=IDENTITY_TONE_CURVE
-        self.summary.setText(f"Base: <b>{s['base_name']}</b> · {validity}<br>LUT stack: <b>{len(active)} layers</b> · Creative Color: <b>{'active' if creative_active else 'neutral'}</b><br>Canon table: <b>33³ / 12-bit</b><br>Contrast: <b>{s['contrast']:+d}</b> · Saturation: <b>{s['saturation']:+d}</b> · Color Tone: <b>{s['color_tone']:+d}</b>")
-        default=self.main.settings.get_folder("last_export_folder",HERE)/(self.main.project_name.text().strip() or "CanonStyle")
+        self.summary.setText(f"Base: <b>{s['base_name']}</b> · {validity}<br>Recipe WB: <b>{recipe_wb_text}</b> · LUT-baked / approximate<br>LUT stack: <b>{len(active)} layers</b> · Creative Color: <b>{'active' if creative_active else 'neutral'}</b><br>Canon table: <b>33³ / 12-bit</b><br>Contrast: <b>{s['contrast']:+d}</b> · Saturation: <b>{s['saturation']:+d}</b> · Color Tone: <b>{s['color_tone']:+d}</b>")
+        default=self.main.settings.get_folder("last_export_folder",exported_styles_dir())/(self.main.project_name.text().strip() or "CanonStyle")
         self.path.setText(str(default.with_suffix('.pf3')))
     def choose(self):
         p,_=QFileDialog.getSaveFileName(self,"Export Canon PF3",self.path.text(),"Canon Picture Style (*.pf3)")
@@ -683,6 +685,8 @@ class ExportDialog(QDialog):
     def start_export(self):
         p=Path(self.path.text().strip())
         if not p.name:return
+        if p.suffix.lower()!=".pf3":
+            p=p.with_suffix(".pf3");self.path.setText(str(p))
         self.export.setEnabled(False);self.progress.setValue(0);self.log.clear();self.main.settings.remember_file("last_export_folder",p)
         # Capture every UI value before entering the background worker. No Qt
         # widget or mutable UI state is accessed from the engine thread.
@@ -702,6 +706,7 @@ class ExportDialog(QDialog):
                       "basePictureStyle":state.get("basePictureStyle") or state.get("base_name"),"baseTemplateSource":base.get("source"),
                       "baseTemplateValidated":bool(base.get("validated")),"basePf3Sha256":base.get("sha256"),
                       "canonTable":{"size":33,"bitDepth":12,"properties":["0x40001070","0x40001071"]},
+                      "recipeWhiteBalance":{"method":"fuji-xt1-provia-rb-lut-v2","accuracy":"empirically-calibrated-approximation","order":"before-user-lut-stack",**normalize_recipe_wb(state.get("recipe_wb"))},
                       "luts":context["luts"],"creativeControls":state.get("creative") or {}}
             output.with_suffix('.manifest.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False),encoding='utf-8')
         except Exception:pass
@@ -734,6 +739,7 @@ class CanonStyleStudioQt(QMainWindow):
         self._active_workers=set()
         self.references=[]; self.current_reference=-1; self.source_full=None; self.source_native_size=None; self.source_is_raw=False; self.source_embedded=False; self.raw_info={}; self.luts=[]; self.custom_base_path=None; self.current_source_path=None;self.base_resolution=None
         self.creative_controls=normalize_creative_controls(DEFAULT_CREATIVE_CONTROLS)
+        self.recipe_wb_controls=normalize_recipe_wb(DEFAULT_RECIPE_WB)
         self.project_path=None; self.snapshots={"A":None,"B":None,"C":None}; self.history=HistoryManager(); self.reference_cache=OrderedDict(); self.applying_state=True; self.render_running=False; self.render_pending=None; self.preview_running=False; self.preview_pending=None; self.render_generation=0; self.load_generation=0; self.eyedropper_active=False; self.custom_wb_mult=None; self.dirty=False; self.last_canon_base=None; self.last_canon_settings=None; self.last_canon_source=None; self.last_canon_native=False; self.last_canon_resolution=None; self.dpp_failure_cache={};self.closing=False
         self.full_render_timer=QTimer(self);self.full_render_timer.setSingleShot(True);self.full_render_timer.timeout.connect(self.start_final_render)
         self.canon_render_timer=QTimer(self);self.canon_render_timer.setSingleShot(True);self.canon_render_timer.timeout.connect(self.start_pending_canon_render)
@@ -801,7 +807,7 @@ class CanonStyleStudioQt(QMainWindow):
         self.redo_btn=QToolButton(text="↷");self.redo_btn.setToolTip("Redo · Ctrl+Y");self.redo_btn.clicked.connect(self.redo);tl.addWidget(self.redo_btn)
         self.report_btn=QPushButton("Create Test Report");self.report_btn.clicked.connect(self.create_test_report);tl.addWidget(self.report_btn)
         self.about_btn=QToolButton(text="About / Alpha");self.about_btn.clicked.connect(self.show_about);tl.addWidget(self.about_btn)
-        self.camera_btn=QPushButton("SEND TO CAMERA");self.camera_btn.setToolTip("Validated loader-assisted EOS RP workflow");self.camera_btn.clicked.connect(self.open_camera_install);tl.addWidget(self.camera_btn)
+        self.camera_btn=QPushButton("SEND TO CAMERA");self.camera_btn.setToolTip("Dynamic Canon camera-family workflow; EOS RP physically validated, other bodies experimental");self.camera_btn.clicked.connect(self.open_camera_install);tl.addWidget(self.camera_btn)
         self.export_btn=QPushButton("EXPORT PF3");self.export_btn.setObjectName("AccentButton");self.export_btn.clicked.connect(self.open_export);tl.addWidget(self.export_btn);main.addWidget(top)
 
         content=QSplitter(Qt.Orientation.Horizontal); content.setChildrenCollapsible(False); main.addWidget(content,1);self.content_splitter=content
@@ -836,7 +842,7 @@ class CanonStyleStudioQt(QMainWindow):
         row=QHBoxLayout();row.addWidget(QLabel("Kelvin"));self.kelvin=QSpinBox();self.kelvin.setRange(2500,10000);self.kelvin.setSingleStep(100);self.kelvin.setValue(5200);self.kelvin.valueChanged.connect(self.schedule_canon_render);self.kelvin.editingFinished.connect(self.commit_history);row.addWidget(self.kelvin);sec.body_layout.addLayout(row)
         row=QHBoxLayout();row.addWidget(QLabel("RAW image/shot"));self.shot_index=QSpinBox();self.shot_index.setRange(0,999);self.shot_index.setValue(0);self.shot_index.setEnabled(False);self.shot_index.setToolTip("DPP4Lib opens the primary RAW image. Multi-shot selection remains available only through the LibRaw fallback.");row.addWidget(self.shot_index);sec.body_layout.addLayout(row)
         self.ab_shift=ValueSlider("WB Shift  B ↔ A",-9,9,0);self.gm_shift=ValueSlider("WB Shift  G ↔ M",-9,9,0);sec.body_layout.addWidget(self.ab_shift);sec.body_layout.addWidget(self.gm_shift)
-        for s in (self.ab_shift,self.gm_shift):s.changed.connect(self.schedule_canon_render);s.committed.connect(self.commit_history)
+        for s in (self.ab_shift,self.gm_shift):s.changed.connect(self.schedule_canon_render);s.changed.connect(self._update_recipe_wb_status);s.committed.connect(self.commit_history)
         row=QHBoxLayout();self.eyedrop=QPushButton("Eyedropper WB");self.eyedrop.setCheckable(True);self.eyedrop.toggled.connect(self.toggle_eyedropper);row.addWidget(self.eyedrop);clear=QPushButton("Clear custom WB");clear.clicked.connect(self.clear_custom_wb);row.addWidget(clear);sec.body_layout.addLayout(row)
         note=QLabel("Requires Canon Picture Style Editor to be installed; Digital Photo Professional is not required. CR3/CR2 preview uses PSE's local DPP4Lib without opening PSE. Exposure, fixed/Kelvin WB and both WB Shift axes are Canon-native. Eyedropper WB is a post-Canon experimental adjustment.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
 
@@ -861,6 +867,13 @@ class CanonStyleStudioQt(QMainWindow):
     def build_creative_section(self):
         sec=CollapsibleSection("RECIPE · TONE CURVE · COLOR AXES",expanded=False);self.side_layout.addWidget(sec);self.creative_section=sec
         recipe=QLabel("Recipe-style · LUT-baked");recipe.setObjectName("Muted");sec.body_layout.addWidget(recipe)
+        recipe_wb=QLabel("Fuji-style Recipe WB · baked before LUT stack");recipe_wb.setObjectName("Muted");sec.body_layout.addWidget(recipe_wb)
+        self.recipe_wb_red=ValueSlider("WB Shift Red (R)",-9,9,self.recipe_wb_controls["red"])
+        self.recipe_wb_blue=ValueSlider("WB Shift Blue (B)",-9,9,self.recipe_wb_controls["blue"])
+        for slider in (self.recipe_wb_red,self.recipe_wb_blue):
+            sec.body_layout.addWidget(slider);slider.changed.connect(self._recipe_wb_changed);slider.committed.connect(self.commit_history)
+        self.recipe_wb_status=QLabel();self.recipe_wb_status.setObjectName("Muted");self.recipe_wb_status.setWordWrap(True);sec.body_layout.addWidget(self.recipe_wb_status)
+        reset_wb=QPushButton("Reset Recipe WB");reset_wb.clicked.connect(self.reset_recipe_wb);sec.body_layout.addWidget(reset_wb)
         self.recipe_highlight=ValueSlider("Highlight",-2,4,self.creative_controls["recipe_highlight"])
         self.recipe_shadow=ValueSlider("Shadow",-2,4,self.creative_controls["recipe_shadow"])
         self.recipe_color=ValueSlider("Color",-4,4,self.creative_controls["recipe_color"])
@@ -877,8 +890,39 @@ class CanonStyleStudioQt(QMainWindow):
         row=QHBoxLayout();row.addWidget(QLabel("Blue Chrome-style"));self.color_chrome_blue=QComboBox();self.color_chrome_blue.addItems(["Off","Weak","Strong"]);row.addWidget(self.color_chrome_blue,1);sec.body_layout.addLayout(row)
         self.color_chrome.currentTextChanged.connect(self._chrome_changed);self.color_chrome_blue.currentTextChanged.connect(self._chrome_changed)
         reset_all=QPushButton("Reset Creative Color");reset_all.clicked.connect(self.reset_creative_controls);sec.body_layout.addWidget(reset_all)
-        note=QLabel("Recipe controls and Creative Color are LUT-baked after the LUT stack. Negative Highlight softens highlights; negative Shadow lifts shadows. Working Preview is responsive; Canon 33³ Preview shows the final combined 33³/12-bit transform. These controls are not claimed as Fujifilm-native.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
+        note=QLabel("Fuji-style Recipe WB is an APPROXIMATE R/B grid cast, LUT-baked before user LUTs and included in PF3 export. It is independent from Canon-native WB Shift; using both combines both effects. Other Recipe and Creative Color controls are baked after the LUT stack. Canon 33³ Preview shows the final combined 33³/12-bit transform.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
         self._axis_selected(self.axis_combo.currentText())
+        self._update_recipe_wb_status()
+
+    def _recipe_wb_changed(self,_value=None):
+        if self.applying_state:return
+        self.recipe_wb_controls=normalize_recipe_wb({"red":self.recipe_wb_red.value(),"blue":self.recipe_wb_blue.value()})
+        self._update_recipe_wb_status()
+        self.schedule_render(True)
+
+    def _update_recipe_wb_status(self,_value=None):
+        if not hasattr(self,"recipe_wb_status"):return
+        controls=normalize_recipe_wb(getattr(self,"recipe_wb_controls",None))
+        active=bool(controls["red"] or controls["blue"])
+        canon_active=hasattr(self,"ab_shift") and bool(self.ab_shift.value() or self.gm_shift.value())
+        if active and canon_active:
+            self.recipe_wb_status.setText(f"R{controls['red']:+d} / B{controls['blue']:+d} · ⚠ Canon WB Shift is also active; both effects are combined.")
+            self.recipe_wb_status.setStyleSheet("color:#FFB45C;")
+        elif active:
+            self.recipe_wb_status.setText(f"R{controls['red']:+d} / B{controls['blue']:+d} · LUT-baked / APPROXIMATE")
+            self.recipe_wb_status.setStyleSheet("")
+        else:
+            self.recipe_wb_status.setText("R+0 / B+0 · neutral")
+            self.recipe_wb_status.setStyleSheet("")
+
+    def set_recipe_wb_controls(self,settings):
+        self.recipe_wb_controls=normalize_recipe_wb(settings)
+        for slider,key in ((self.recipe_wb_red,"red"),(self.recipe_wb_blue,"blue")):
+            slider.blockSignals(True);slider.setValue(self.recipe_wb_controls[key]);slider.blockSignals(False)
+        self._update_recipe_wb_status()
+
+    def reset_recipe_wb(self):
+        self.set_recipe_wb_controls(DEFAULT_RECIPE_WB);self.commit_and_render()
 
     def _recipe_control_changed(self,_value=None):
         if self.applying_state:return
@@ -976,7 +1020,7 @@ class CanonStyleStudioQt(QMainWindow):
             "• Tone Curve, Six Color-Axes and Chrome-style controls (LUT-baked)\n"
             "• Compatibility with untested Canon bodies\n\n"
             "Canon software and libraries are not distributed with Canon Style Studio.\n"
-            "Send to Camera uses the loader-assisted EOS Utility workflow and is physically validated only for EOS RP.\n"
+            "Send to Camera dynamically uses the connected Canon camera ID, descriptor and native carrier. EOS RP is physically validated; other bodies remain experimental until tested.\n"
             "External hash-validated support fixtures are required and are not distributed with this build.\n"
             "Canon Style Studio is independent experimental software and is not affiliated with or endorsed by Canon.")
 
@@ -1013,8 +1057,10 @@ class CanonStyleStudioQt(QMainWindow):
                 "fallback_reason":self.raw_info.get("fallback_reason"),
             },
             "camera_install":{
-                "integrated":True,"validated_body":"EOS RP","raw_compatibility_is_camera_compatibility":False,
+                "integrated":True,"method":"dynamic Canon camera family","physically_validated_bodies":["EOS RP"],
+                "other_bodies":"experimental until physical validation","raw_compatibility_is_camera_compatibility":False,
                 "support_assets_validated":bool(camera_assets),"support_fixture_hashes":dict(camera_assets.hashes) if camera_assets else None,
+                "live_inputs":["0x01000001","0x01000210","0x01000203"],
                 "patch_property":"0x01000203","property_0x00000115":"observation only / never patched",
             },
             "settings":{
@@ -1143,7 +1189,7 @@ class CanonStyleStudioQt(QMainWindow):
             # approximated here. Those controls now use a debounced real DPP render,
             # eliminating the large colour/tone jump when the final frame arrives.
             post={"custom_wb_mult":raw_preview.get("custom_wb_mult")}
-            sharp={"sharpness_override":controls.get("sharpness_override",False),"sharp_strength":controls.get("sharp_strength",0),"creative":controls.get("creative")}
+            sharp={"sharpness_override":controls.get("sharpness_override",False),"sharp_strength":controls.get("sharp_strength",0),"recipe_wb":controls.get("recipe_wb"),"creative":controls.get("creative")}
             inp,out=self.render_engine.render_from_canon_base(im,luts,sharp,preview_mode,post,max_side=max(im.size))
             resolution=self.last_canon_resolution or ("native" if self.last_canon_native else "working")
             return inp,out,{"decoder":"Cached Canon composition","render_size":inp.size,"native_size":self.source_native_size or inp.size,"resolution":resolution}
@@ -1210,7 +1256,7 @@ class CanonStyleStudioQt(QMainWindow):
         self.base_resolution=self.resolve_current_base(optional=optional)
         return Path(self.base_resolution["path"]) if self.base_resolution else None
     def controls_dict(self):
-        return {"contrast":int(self.contrast.value()),"saturation":int(self.saturation.value()),"color_tone":int(self.color_tone.value()),"sharpness_override":self.sharp_enable.isChecked(),"sharp_strength":int(self.sharp_strength.value()),"fineness":int(self.fineness.value()),"threshold":int(self.threshold.value()),"creative":normalize_creative_controls(self.creative_controls)}
+        return {"contrast":int(self.contrast.value()),"saturation":int(self.saturation.value()),"color_tone":int(self.color_tone.value()),"sharpness_override":self.sharp_enable.isChecked(),"sharp_strength":int(self.sharp_strength.value()),"fineness":int(self.fineness.value()),"threshold":int(self.threshold.value()),"recipe_wb":normalize_recipe_wb(self.recipe_wb_controls),"creative":normalize_creative_controls(self.creative_controls)}
     def edit_state_dict(self):
         base=self.current_base_path(optional=True)
         base_style=self.base_combo.currentText()
@@ -1244,7 +1290,7 @@ class CanonStyleStudioQt(QMainWindow):
             custom=s.get("custom_pf3") or "";self.custom_base_path=Path(custom) if custom else None
             vals=list(BASES.keys())+(["Imported PF3"] if self.custom_base_path else [])
             self.base_combo.blockSignals(True);self.base_combo.clear();self.base_combo.addItems(vals);self.base_combo.setCurrentText(s.get("basePictureStyle") or s.get("base_name","Neutral"));self.base_combo.blockSignals(False)
-            self.contrast.setValue(s.get("contrast",0));self.saturation.setValue(s.get("saturation",0));self.color_tone.setValue(s.get("color_tone",0));self.sharp_enable.setChecked(s.get("sharpness_override",False));self.sharp_strength.setValue(s.get("sharp_strength",0));self.fineness.setValue(s.get("fineness",2));self.threshold.setValue(s.get("threshold",4));self.set_creative_controls(s.get("creative"))
+            self.contrast.setValue(s.get("contrast",0));self.saturation.setValue(s.get("saturation",0));self.color_tone.setValue(s.get("color_tone",0));self.sharp_enable.setChecked(s.get("sharpness_override",False));self.sharp_strength.setValue(s.get("sharp_strength",0));self.fineness.setValue(s.get("fineness",2));self.threshold.setValue(s.get("threshold",4));self.set_recipe_wb_controls(s.get("recipe_wb"));self.set_creative_controls(s.get("creative"))
             wb=s.get("raw_wb_mode","As Shot");wb="Auto — Ambience" if wb=="Auto Calculated" else wb;self.wb_combo.setCurrentText(wb);self.kelvin.setEnabled(wb=="Kelvin");self.kelvin.setValue(s.get("raw_kelvin",5200));self.shot_index.setValue(s.get("raw_shot_index",0));self.exposure.setValue(s.get("raw_exposure",0));self.ab_shift.setValue(s.get("wb_ab_shift",0));self.gm_shift.setValue(s.get("wb_gm_shift",0));self.custom_wb_mult=s.get("custom_wb_mult")
             self.render_mode.setCurrentText("Canon 33³" if s.get("preview_quality_mode")=="canon33" else "Working Preview")
             if load_luts:

@@ -37,6 +37,8 @@ from camera_install.rp_payload import (
 from creative_controls import (
     IDENTITY_TONE_CURVE, apply_creative_rgb, creative_cube,
     creative_is_neutral, normalize_creative_controls,
+    apply_recipe_wb_rgb, normalize_recipe_wb, recipe_wb_cube,
+    recipe_wb_is_neutral, recipe_wb_linear_gains,
 )
 
 
@@ -141,6 +143,31 @@ class CoreRegressionTests(unittest.TestCase):
         self.assertIn("native_payload_captured",agent)
         self.assertIn("args[4].readByteArray(this.n)",agent)
 
+        dynamic=(HERE/"camera_install"/"dynamic_camera_agent.js").read_text(encoding="utf-8")
+        validate_agent_source(dynamic)
+        self.assertIn("armdynamic",dynamic)
+        self.assertIn("EdsCfpGetPropertySize",dynamic)
+        self.assertIn("capturedCameraId",dynamic)
+        self.assertIn("capturedDescriptor",dynamic)
+        self.assertIn("validateNativeRoundTrip",dynamic)
+        self.assertIn("meaningfulDifferences",dynamic)
+        self.assertIn("Canon compiler output is identical",dynamic)
+        self.assertIn("armedLegacyBlock1",dynamic)
+        self.assertIn("legacy-dual-8192-block-carrier",dynamic)
+        self.assertIn("CAMERA_FAMILY_REGISTRY",dynamic)
+        self.assertIn("modern-78980-pf3-table-encoder-v1",dynamic)
+        self.assertIn("modern-83076-pf3-table-encoder-v1",dynamic)
+        self.assertIn("modern-full33-paired",dynamic)
+        self.assertIn("sizes: [78980]",dynamic)
+        self.assertIn("sizes: [83076]",dynamic)
+        self.assertIn("sizes: [431616]",dynamic)
+        self.assertIn("native_payload_captured",dynamic)
+        self.assertIn("0x40001070",dynamic)
+        self.assertIn("0x40001071",dynamic)
+        self.assertIn("preservedRegions: ['0x1F01', '0x102A']",dynamic)
+        self.assertNotIn("api.Set(ref, 0x01000203",dynamic)
+        self.assertNotIn("this.n !== 16752",dynamic)
+
     def test_unknown_camera_payload_capture_is_read_only_and_persistent(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);events=[]
@@ -163,6 +190,31 @@ class CoreRegressionTests(unittest.TestCase):
             self.assertTrue(saved["readOnly"]);self.assertFalse(saved["argumentsModified"])
             self.assertEqual(events[-1]["captureFile"],capture.name)
 
+    def test_dynamic_camera_report_hashes_native_carrier_without_storing_it(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);events=[]
+            installer=object.__new__(EosRpInstaller)
+            installer.event_callback=events.append
+            installer._lock=threading.RLock()
+            installer._report={"status":"ARMED","events":[]}
+            installer._report_path=root/"CANON_CAMERA_INSTALL_REPORT.json"
+            installer.armed=True
+            installer._ready=threading.Event()
+            native=bytes((index*17+9)&0xff for index in range(83076))
+            installer._on_message(
+                {"type":"send","payload":{"type":"native_payload_observed","slot":1,"size":len(native)}},native
+            )
+            self.assertEqual(installer._report["nativeCarrier"]["sha256"],hashlib.sha256(native).hexdigest())
+            self.assertFalse(installer._report["nativeCarrier"]["stored"])
+            self.assertFalse(any(root.glob("NATIVE_*.bin")))
+            outgoing=bytes((value^0x5a) for value in native)
+            compiler={"cameraIdHex":"81040080","descriptorSize":15076,"outputSize":len(outgoing)}
+            installer._on_message(
+                {"type":"send","payload":{"type":"payload_patched","slot":1,"size":len(outgoing),"compiler":compiler}},outgoing
+            )
+            self.assertEqual(installer._report["dynamicCompiler"],compiler)
+            self.assertEqual(installer._report["patchedPayloadSize"],len(outgoing))
+
     def test_external_eos_rp_support_assets_when_configured(self):
         folder=os.environ.get("CANON_STYLE_STUDIO_RP_ASSETS")
         if not folder:self.skipTest("External EOS RP research fixtures are intentionally absent from public packages")
@@ -174,8 +226,8 @@ class CoreRegressionTests(unittest.TestCase):
     def test_eos_rp_prepare_flow_arms_only_after_exact_selftest(self):
         class FakeExports:
             def __init__(self):self.calls=[]
-            def arm(self,slot,payload_hex,name):
-                self.calls.append((slot,payload_hex,name));return True
+            def armdynamic(self,slot,pf3_path,name,block1_hex):
+                self.calls.append((slot,pf3_path,name,block1_hex));return True
         class FakeScript:
             def __init__(self):self.exports_sync=FakeExports()
 
@@ -192,20 +244,32 @@ class CoreRegressionTests(unittest.TestCase):
             assets=RpAssetSet(root=root,hashes={"fixture":"test"},**paths)
             pf3_data=bytearray(434511);pf3_data[4:7]=b"PSP"
             pf3=root/"current.pf3";pf3.write_bytes(pf3_data)
+            base_pf3=root/"base.pf3";base_pf3.write_bytes(pf3_data)
 
             events=[];installer=EosRpInstaller(assets,event_callback=events.append)
             fake=FakeScript();installer.connect=lambda **_kwargs:setattr(installer,"script",fake) or fake
             target_block2=bytes((index*23+9)&0xff for index in range(BLOCK_SIZE))
-            compiled=iter((({"ok":True},bytes(360)+expected+expected),({"ok":True},bytes(360)+target+target_block2)))
+            compiled=iter((
+                ({"ok":True},bytes(360)+expected+expected),
+                ({"ok":True},bytes(360)+target+target_block2),
+                ({"ok":True},bytes(360)+expected+expected),
+            ))
             installer._compile=lambda _path:next(compiled)
-            result=installer.prepare_and_arm(pf3,2,"Câmara João",root/"output",launch_eos=False)
+            result=installer.prepare_and_arm(
+                pf3,2,"Câmara João",root/"output",launch_eos=False,
+                base_pf3_path=base_pf3,
+            )
             self.assertTrue(installer.armed);self.assertEqual(len(fake.exports_sync.calls),1)
-            slot,payload_hex,name=fake.exports_sync.calls[0]
-            self.assertEqual(slot,2);self.assertEqual(name,"Camara Joao");self.assertEqual(len(bytes.fromhex(payload_hex)),RP_PAYLOAD_SIZE)
+            slot,armed_pf3,name,block1_hex=fake.exports_sync.calls[0]
+            self.assertEqual(slot,2);self.assertEqual(name,"Camara Joao");self.assertEqual(Path(armed_pf3),pf3.resolve())
+            self.assertEqual(bytes.fromhex(block1_hex),target)
             report=json.loads(Path(result["reportPath"]).read_text(encoding="utf-8"))
             self.assertTrue(report["compilerSelfTest"]["exact"]);self.assertFalse(report["cameraWritePolicy"]["patch115"])
-            self.assertFalse(report["targetCompiler"]["duplicateBlocks"])
-            self.assertTrue(report["targetCompiler"]["carrierBlock2Preserved"])
+            self.assertEqual(report["targetCompiler"]["policy"],"validated legacy oracle Block1 adapted to the live Canon carrier family")
+            self.assertEqual(report["targetCompiler"]["differentBytesFromBase"],sum(a!=b for a,b in zip(target,expected)))
+            self.assertTrue(report["cameraWritePolicy"]["requireNativeSizeMatch"])
+            self.assertTrue(report["cameraWritePolicy"]["rejectIdenticalCarrier"])
+            self.assertTrue(report["cameraWritePolicy"]["requirePf3DifferencesOutsideMetadata"])
 
             blocked=EosRpInstaller(assets)
             blocked_fake=FakeScript();blocked.connect=lambda **_kwargs:setattr(blocked,"script",blocked_fake) or blocked_fake
@@ -293,6 +357,33 @@ class CoreRegressionTests(unittest.TestCase):
         cube=creative_cube({"color_chrome":"Strong"},33)
         self.assertEqual(cube["size"],33);self.assertEqual(len(cube["values"]),33**3*3)
         self.assertTrue(str(cube["fingerprint"]).startswith("creative:"))
+
+    def test_fuji_recipe_wb_directions_gamut_and_stack_order(self):
+        self.assertEqual(normalize_recipe_wb({"red":99,"blue":-99}),{"red":9,"blue":-9})
+        self.assertTrue(recipe_wb_is_neutral({}))
+        samples=np.asarray([[0.0,0.0,0.0],[0.18,0.18,0.18],[0.50,0.50,0.50],[1.0,1.0,1.0]],dtype=np.float64)
+        self.assertTrue(np.array_equal(apply_recipe_wb_rgb(samples,{}),samples))
+        warm=apply_recipe_wb_rgb(samples,{"red":4,"blue":-5})
+        self.assertGreater(float(warm[2,0]),float(warm[2,1]))
+        self.assertGreater(float(warm[2,1]),float(warm[2,2]))
+        self.assertTrue(np.allclose(warm[0],samples[0],atol=1e-9))
+        self.assertTrue(np.allclose(warm[-1],samples[-1],atol=1e-9))
+        self.assertTrue(np.all((warm>=0.0)&(warm<=1.0)))
+        blue=recipe_wb_linear_gains({"red":0,"blue":9})
+        self.assertGreater(float(blue[2]),float(blue[0]))
+        # Empirical X-T1/Provia calibration anchors. These guard against the
+        # former symmetric model, whose B+5 blue gain was 1.42 instead of the
+        # measured effective 1.17.
+        self.assertTrue(np.allclose(recipe_wb_linear_gains({"red":5,"blue":0}),[1.289562,0.968002,1.010467],atol=1e-6))
+        self.assertTrue(np.allclose(recipe_wb_linear_gains({"red":-5,"blue":0}),[0.698804,1.037310,0.998874],atol=1e-6))
+        self.assertTrue(np.allclose(recipe_wb_linear_gains({"red":0,"blue":5}),[1.001225,0.966940,1.168587],atol=1e-6))
+        self.assertTrue(np.allclose(recipe_wb_linear_gains({"red":0,"blue":-5}),[1.002373,1.041436,0.765947],atol=1e-6))
+        cube=recipe_wb_cube({"red":4,"blue":-5},33)
+        self.assertEqual(cube["size"],33);self.assertEqual(len(cube["values"]),33**3*3)
+        self.assertTrue(str(cube["fingerprint"]).startswith("recipe-wb:"))
+        engine=CanonRenderEngine();user={"id":"user","cube":self.cube,"enabled":True,"opacity":1.0}
+        effective=engine.effective_luts([user],{"recipe_wb":{"red":4,"blue":-5},"creative":{"recipe_color":1}})
+        self.assertEqual([entry["id"] for entry in effective],["fuji-recipe-wb","user","creative-controls"])
 
     def test_creative_controls_normalize_and_project_roundtrip(self):
         creative=normalize_creative_controls({
@@ -397,6 +488,7 @@ class CoreRegressionTests(unittest.TestCase):
             current={"basePictureStyle":"Standard","base_path":r"X:\\private\\Standard.pf3",
                      "contrast":2,"saturation":-1,"color_tone":3,"raw_wb_mode":"Kelvin","raw_kelvin":4300,
                      "raw_exposure":1.25,"wb_ab_shift":-4,"wb_gm_shift":2,"custom_wb_mult":[1.2,1.0,.8],
+                     "recipe_wb":{"red":4,"blue":-5},
                      "creative":normalize_creative_controls({"color_chrome_fx_blue":"Strong"}),"luts":[
                 {"id":"cube","path":str(source),"enabled":True,"opacity":0.35,"metadata":{"preferredBaseStyle":"Standard"}},
                 {"id":"hald","path":str(hald),"enabled":False,"opacity":0.8,"metadata":{}},
@@ -424,7 +516,7 @@ class CoreRegressionTests(unittest.TestCase):
             self.assertEqual([x["id"] for x in loaded.edit["luts"]],["cube","hald"])
             self.assertEqual(loaded.edit["luts"][0]["opacity"],.35)
             self.assertFalse(loaded.edit["luts"][1]["enabled"])
-            for key in ("contrast","saturation","color_tone","raw_wb_mode","raw_kelvin","raw_exposure","wb_ab_shift","wb_gm_shift","custom_wb_mult","creative"):
+            for key in ("contrast","saturation","color_tone","raw_wb_mode","raw_kelvin","raw_exposure","wb_ab_shift","wb_gm_shift","custom_wb_mult","recipe_wb","creative"):
                 self.assertEqual(loaded.edit[key],current[key],key)
             restored=[Path(x["path"]) for x in loaded.edit["luts"]]
             self.assertTrue(all(path.is_file() for path in restored))
@@ -488,6 +580,7 @@ class CoreRegressionTests(unittest.TestCase):
             {"id":"hald-b","cube":self.hald,"enabled":True,"opacity":0.60},
         ]
         controls={"contrast":0,"saturation":0,"color_tone":0,"sharpness_override":False,
+                  "recipe_wb":{"red":4,"blue":-5},
                   "creative":{"recipe_highlight":-2,"recipe_shadow":-1,"recipe_color":1,"tone_curve":[0.0,0.20,0.48,0.82,1.0],"color_axes":{"Red":{"hue":8,"saturation":12,"luminance":-5}},"color_chrome":"Weak","color_chrome_fx_blue":"Strong"}}
         with tempfile.TemporaryDirectory() as td:
             out=Path(td)/"stack_regression.pf3"
