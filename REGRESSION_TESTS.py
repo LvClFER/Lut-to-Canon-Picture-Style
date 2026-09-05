@@ -165,6 +165,10 @@ class CoreRegressionTests(unittest.TestCase):
         self.assertIn("0x40001070",dynamic)
         self.assertIn("0x40001071",dynamic)
         self.assertIn("preservedRegions: ['0x1F01', '0x102A']",dynamic)
+        self.assertIn("const LEGACY_NAME_OFFSETS = [8, 44]",dynamic)
+        self.assertIn("const MODERN_NAME_OFFSETS = [8, 46]",dynamic)
+        self.assertIn("patchPayloadName(output, MODERN_NAME_OFFSETS)",dynamic)
+        self.assertIn("patchPayloadName(output, LEGACY_NAME_OFFSETS)",dynamic)
         self.assertNotIn("api.Set(ref, 0x01000203",dynamic)
         self.assertNotIn("this.n !== 16752",dynamic)
 
@@ -382,8 +386,10 @@ class CoreRegressionTests(unittest.TestCase):
         self.assertEqual(cube["size"],33);self.assertEqual(len(cube["values"]),33**3*3)
         self.assertTrue(str(cube["fingerprint"]).startswith("recipe-wb:"))
         engine=CanonRenderEngine();user={"id":"user","cube":self.cube,"enabled":True,"opacity":1.0}
-        effective=engine.effective_luts([user],{"recipe_wb":{"red":4,"blue":-5},"creative":{"recipe_color":1}})
-        self.assertEqual([entry["id"] for entry in effective],["fuji-recipe-wb","user","creative-controls"])
+        effective=engine.effective_luts([user],{"recipe_wb":{"red":4,"blue":-5},"creative":{"recipe_color":1,"recipe_highlight":-1}})
+        self.assertEqual([entry["id"] for entry in effective],["fuji-recipe-wb","recipe-color","user","creative-controls"])
+        color_only=engine.effective_luts([user],{"creative":{"recipe_color":4}})
+        self.assertEqual([entry["id"] for entry in color_only],["recipe-color","user"])
 
     def test_creative_controls_normalize_and_project_roundtrip(self):
         creative=normalize_creative_controls({

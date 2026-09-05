@@ -47,6 +47,13 @@ const CAMERA_FAMILY_REGISTRY = [
   { id: 'modern-full33-paired', sizes: [431616], installEnabled: false, status: 'recognized-encoder-research-required', builder: 'modern-full33', regions: ['0x1F04', '0x1F03'] }
 ];
 
+// Legacy carriers place both 32-byte names directly at 8 and 44. Modern
+// mirrorless carriers keep a two-byte field header at 44/45, so their second
+// name begins at 46. Overwriting that header makes the camera discard the
+// first two visible characters of the replacement name.
+const LEGACY_NAME_OFFSETS = [8, 44];
+const MODERN_NAME_OFFSETS = [8, 46];
+
 function detectCarrierFamily(bytes) {
   const size = bytes.length;
   for (const family of CAMERA_FAMILY_REGISTRY) {
@@ -273,7 +280,7 @@ function buildModern17Carrier(nativeCarrier, family) {
       output.set(xorCanon(decoded1f02, 0xB8ED), 78980);
       patchedRegions.push('0x1F02');
     }
-    patchPayloadName(output);
+    patchPayloadName(output, MODERN_NAME_OFFSETS);
     const validation = validateNativeRoundTrip(nativeCarrier, output);
     return { output: output, metadata: {
       strategy: includeAuxiliary ? 'modern-83076-pf3-table-encoder-v1' : 'modern-78980-pf3-table-encoder-v1',
@@ -303,9 +310,9 @@ function fixedAscii32(value) {
   return output;
 }
 
-function patchPayloadName(payload) {
+function patchPayloadName(payload, offsets) {
   const name = fixedAscii32(armedName);
-  for (const offset of [8, 44]) {
+  for (const offset of (offsets || LEGACY_NAME_OFFSETS)) {
     if (offset + 32 > payload.length) throw new Error('Canon carrier is too small for its duplicated style name');
     for (let i = 0; i < 32; i++) payload[offset + i] = name[i];
   }
@@ -418,7 +425,7 @@ function compileForNativeCarrier(nativeCarrier) {
       nativeCarrier.length - legacyDataStart === 16384) {
     const output = new Uint8Array(nativeCarrier);
     output.set(armedLegacyBlock1, legacyDataStart);
-    patchPayloadName(output);
+    patchPayloadName(output, LEGACY_NAME_OFFSETS);
     const validation = validateNativeRoundTrip(nativeCarrier, output);
     return { output: output, metadata: {
       strategy: 'legacy-dual-8192-block-carrier', familyId: family.id,

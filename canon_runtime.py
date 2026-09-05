@@ -14,8 +14,8 @@ from pathlib import Path
 
 APP_NAME = "CanonStyleStudio"
 PUBLIC_NAME = "Canon Style Studio Public Alpha"
-PUBLIC_VERSION = "1.0.0-alpha.17"
-BUILD_ID = "2026-09-05-FUJI-WB-CALIBRATION-PF3-ALPHA-17"
+PUBLIC_VERSION = "1.0.0-alpha.18"
+BUILD_ID = "2026-09-05-FUJI-COLOR-R8-NAME-ALPHA-18"
 
 
 def application_root() -> Path:

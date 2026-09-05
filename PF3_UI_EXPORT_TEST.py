@@ -20,22 +20,26 @@ from project_state import SettingsStore
 
 def main() -> int:
     app = QApplication.instance() or QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
     app.setStyle("Fusion")
     app.setStyleSheet(app_stylesheet())
     temporary = tempfile.TemporaryDirectory()
     window = CanonStyleStudioQt()
     window.settings = SettingsStore(Path(temporary.name) / "settings.json")
+    window.show()
     target = Path(temporary.name) / "UI Export R+4 B-5.pf3"
     result = {"code": 1}
 
     try:
         window.recipe_wb_red.setValue(4)
         window.recipe_wb_blue.setValue(-5)
+        window.recipe_color.setValue(4)
         dialog = ExportDialog(window, window)
         if Path(dialog.path.text()).parent.resolve() != exported_styles_dir().resolve():
             raise AssertionError(f"Default PF3 folder is not portable exported_styles: {dialog.path.text()}")
         dialog.path.setText(str(target.with_suffix("")))
         dialog.start_export()
+        dialog.show()
 
         def verify(_worker_result=None):
             try:
@@ -54,6 +58,13 @@ def main() -> int:
                     raise AssertionError(f"Recipe WB manifest mismatch: {actual}")
                 if manifest["recipeWhiteBalance"]["method"] != "fuji-xt1-provia-rb-lut-v2":
                     raise AssertionError("Manifest contains the obsolete Recipe WB method")
+                if manifest["recipeColor"] != {
+                    "method": "oklab-chroma-exponential-v1",
+                    "accuracy": "approximate",
+                    "order": "before-user-lut-stack",
+                    "value": 4,
+                }:
+                    raise AssertionError(f"Recipe Color manifest mismatch: {manifest['recipeColor']}")
                 basic = inspect_pf3(window.dll_path(), target)["basic"]
                 result.update(code=0, size=target.stat().st_size, basic=basic, manifest=manifest_path.name)
             except Exception:
@@ -72,9 +83,14 @@ def main() -> int:
     except Exception:
         result["error"] = traceback.format_exc()
     finally:
+        if not window.engine_pool.waitForDone(30000):
+            result.setdefault("error", "engine pool did not finish")
         window.dirty = False
         window.close()
-        temporary.cleanup()
+        try:
+            temporary.cleanup()
+        except PermissionError as exc:
+            result.setdefault("error", f"temporary PF3 remained locked: {exc}")
     print(result)
     return int(result["code"])
 

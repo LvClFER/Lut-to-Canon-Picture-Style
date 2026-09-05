@@ -384,6 +384,37 @@ def creative_lut_entry(settings=None, size=65):
     return {"id": "creative-controls", "cube": creative_cube(controls, size), "enabled": True, "opacity": 1.0}
 
 
+def split_recipe_color(settings=None):
+    """Separate Fuji-style Color from controls that remain post-LUT.
+
+    A simulated film-style LUT may already place vivid colors on the output
+    gamut boundary. Applying Color after that LUT makes positive values collapse
+    back to the same boundary. Fuji processes Color inside its rendering chain,
+    before the final output gamut limit, so keep it as a dedicated pre-LUT stage.
+    """
+    controls = normalize_creative_controls(settings)
+    recipe_color = int(controls["recipe_color"])
+    post_controls = deepcopy(controls)
+    post_controls["recipe_color"] = 0
+    return recipe_color, post_controls
+
+
+def recipe_color_lut_entry(settings=None, size=65):
+    value, _post_controls = split_recipe_color(settings)
+    if value == 0:
+        return None
+    cube = creative_cube({"recipe_color": value}, size)
+    cube["title"] = "Fuji-style Recipe Color"
+    cube["source"] = "generated_fuji_recipe_color_pre_lut"
+    cube["fingerprint"] = "recipe-color:" + cube["fingerprint"].split(":", 1)[-1]
+    cube["recipeColor"] = {
+        "value": value,
+        "order": "before-user-lut-stack",
+        "accuracy": "approximate",
+    }
+    return {"id": "recipe-color", "cube": cube, "enabled": True, "opacity": 1.0}
+
+
 def recipe_wb_cube(settings=None, size=65):
     controls = normalize_recipe_wb(settings)
     size = int(size)

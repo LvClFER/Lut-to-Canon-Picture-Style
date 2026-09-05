@@ -11,6 +11,7 @@ import struct
 import ctypes
 import colorsys
 import hashlib
+import threading
 from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Optional
@@ -22,6 +23,7 @@ from canon_runtime import cache_dir as runtime_cache_dir, discover_pse
 from creative_controls import (
     creative_lut_entry, normalize_creative_controls,
     normalize_recipe_wb, recipe_wb_lut_entry,
+    recipe_color_lut_entry, split_recipe_color,
 )
 
 try:
@@ -61,6 +63,11 @@ OPEN_EXISTING = 2
 CREATE_ALWAYS = 1
 READ = 0
 WRITE = 1
+
+# EdsCFParse has process-global initialize/terminate state. Serializing only
+# the short DLL I/O sessions prevents one preview/export worker from
+# terminating the parser while another worker is using a reference.
+_EDS_CFP_LOCK = threading.RLock()
 
 PICTURE_STYLE_IDS = {
     "Standard": 0x81,
@@ -746,19 +753,20 @@ def generated_pf3_properties(style="Neutral",title=None):
 
 def create_generated_base_pf3(dll_path,output_path,style="Neutral"):
     output_path=Path(output_path);output_path.parent.mkdir(parents=True,exist_ok=True)
-    api=EdsCFParse(dll_path);ref=None
-    try:
-        api.initialize();ref=api.create_ref(output_path,CREATE_ALWAYS,WRITE)
-        props=generated_pf3_properties(style,style)
-        for prop,expected in PROPERTY_ORDER:
-            api.set_property(ref,prop,props[prop])
-        api.reflect(ref)
-    finally:
+    with _EDS_CFP_LOCK:
+        api=EdsCFParse(dll_path);ref=None
         try:
-            if ref:api.release(ref)
-        except Exception:pass
-        try:api.terminate()
-        except Exception:pass
+            api.initialize();ref=api.create_ref(output_path,CREATE_ALWAYS,WRITE)
+            props=generated_pf3_properties(style,style)
+            for prop,expected in PROPERTY_ORDER:
+                api.set_property(ref,prop,props[prop])
+            api.reflect(ref)
+        finally:
+            try:
+                if ref:api.release(ref)
+            except Exception:pass
+            try:api.terminate()
+            except Exception:pass
     validate_pf3_header(output_path)
     return output_path
 
@@ -776,17 +784,18 @@ def ensure_runtime_base_pf3(dll_path,style="Neutral",directory=None):
 
 
 def read_base_properties(dll_path,base_path,wanted=None):
-    api=EdsCFParse(dll_path); ref=None
-    try:
-        api.initialize(); ref=api.create_ref(base_path,OPEN_EXISTING,READ); props={}
-        for prop,expected in (PROPERTY_ORDER if wanted is None else wanted): props[prop]=api.get_property(ref,prop,expected)
-        return props
-    finally:
+    with _EDS_CFP_LOCK:
+        api=EdsCFParse(dll_path); ref=None
         try:
-            if ref: api.release(ref)
-        except Exception: pass
-        try: api.terminate()
-        except Exception: pass
+            api.initialize(); ref=api.create_ref(base_path,OPEN_EXISTING,READ); props={}
+            for prop,expected in (PROPERTY_ORDER if wanted is None else wanted): props[prop]=api.get_property(ref,prop,expected)
+            return props
+        finally:
+            try:
+                if ref: api.release(ref)
+            except Exception: pass
+            try: api.terminate()
+            except Exception: pass
 
 
 def resolve_validated_base_pf3(dll_path,style,search_directories=()):
@@ -828,40 +837,48 @@ def inspect_pf3(dll_path, path):
 
 
 def export_pf3(dll_path,base_path,output_path,lut_entries,controls,title,log=lambda s:None,progress=lambda v:None):
-    validate_pf3_header(base_path); api=EdsCFParse(dll_path); src=dst=None
-    try:
-        api.initialize(); log("Canon EdsCFParse initialized."); src=api.create_ref(base_path,OPEN_EXISTING,READ); props={}
-        for prop,expected in PROPERTY_ORDER: props[prop]=api.get_property(src,prop,expected)
-        props[0x00000115]=modify_basic_0115(props[0x00000115],controls["contrast"],controls["saturation"],controls["color_tone"],controls.get("sharpness_override",False),controls.get("sharp_strength",0),controls.get("fineness",2),controls.get("threshold",4))
-        effective=list(lut_entries)
-        recipe_wb=recipe_wb_lut_entry(controls.get("recipe_wb"),size=33)
-        if recipe_wb:effective.insert(0,recipe_wb)
-        creative=creative_lut_entry(controls.get("creative"),size=33)
-        if creative:effective.append(creative)
-        enabled=[e for e in effective if e.get("enabled") and e.get("opacity",0)>0]
-        if enabled:
-            for idx,prop in enumerate(BIG_TABLES):
-                log(f"Composing LUT stack into 0x{prop:08X}…")
-                props[prop]=transform_canon_table_stack(props[prop],enabled,progress=lambda v,idx=idx:progress((idx+v)/2.0))
-        else: progress(1.0)
-        output_path=Path(output_path); output_path.parent.mkdir(parents=True,exist_ok=True)
-        if output_path.resolve()==Path(base_path).resolve(): raise RuntimeError("Output cannot overwrite the selected Canon base.")
-        dst=api.create_ref(output_path,CREATE_ALWAYS,WRITE)
-        for prop,expected in PROPERTY_ORDER:
-            data=props[prop]
-            if prop==0x40001002:
-                t=title.encode("ascii",errors="replace")[:31]; data=t+b"\x00"*(32-len(t))
-            api.set_property(dst,prop,data)
-        log("Serializing/checksumming with Canon DLL…"); api.reflect(dst)
-    finally:
+    validate_pf3_header(base_path)
+    output_path=Path(output_path); output_path.parent.mkdir(parents=True,exist_ok=True)
+    if output_path.resolve()==Path(base_path).resolve(): raise RuntimeError("Output cannot overwrite the selected Canon base.")
+    props=read_base_properties(dll_path,base_path)
+    log("Canon EdsCFParse initialized.")
+    props[0x00000115]=modify_basic_0115(props[0x00000115],controls["contrast"],controls["saturation"],controls["color_tone"],controls.get("sharpness_override",False),controls.get("sharp_strength",0),controls.get("fineness",2),controls.get("threshold",4))
+    effective=[]
+    recipe_wb=recipe_wb_lut_entry(controls.get("recipe_wb"),size=33)
+    if recipe_wb:effective.append(recipe_wb)
+    recipe_color=recipe_color_lut_entry(controls.get("creative"),size=33)
+    if recipe_color:effective.append(recipe_color)
+    effective.extend(lut_entries)
+    _recipe_color_value,post_controls=split_recipe_color(controls.get("creative"))
+    creative=creative_lut_entry(post_controls,size=33)
+    if creative:effective.append(creative)
+    enabled=[e for e in effective if e.get("enabled") and e.get("opacity",0)>0]
+    if enabled:
+        for idx,prop in enumerate(BIG_TABLES):
+            log(f"Composing LUT stack into 0x{prop:08X}…")
+            props[prop]=transform_canon_table_stack(props[prop],enabled,progress=lambda v,idx=idx:progress((idx+v)/2.0))
+    else: progress(1.0)
+
+    # Do not hold a Canon parser reference while composing the potentially
+    # expensive LUT stack. Re-open a fresh, serialized DLL session only for
+    # final serialization/checksumming.
+    with _EDS_CFP_LOCK:
+        api=EdsCFParse(dll_path); dst=None
         try:
-            if dst:api.release(dst)
-        except Exception:pass
-        try:
-            if src:api.release(src)
-        except Exception:pass
-        try:api.terminate()
-        except Exception:pass
+            api.initialize()
+            dst=api.create_ref(output_path,CREATE_ALWAYS,WRITE)
+            for prop,expected in PROPERTY_ORDER:
+                data=props[prop]
+                if prop==0x40001002:
+                    t=title.encode("ascii",errors="replace")[:31]; data=t+b"\x00"*(32-len(t))
+                api.set_property(dst,prop,data)
+            log("Serializing/checksumming with Canon DLL…"); api.reflect(dst)
+        finally:
+            try:
+                if dst:api.release(dst)
+            except Exception:pass
+            try:api.terminate()
+            except Exception:pass
     size=validate_pf3_header(output_path)
     if size!=434511: raise RuntimeError(f"Output PF3 is {size:,} bytes; expected 434,511. Do not register it.")
     sha=hashlib.sha256(Path(output_path).read_bytes()).hexdigest(); return size,sha
@@ -870,10 +887,10 @@ def export_pf3(dll_path,base_path,output_path,lut_entries,controls,title,log=lam
 class CanonRenderEngine:
     """Shared state-free rendering/cache layer used by both V0.3.6 and V0.4.x UI."""
     def __init__(self):
-        self.base_cache={}; self.pillow_cache={}; self.composite_cache={}; self.stack33_cache={}; self.creative_cache={}; self.recipe_wb_cache={}
+        self.base_cache={}; self.pillow_cache={}; self.composite_cache={}; self.stack33_cache={}; self.creative_cache={}; self.recipe_color_cache={}; self.recipe_wb_cache={}
 
     def clear(self):
-        self.base_cache.clear(); self.pillow_cache.clear(); self.composite_cache.clear(); self.stack33_cache.clear(); self.creative_cache.clear(); self.recipe_wb_cache.clear()
+        self.base_cache.clear(); self.pillow_cache.clear(); self.composite_cache.clear(); self.stack33_cache.clear(); self.creative_cache.clear(); self.recipe_color_cache.clear(); self.recipe_wb_cache.clear()
 
     def load_base(self,dll_path,base_path):
         key=(file_fingerprint(Path(dll_path)),file_fingerprint(Path(base_path)))
@@ -894,18 +911,26 @@ class CanonRenderEngine:
         return tuple((e["cube"].get("fingerprint",e["cube"].get("title","")),bool(e.get("enabled",True)),round(float(e.get("opacity",1.0)),6)) for e in luts)
 
     def effective_luts(self,luts,controls):
-        effective=list(luts)
+        effective=[]
         normalized_wb=normalize_recipe_wb((controls or {}).get("recipe_wb"))
         wb_key=json.dumps(normalized_wb,sort_keys=True,separators=(",",":"))
         if wb_key not in self.recipe_wb_cache:
             self.recipe_wb_cache[wb_key]=recipe_wb_lut_entry(normalized_wb,size=33)
             if len(self.recipe_wb_cache)>24:self.recipe_wb_cache.pop(next(iter(self.recipe_wb_cache)))
         recipe_wb=self.recipe_wb_cache[wb_key]
-        if recipe_wb:effective.insert(0,recipe_wb)
+        if recipe_wb:effective.append(recipe_wb)
         normalized=normalize_creative_controls((controls or {}).get("creative"))
-        key=json.dumps(normalized,sort_keys=True,separators=(",",":"))
+        recipe_color_value,post_controls=split_recipe_color(normalized)
+        color_key=str(recipe_color_value)
+        if color_key not in self.recipe_color_cache:
+            self.recipe_color_cache[color_key]=recipe_color_lut_entry(normalized,size=33)
+            if len(self.recipe_color_cache)>9:self.recipe_color_cache.pop(next(iter(self.recipe_color_cache)))
+        recipe_color=self.recipe_color_cache[color_key]
+        if recipe_color:effective.append(recipe_color)
+        effective.extend(luts)
+        key=json.dumps(post_controls,sort_keys=True,separators=(",",":"))
         if key not in self.creative_cache:
-            self.creative_cache[key]=creative_lut_entry(normalized,size=33)
+            self.creative_cache[key]=creative_lut_entry(post_controls,size=33)
             if len(self.creative_cache)>12:self.creative_cache.pop(next(iter(self.creative_cache)))
         creative=self.creative_cache[key]
         if creative:effective.append(creative)

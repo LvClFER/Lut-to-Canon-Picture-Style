@@ -1,6 +1,6 @@
 # Canon Style Studio Public Alpha
 
-Version **1.0.0-alpha.17** · Build **2026-09-05-FUJI-WB-CALIBRATION-PF3-ALPHA-17**
+Version **1.0.0-alpha.18** · Build **2026-09-05-FUJI-COLOR-R8-NAME-ALPHA-18**
 
 Canon Style Studio is an experimental Windows editor for developing Canon RAW files through the Canon DPP4Lib runtime installed with Picture Style Editor, building sequential LUT stacks, previewing Canon's 33³/12-bit LUT result and exporting PF3 Picture Style files.
 
@@ -32,7 +32,7 @@ Without PSE, JPEG/PNG/TIFF and LUT work remains available. Canon RAW rendering a
 - Open CR3/CR2, JPEG, PNG or TIFF references.
 - Adjust Canon-native Exposure, fixed/Kelvin White Balance, WB Shift, Picture Style, Contrast, Saturation and Color Tone for RAW files. Fuji-style Recipe WB is a separate LUT-baked approximation calibrated from a controlled X-T1/Provia/5000 K reference sequence.
 - Add `.cube` or Hald LUTs, reorder layers and set opacity. LUT-only changes reuse the cached Canon development.
-- Use recipe-style Highlight and Shadow controls from -2 to +4 and Color from -4 to +4; shape a five-point monotonic Tone Curve; tune Red, Yellow, Green, Cyan, Blue and Magenta Hue/Saturation/Luminance axes; and add experimental Color Chrome-style or Blue Chrome-style density. These controls are baked after the LUT stack and reuse the cached Canon development.
+- Use recipe-style Highlight and Shadow controls from -2 to +4 and Color from -4 to +4; shape a five-point monotonic Tone Curve; tune Red, Yellow, Green, Cyan, Blue and Magenta Hue/Saturation/Luminance axes; and add experimental Color Chrome-style or Blue Chrome-style density. Recipe Color is baked before the user LUT stack so each film-simulation LUT responds to the adjusted source colour; the remaining creative controls are baked after it. All reuse the cached Canon development.
 - Save a portable `.canonstyleproject` archive containing every editor setting and all CUBE/Hald LUTs used by the current edit or snapshots. Reference photographs are deliberately not embedded; only their filenames are retained as reconnect hints.
 - Switch to **Canon 33³ Preview** to simulate only the final sequential LUT stack quantized to Canon's 33³/12-bit table.
 - Export PF3 through Canon's locally installed EdsCFParse serializer. The default destination is the portable `exported_styles/` folder, and `.pf3` is added automatically. No Picture Style is applied a second time by Canon 33³ Preview.
@@ -40,7 +40,7 @@ Without PSE, JPEG/PNG/TIFF and LUT work remains available. Canon RAW rendering a
 
 The editor records `basePictureStyle` in projects and PF3 manifests. Public releases do not contain extracted Canon base PF3 files. When a hash-validated local base set is available, select it with **Bases…**; otherwise generated PSE/EdsCFParse templates are clearly labelled experimental before export.
 
-Highlight, Shadow, Color, Tone Curve, Six Color-Axes and both Chrome-style controls are LUT-baked creative transforms, not claimed Canon-native PF3 controls. Working Preview applies them as a responsive 33³ creative stage after the full LUT stack. Canon 33³ Preview recomposes the complete LUT stack plus creative stage into the final 33³/12-bit transform, matching PF3 table export.
+Highlight, Shadow, Color, Tone Curve, Six Color-Axes and both Chrome-style controls are LUT-baked creative transforms, not claimed Canon-native PF3 controls. Working Preview places Recipe Color before the user LUT stack and the remaining creative stage after it. Canon 33³ Preview recomposes the same ordered pipeline into the final 33³/12-bit transform, matching PF3 table export.
 
 Portable projects validate embedded LUT sizes and SHA-256 hashes before extraction, reject unsafe archive paths, and remain backward-compatible with the earlier plain-JSON project format. Local Canon PF3/DLL/ICC resources and RAW/JPEG/TIFF references are never embedded. An Imported PF3 must be selected again on the destination computer.
 

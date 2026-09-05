@@ -122,6 +122,9 @@ def validate_agent_source(source: str) -> None:
             "modern-full33-paired", "native_payload_captured",
             "0x40001070", "0x40001071", "0x1F00", "0x1022", "0x1F02",
             "preservedRegions: ['0x1F01', '0x102A']",
+            "const LEGACY_NAME_OFFSETS = [8, 44]",
+            "const MODERN_NAME_OFFSETS = [8, 46]",
+            "patchPayloadName(output, MODERN_NAME_OFFSETS)",
             "args[3] =", "args[4] =",
         )
         missing = [value for value in required if value not in source]

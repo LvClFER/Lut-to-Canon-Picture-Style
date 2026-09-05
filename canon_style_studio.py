@@ -707,6 +707,7 @@ class ExportDialog(QDialog):
                       "baseTemplateValidated":bool(base.get("validated")),"basePf3Sha256":base.get("sha256"),
                       "canonTable":{"size":33,"bitDepth":12,"properties":["0x40001070","0x40001071"]},
                       "recipeWhiteBalance":{"method":"fuji-xt1-provia-rb-lut-v2","accuracy":"empirically-calibrated-approximation","order":"before-user-lut-stack",**normalize_recipe_wb(state.get("recipe_wb"))},
+                      "recipeColor":{"method":"oklab-chroma-exponential-v1","accuracy":"approximate","order":"before-user-lut-stack","value":int((state.get("creative") or {}).get("recipe_color",0))},
                       "luts":context["luts"],"creativeControls":state.get("creative") or {}}
             output.with_suffix('.manifest.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False),encoding='utf-8')
         except Exception:pass
@@ -890,7 +891,7 @@ class CanonStyleStudioQt(QMainWindow):
         row=QHBoxLayout();row.addWidget(QLabel("Blue Chrome-style"));self.color_chrome_blue=QComboBox();self.color_chrome_blue.addItems(["Off","Weak","Strong"]);row.addWidget(self.color_chrome_blue,1);sec.body_layout.addLayout(row)
         self.color_chrome.currentTextChanged.connect(self._chrome_changed);self.color_chrome_blue.currentTextChanged.connect(self._chrome_changed)
         reset_all=QPushButton("Reset Creative Color");reset_all.clicked.connect(self.reset_creative_controls);sec.body_layout.addWidget(reset_all)
-        note=QLabel("Fuji-style Recipe WB is an APPROXIMATE R/B grid cast, LUT-baked before user LUTs and included in PF3 export. It is independent from Canon-native WB Shift; using both combines both effects. Other Recipe and Creative Color controls are baked after the LUT stack. Canon 33³ Preview shows the final combined 33³/12-bit transform.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
+        note=QLabel("Fuji-style Recipe WB and Color are APPROXIMATE and LUT-baked before user LUTs, matching the internal-before-output-gamut behavior needed by simulated Fuji styles. They are included in PF3 export. Highlight/Shadow, Tone Curve, Color Axes and Chrome-style controls remain after the LUT stack. Canon 33³ Preview shows the final combined 33³/12-bit transform.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
         self._axis_selected(self.axis_combo.currentText())
         self._update_recipe_wb_status()
 
