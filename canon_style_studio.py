@@ -677,7 +677,7 @@ class ExportDialog(QDialog):
         recipe_active=any(int(creative.get(key,0) or 0) for key in ("recipe_highlight","recipe_shadow","recipe_color"))
         creative_active=recipe_active or active_axes or creative.get("color_chrome")!="Off" or creative.get("color_chrome_fx_blue")!="Off" or creative.get("tone_curve")!=IDENTITY_TONE_CURVE
         self.summary.setText(f"Base: <b>{s['base_name']}</b> · {validity}<br>Recipe WB: <b>{recipe_wb_text}</b> · LUT-baked / approximate<br>LUT stack: <b>{len(active)} layers</b> · Creative Color: <b>{'active' if creative_active else 'neutral'}</b><br>Canon table: <b>33³ / 12-bit</b><br>Contrast: <b>{s['contrast']:+d}</b> · Saturation: <b>{s['saturation']:+d}</b> · Color Tone: <b>{s['color_tone']:+d}</b>")
-        default=self.main.settings.get_folder("last_export_folder",exported_styles_dir())/(self.main.project_name.text().strip() or "CanonStyle")
+        default=self.main.settings.get_folder("last_export_folder",exported_styles_dir())/(self.main.project_name.text().strip().rstrip("*") or "CanonStyle")
         self.path.setText(str(default.with_suffix('.pf3')))
     def choose(self):
         p,_=QFileDialog.getSaveFileName(self,"Export Canon PF3",self.path.text(),"Canon Picture Style (*.pf3)")
