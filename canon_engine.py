@@ -57,6 +57,11 @@ PROPERTY_ORDER = [
     (0x40001080,   4),
 ]
 BIG_TABLES = (0x40001070, 0x40001071)
+# Properties export_pf3() actually parses/rebuilds and therefore must arrive at a
+# fixed size when read from a source PF3; everything else in PROPERTY_ORDER is
+# passed through unmodified and may legitimately vary in length (e.g. a base
+# authored in Picture Style Editor can carry a larger blob in 0x40001023).
+STRICT_READ_PROPS = {0x00000115, *BIG_TABLES}
 OPEN_EXISTING = 2
 CREATE_ALWAYS = 1
 READ = 0
@@ -828,10 +833,18 @@ def inspect_pf3(dll_path, path):
 
 
 def export_pf3(dll_path,base_path,output_path,lut_entries,controls,title,log=lambda s:None,progress=lambda v:None):
-    validate_pf3_header(base_path); api=EdsCFParse(dll_path); src=dst=None
+    base_size=validate_pf3_header(base_path); api=EdsCFParse(dll_path); src=dst=None
     try:
         api.initialize(); log("Canon EdsCFParse initialized."); src=api.create_ref(base_path,OPEN_EXISTING,READ); props={}
-        for prop,expected in PROPERTY_ORDER: props[prop]=api.get_property(src,prop,expected)
+        # PROPERTY_ORDER's byte counts describe Canon's small factory-style bases. A
+        # base authored/edited in Picture Style Editor can carry a larger, otherwise
+        # passthrough blob in a field like 0x40001023. Only enforce the fixed size on
+        # read for the properties this function actually parses afterwards (basic
+        # 0x00000115 and the two BIG_TABLES) — modify_basic_0115()/validate_canon_table()
+        # already re-check those sizes themselves, so this just fails a bit earlier
+        # with a clearer message. Every other property is read as-is and passed through.
+        for prop,expected in PROPERTY_ORDER:
+            props[prop]=api.get_property(src,prop,expected if prop in STRICT_READ_PROPS else None)
         props[0x00000115]=modify_basic_0115(props[0x00000115],controls["contrast"],controls["saturation"],controls["color_tone"],controls.get("sharpness_override",False),controls.get("sharp_strength",0),controls.get("fineness",2),controls.get("threshold",4))
         effective=list(lut_entries)
         recipe_wb=recipe_wb_lut_entry(controls.get("recipe_wb"),size=33)
@@ -863,7 +876,11 @@ def export_pf3(dll_path,base_path,output_path,lut_entries,controls,title,log=lam
         try:api.terminate()
         except Exception:pass
     size=validate_pf3_header(output_path)
-    if size!=434511: raise RuntimeError(f"Output PF3 is {size:,} bytes; expected 434,511. Do not register it.")
+    # Every property is written back at the exact length it was read in (the two
+    # parsed ones are re-checked to be same-length by modify_basic_0115()/
+    # transform_canon_table_stack()), so the output must match the source base's
+    # size exactly — regardless of that base's own size.
+    if size!=base_size: raise RuntimeError(f"Output PF3 is {size:,} bytes; expected {base_size:,} bytes (source base size). Do not register it.")
     sha=hashlib.sha256(Path(output_path).read_bytes()).hexdigest(); return size,sha
 
 
