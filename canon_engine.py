@@ -432,9 +432,12 @@ def modify_basic_0115(base, contrast, saturation, color_tone, sharpness_override
         raise ValueError("Expected 32-byte property 0x00000115.")
     b=bytearray(base)
     def put(offset,value): b[offset:offset+4]=int(value).to_bytes(4,"little",signed=True)
-    put(4,contrast); put(8,saturation); put(12,color_tone)
+    # Canon's EdsPictureStyleDesc layout: contrast=0, sharpness(strength)=4,
+    # saturation=8, colorTone=12, filterEffect=16, toningEffect=20,
+    # sharpFineness=24, sharpThreshold=28.
+    put(0,contrast); put(8,saturation); put(12,color_tone)
     if sharpness_override:
-        put(0,sharp_strength); put(24,fineness); put(28,threshold)
+        put(4,sharp_strength); put(24,fineness); put(28,threshold)
     return bytes(b)
 
 
@@ -443,7 +446,7 @@ def parse_basic_0115(data):
         raise ValueError("Expected 32-byte property 0x00000115.")
     def get(offset): return int.from_bytes(data[offset:offset+4], "little", signed=True)
     return {
-        "sharp_strength": get(0), "contrast": get(4), "saturation": get(8),
+        "contrast": get(0), "sharp_strength": get(4), "saturation": get(8),
         "color_tone": get(12), "fineness": get(24), "threshold": get(28),
     }
 
