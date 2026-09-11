@@ -152,26 +152,22 @@ class CoreRegressionTests(unittest.TestCase):
         self.assertIn("validateNativeRoundTrip",dynamic)
         self.assertIn("meaningfulDifferences",dynamic)
         self.assertIn("Canon compiler output is identical",dynamic)
-        self.assertIn("armedLegacyBlock1",dynamic)
-        self.assertIn("legacy-dual-8192-block-carrier",dynamic)
-        self.assertIn("CAMERA_FAMILY_REGISTRY",dynamic)
-        self.assertIn("canon-native-pf3-acceptance-hook-v1",dynamic)
+        self.assertIn("KNOWN_CARRIER_OBSERVATIONS",dynamic)
+        self.assertIn("canon-native-pf3-compiler-universal-v2",dynamic)
+        self.assertIn("universal-live-eds-cfparse",dynamic)
         self.assertIn("installPf3AcceptanceHooks",dynamic)
         self.assertIn("Unsupported EdsCFParse code signature",dynamic)
-        self.assertIn("modern-full33-paired",dynamic)
-        self.assertIn("sizes: [78980]",dynamic)
-        self.assertIn("sizes: [83076]",dynamic)
-        self.assertIn("sizes: [431616]",dynamic)
         self.assertIn("native_payload_captured",dynamic)
         self.assertIn("0x40001070",dynamic)
         self.assertIn("0x40001071",dynamic)
-        for rva in ("0x4d8d0", "0x46fd0", "0x46a50", "0x4cd10", "0x49830", "0x4a2b0"):
+        for rva in ("0x4d8d0", "0x48d10", "0x46fd0", "0x46a50", "0x4cd10", "0x49830", "0x4a2b0"):
             self.assertIn(rva,dynamic)
-        self.assertIn("patchedRegions: patchedRegions, preservedRegions: []",dynamic)
-        self.assertIn("const LEGACY_NAME_OFFSETS = [8, 44]",dynamic)
-        self.assertIn("const MODERN_NAME_OFFSETS = [8, 46]",dynamic)
-        self.assertIn("patchPayloadName(output, MODERN_NAME_OFFSETS)",dynamic)
-        self.assertIn("patchPayloadName(output, LEGACY_NAME_OFFSETS)",dynamic)
+        self.assertIn("dense10IndicesApplied",dynamic)
+        self.assertIn("dense17IndicesApplied",dynamic)
+        self.assertNotIn("armedLegacyBlock1",dynamic)
+        self.assertNotIn("legacyBlock1Hex",dynamic)
+        self.assertNotIn("MODERN_1F00_ENCODER",dynamic)
+        self.assertNotIn("patchPayloadNameDetected",dynamic)
         self.assertNotIn("api.Set(ref, 0x01000203",dynamic)
         self.assertNotIn("this.n !== 16752",dynamic)
 
@@ -233,14 +229,13 @@ class CoreRegressionTests(unittest.TestCase):
     def test_eos_rp_prepare_flow_arms_only_after_exact_selftest(self):
         class FakeExports:
             def __init__(self):self.calls=[]
-            def armdynamic(self,slot,pf3_path,name,block1_hex):
-                self.calls.append((slot,pf3_path,name,block1_hex));return True
+            def armdynamic(self,slot,pf3_path,name):
+                self.calls.append((slot,pf3_path,name));return True
         class FakeScript:
             def __init__(self):self.exports_sync=FakeExports()
 
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);expected=bytes((index*13)&0xff for index in range(BLOCK_SIZE))
-            target=bytes((index*19+5)&0xff for index in range(BLOCK_SIZE))
             paths={
                 "selftest_pf3":root/"selftest.pf3","selftest_block":root/"expected.bin",
                 "rp_carrier":root/"carrier.bin","camera_id":root/"camera.bin","descriptor":root/"descriptor.bin",
@@ -255,10 +250,7 @@ class CoreRegressionTests(unittest.TestCase):
 
             events=[];installer=EosRpInstaller(assets,event_callback=events.append)
             fake=FakeScript();installer.connect=lambda **_kwargs:setattr(installer,"script",fake) or fake
-            target_block2=bytes((index*23+9)&0xff for index in range(BLOCK_SIZE))
             compiled=iter((
-                ({"ok":True},bytes(360)+expected+expected),
-                ({"ok":True},bytes(360)+target+target_block2),
                 ({"ok":True},bytes(360)+expected+expected),
             ))
             installer._compile=lambda _path:next(compiled)
@@ -267,13 +259,12 @@ class CoreRegressionTests(unittest.TestCase):
                 base_pf3_path=base_pf3,
             )
             self.assertTrue(installer.armed);self.assertEqual(len(fake.exports_sync.calls),1)
-            slot,armed_pf3,name,block1_hex=fake.exports_sync.calls[0]
+            slot,armed_pf3,name=fake.exports_sync.calls[0]
             self.assertEqual(slot,2);self.assertEqual(name,"Camara Joao");self.assertEqual(Path(armed_pf3),pf3.resolve())
-            self.assertEqual(bytes.fromhex(block1_hex),target)
             report=json.loads(Path(result["reportPath"]).read_text(encoding="utf-8"))
             self.assertTrue(report["compilerSelfTest"]["exact"]);self.assertFalse(report["cameraWritePolicy"]["patch115"])
-            self.assertEqual(report["targetCompiler"]["policy"],"validated legacy oracle Block1 adapted to the live Canon carrier family")
-            self.assertEqual(report["targetCompiler"]["differentBytesFromBase"],sum(a!=b for a,b in zip(target,expected)))
+            self.assertEqual(report["targetCompiler"]["policy"],"current PF3 compiled by EdsCFParse with the live Canon camera ID and descriptor")
+            self.assertFalse(report["targetCompiler"]["modelSpecificBuilder"])
             self.assertTrue(report["cameraWritePolicy"]["requireNativeSizeMatch"])
             self.assertTrue(report["cameraWritePolicy"]["rejectIdenticalCarrier"])
             self.assertTrue(report["cameraWritePolicy"]["requirePf3DifferencesOutsideMetadata"])

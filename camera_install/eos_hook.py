@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .rp_assets import RpAssetSet
 from .rp_payload import (
-    canon_style_name, extract_legacy_block1, sha256_bytes,
+    canon_style_name, sha256_bytes,
     validate_agent_source, validate_compiler_selftest,
 )
 
@@ -68,10 +68,10 @@ class EosRpInstaller:
     """Fail-closed Canon camera-registration coordinator.
 
     EOS Utility remains the transaction owner. The agent captures the live
-    Canon camera ID, descriptor and genuine 0x01000203 carrier, selects a
-    guarded builder from the carrier-family registry, and uses the genuine
-    carrier as the envelope. Unknown families are captured read-only and never
-    patched. 0x00000115 is observation-only.
+    Canon camera ID, descriptor and genuine 0x01000203 carrier, then asks the
+    installed Canon compiler to generate that camera's native representation
+    from the current PF3. No model-specific payload builder is selected by the
+    application. 0x00000115 is observation-only.
     """
 
     def __init__(self, assets: RpAssetSet, event_callback=None, agent_path=None):
@@ -265,38 +265,13 @@ class EosRpInstaller:
         )
         self._emit({"type": "selftest_pass", "blockSha256": selftest_hash})
 
-        self._emit({"type": "stage", "message": "Compiling current PF3 into the validated camera oracle block…"})
-        target_meta, target_legacy = self._compile(pf3_path)
-        if not target_meta.get("ok"):
-            raise RuntimeError("Canon compiler rejected the current PF3")
-        target_block1 = extract_legacy_block1(target_legacy)
-        target_block_hash = sha256_bytes(target_block1)
-        base_block_hash = None
-        base_difference_count = None
-        if base_pf3_path:
-            base_pf3_path = Path(base_pf3_path).resolve()
-            if not base_pf3_path.is_file() or base_pf3_path.stat().st_size != 434_511:
-                raise RuntimeError("The selected validated base PF3 is unavailable for the camera oracle check")
-            base_meta, base_legacy = self._compile(base_pf3_path)
-            if not base_meta.get("ok"):
-                raise RuntimeError("Canon compiler rejected the selected base PF3")
-            base_block1 = extract_legacy_block1(base_legacy)
-            base_block_hash = sha256_bytes(base_block1)
-            base_difference_count = sum(a != b for a, b in zip(target_block1, base_block1))
-            if base_difference_count == 0:
-                raise RuntimeError("Canon camera oracle produced the base/default block; the PF3 transform was not incorporated")
-        self._emit({
-            "type": "target_oracle_pass", "blockSha256": target_block_hash,
-            "baseBlockSha256": base_block_hash, "differenceCount": base_difference_count,
-        })
-
         report_path = output_dir / "CANON_CAMERA_INSTALL_REPORT.json"
         report = {
             "format": "CanonStyleStudio.DynamicCameraInstallReport",
             "version": 2,
             "status": "ARMED",
             "createdAt": _utc_now(),
-            "cameraCompatibility": "Dynamic Canon family detection; physical validation initially EOS RP",
+            "cameraCompatibility": "Canon-native live descriptor/carrier compilation; physical confirmation remains per body",
             "rawCompatibilityDoesNotImplyCameraCompatibility": True,
             "sourcePf3": pf3_path.name,
             "sourcePf3Sha256": sha256_bytes(pf3_path.read_bytes()),
@@ -307,17 +282,14 @@ class EosRpInstaller:
                 "exact": True, "blockSha256": selftest_hash, "meta": selftest_meta,
             },
             "targetCompiler": {
-                "policy": "validated legacy oracle Block1 adapted to the live Canon carrier family",
-                "legacyBlock1Sha256": target_block_hash,
-                "baseBlock1Sha256": base_block_hash,
-                "differentBytesFromBase": base_difference_count,
-                "meta": target_meta,
-                "pendingLiveFamily": True,
+                "policy": "current PF3 compiled by EdsCFParse with the live Canon camera ID and descriptor",
+                "modelSpecificBuilder": False,
+                "pendingLiveCanonInputs": True,
             },
             "cameraWritePolicy": {
                 "patch203PayloadOnlyAfterDynamicValidation": True, "patch115": False,
                 "requireNativeSizeMatch": True, "requireHeaderMatch": True,
-                "requireSentinelMatch": True,
+                "requireSentinelMatchWhenPresent": True,
                 "rejectIdenticalCarrier": True, "requirePf3DifferencesOutsideMetadata": True,
                 "reason": "0x00000115 is opaque binary state/control data",
             },
@@ -329,8 +301,8 @@ class EosRpInstaller:
             self._report_path = report_path
             self._save_report()
 
-        self._emit({"type": "stage", "message": "Arming dynamic Canon camera-family detection…"})
-        armed = self.script.exports_sync.armdynamic(slot, str(pf3_path), style_name, target_block1.hex())
+        self._emit({"type": "stage", "message": "Arming the Canon-native PF3 compiler path…"})
+        armed = self.script.exports_sync.armdynamic(slot, str(pf3_path), style_name)
         if not armed:
             raise RuntimeError("EOS Utility hook did not arm")
         self.armed = True

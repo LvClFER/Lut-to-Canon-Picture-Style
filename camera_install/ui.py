@@ -42,7 +42,7 @@ class CameraInstallDialog(QDialog):
     def __init__(self, main, parent=None):
         super().__init__(parent)
         self.main = main
-        self.setWindowTitle("Send to Camera · Dynamic Canon workflow")
+        self.setWindowTitle("Send to Camera · Canon-native PF3 workflow")
         self.resize(760, 680)
         self.setMinimumSize(680, 600)
         self.pool = QThreadPool(self)
@@ -54,13 +54,13 @@ class CameraInstallDialog(QDialog):
         self.assets = None
 
         layout = QVBoxLayout(self)
-        title = QLabel("Send to Camera · Canon Dynamic")
+        title = QLabel("Send to Camera · Canon Native")
         title.setStyleSheet("font-size:18pt;font-weight:700;")
         layout.addWidget(title)
         warning = QLabel(
-            "The dynamic method is physically validated first on EOS RP; other bodies remain experimental "
-            "until tested. The app uses the live Canon camera ID, descriptor and carrier, and writes only "
-            "after strict native-size/header validation. EOS Utility remains the transaction owner."
+            "The app gives the current PF3 to Canon's own compiler with the connected camera's live ID, "
+            "descriptor and carrier. Canon selects the camera representation; the app only corrects the "
+            "internal gate that otherwise discards arbitrary PF3 tables. EOS Utility remains the transaction owner."
         )
         warning.setWordWrap(True)
         warning.setStyleSheet("color:#FFB86B;font-weight:600;")
@@ -89,7 +89,7 @@ class CameraInstallDialog(QDialog):
 
         target_row = QHBoxLayout()
         target_row.addWidget(QLabel("Target"))
-        self.target = QLabel("Automatic Canon camera-family detection")
+        self.target = QLabel("Automatic · Canon live compiler and connected camera descriptor")
         target_row.addWidget(self.target, 1)
         target_row.addWidget(QLabel("Choose User Def. 1, 2 or 3 in EOS Utility"))
         layout.addLayout(target_row)
@@ -109,15 +109,15 @@ class CameraInstallDialog(QDialog):
         layout.addWidget(self.requirements)
 
         self.confirm_rp = QCheckBox(
-            "I understand non-RP camera installation is experimental and will proceed only if every dynamic validation passes"
+            "Proceed only when the Canon-native compiler and live payload validations pass"
         )
         self.confirm_rp.toggled.connect(self.update_prepare_enabled)
         layout.addWidget(self.confirm_rp)
 
         self.steps = QLabel(
             "Workflow: export PF3 → exact Canon compiler self-test → capture the connected camera's live ID, "
-            "descriptor and genuine carrier → Canon-native PF3 recompilation for that family → size/header/sentinel "
-            "validation → replace only 0x01000203. Property 0x00000115 remains untouched."
+            "descriptor and genuine carrier → Canon-native PF3 compilation → structural validation → replace only "
+            "0x01000203. Property 0x00000115 remains untouched."
         )
         self.steps.setWordWrap(True)
         layout.addWidget(self.steps)
@@ -248,7 +248,7 @@ class CameraInstallDialog(QDialog):
         if not bool((self.main.base_resolution or {}).get("validated")):
             reasons.append("Select a hash-validated Canon base PF3 (the imported ZIP supplies these bases)")
         if not self.confirm_rp.isChecked():
-            reasons.append("Confirm the experimental dynamic-camera safety notice")
+            reasons.append("Confirm the Canon-native live validation notice")
         return reasons
 
     def update_prepare_enabled(self):
@@ -333,7 +333,7 @@ class CameraInstallDialog(QDialog):
                 "pf3":pf3_path.name, "pf3Size":size, "pf3Sha256":digest,
                 "basePictureStyle":base_style, "baseTemplateValidated":True,
                 "basePf3Sha256":base_info.get("sha256"),
-                "cameraTarget":"Dynamic Canon family", "slot":None, "slotPolicy":"dynamicUserDef1To3",
+                "cameraTarget":"Canon-native live compiler", "slot":None, "slotPolicy":"dynamicUserDef1To3",
             }
             pf3_path.with_suffix(".manifest.json").write_text(
                 json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
@@ -341,7 +341,6 @@ class CameraInstallDialog(QDialog):
             self.worker.signals.event.emit({"type":"pf3_ready", "size":size, "sha256":digest})
             return self.installer.prepare_and_arm(
                 pf3_path, slot, style_name, output_dir, launch_eos=True,
-                base_pf3_path=base,
             )
 
         self.worker = CameraPrepareWorker(work)
@@ -365,15 +364,10 @@ class CameraInstallDialog(QDialog):
             self.append("EOS Utility 3 started. Waiting for Canon modules…")
         elif kind == "selftest_pass":
             self.append("Compiler self-test: EXACT 8192-byte match.")
-        elif kind == "target_oracle_pass":
-            self.append(
-                "Current PF3 camera block validated · "
-                f"{event.get('differenceCount')} bytes differ from the Canon base block."
-            )
         elif kind == "ready":
             self.append("Canon dynamic compiler + EDSDK hook ready inside EOS Utility.")
         elif kind == "armed":
-            self.append("Dynamic hook armed · choose User Def. 1, 2 or 3 in EOS Utility.")
+            self.append("Canon-native PF3 hook armed · choose User Def. 1, 2 or 3 in EOS Utility.")
         elif kind == "compiler_input_captured":
             if event.get("input") == "cameraId":
                 self.append(f"Live Canon camera ID captured · {event.get('cameraIdHex')}")
@@ -384,10 +378,9 @@ class CameraInstallDialog(QDialog):
         elif kind == "registration_seen":
             self.append(f"Genuine registration seen · User Def. {event.get('slot')} · {event.get('size')} bytes")
         elif kind == "carrier_family_detected":
-            state = "enabled" if event.get("installEnabled") else "diagnostic capture only"
             self.append(
-                f"Carrier family detected · {event.get('familyId')} · {state} · "
-                f"{event.get('familyStatus')}"
+                f"Live Canon carrier observed · {event.get('size')} bytes · "
+                "the Canon compiler will select its representation automatically"
             )
         elif kind == "native_payload_observed":
             self.append(f"Genuine Canon carrier observed · {event.get('size')} bytes · retained only as a report hash")
@@ -430,12 +423,12 @@ class CameraInstallDialog(QDialog):
         self.progress.setValue(4)
         self.assets_button.setEnabled(True)
         self.import_zip_button.setEnabled(True)
-        self.append("✓ ARMED · exact compiler self-test passed; live camera-family validation is waiting")
+        self.append("✓ ARMED · exact compiler self-test passed; live Canon compilation is waiting")
         self.append(f"PF3: {Path(result['pf3']).name}")
         self.append(f"Install report: {Path(result['reportPath']).name}")
         self.steps.setText(
             "FINAL STEP — In EOS Utility, register the generated PF3 normally to User Def. 1, 2 or 3. "
-            f"Expected camera name: {result['styleName']}. The app will capture and validate the native family before writing. "
+            f"Expected camera name: {result['styleName']}. The app will compile and validate the PF3 against the live Canon transaction before writing. "
             "Do not close this window until success or until you intentionally disarm."
         )
         try:

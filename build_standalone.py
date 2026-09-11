@@ -103,7 +103,7 @@ def build(output_root, private_multi_camera=False):
               "python_required":False,"pse_required_for_canon_raw":True,
               "canon_resources_bundled":bool(private_multi_camera),"entrypoint":"CanonStyleStudio.exe",
               "distribution":"private compatibility testing only; do not publish" if private_multi_camera else "public",
-              "camera_install":{"method":"Canon-native PF3 acceptance hook plus guarded carrier-family registry","physically_validated_bodies":["EOS RP"],"offline_validated_bodies":["EOS R8 (83076; five Canon regions exact across controlled PF3 vectors)"],"enabled_carrier_sizes":[16744,16752,78980,83076],"capture_only_carrier_sizes":[8164,8168,8528,16720,431616],"experimental_bodies":"all bodies not physically validated with this hook","external_selftest_assets_required":not private_multi_camera,"support_assets_bundled":bool(private_multi_camera)},
+              "camera_install":{"method":"single live Canon EdsCFParse route; Canon selects the camera representation and the hook preserves arbitrary PF3 tables","model_specific_builders":False,"offline_validated_transactions":["EOS 1300D / 16744","EOS RP / 16752","EOS R8 / 83076"],"accepted_carrier_policy":"all live Canon carriers that pass compiler and structural validation","physical_revalidation_required":True,"external_selftest_assets_required":not private_multi_camera,"support_assets_bundled":bool(private_multi_camera)},
               "portable_storage":{"settings":"app_data","support":"camera_support","camera_exports":"exported_styles"}}
     (release/"STANDALONE_MANIFEST.json").write_text(json.dumps(manifest,indent=2),encoding="utf-8")
     problems=audit(release,allow_private_support=private_multi_camera)

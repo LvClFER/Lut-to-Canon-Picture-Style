@@ -114,19 +114,14 @@ def validate_agent_source(source: str) -> None:
     if "armdynamic" in source:
         required = (
             "capturedCameraId", "capturedDescriptor", "EdsCfpGetPropertySize",
-            "validateNativeRoundTrip", "CAMERA_FAMILY_REGISTRY",
+            "validateNativeRoundTrip", "KNOWN_CARRIER_OBSERVATIONS",
             "meaningfulDifferences", "Canon compiler output is identical",
-            "armedLegacyBlock1", "legacy-dual-8192-block-carrier",
-            "sizes: [78980]", "sizes: [83076]", "sizes: [431616]",
-            "canon-native-pf3-acceptance-hook-v1", "installPf3AcceptanceHooks",
-            "modern-full33-paired", "native_payload_captured",
-            "0x40001070", "0x40001071", "0x1F00", "0x1022", "0x1F02",
-            "0x4d8d0", "0x46fd0", "0x46a50", "0x4cd10", "0x49830", "0x4a2b0",
-            "patchedRegions: patchedRegions, preservedRegions: []",
+            "canon-native-pf3-compiler-universal-v2", "installPf3AcceptanceHooks",
+            "universal-live-eds-cfparse", "native_payload_captured",
+            "0x40001070", "0x40001071",
+            "0x4d8d0", "0x48d10", "0x46fd0", "0x46a50", "0x4cd10", "0x49830", "0x4a2b0",
+            "compilerGridPathSeen", "dense10IndicesApplied", "dense17IndicesApplied",
             "Unsupported EdsCFParse code signature",
-            "const LEGACY_NAME_OFFSETS = [8, 44]",
-            "const MODERN_NAME_OFFSETS = [8, 46]",
-            "patchPayloadName(output, MODERN_NAME_OFFSETS)",
             "args[3] =", "args[4] =",
         )
         missing = [value for value in required if value not in source]
@@ -136,6 +131,13 @@ def validate_agent_source(source: str) -> None:
             raise RuntimeError("Dynamic camera agent still contains an EOS RP-only payload-size guard")
         if "api.Set(ref, 0x01000203" in source:
             raise RuntimeError("Dynamic camera agent feeds the native carrier back into the PF3 compiler")
+        forbidden = (
+            "armedLegacyBlock1", "legacyBlock1Hex", "legacy-dual-8192-block-carrier",
+            "MODERN_1F00_ENCODER", "patchPayloadNameDetected",
+        )
+        present = [value for value in forbidden if value in source]
+        if present:
+            raise RuntimeError("Dynamic camera agent still contains model-specific payload logic: " + ", ".join(present))
     elif "this.n !== 16752" not in source:
         raise RuntimeError("Legacy EOS RP agent does not enforce its validated 16752-byte contract")
     if "!isUserDefSlot" not in source or "this.param !== selectedParam" in source:
