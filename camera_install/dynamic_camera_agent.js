@@ -42,8 +42,8 @@ const CAMERA_FAMILY_REGISTRY = [
   { id: 'legacy-compact-8528', sizes: [8528], installEnabled: false, status: 'recognized-research-required' },
   { id: 'legacy-transition-16720', sizes: [16720], installEnabled: false, status: 'recognized-research-required' },
   { id: 'legacy-dual-8192', sizes: [16744, 16752], installEnabled: true, status: 'physically-validated-eos-1300d-rp', builder: 'legacy-dual-8192' },
-  { id: 'modern-17cube-paired', sizes: [78980], installEnabled: true, status: 'structurally-mapped-physical-validation-required', builder: 'modern-17cube' },
-  { id: 'modern-17cube-paired-aux', sizes: [83076], installEnabled: true, status: 'physically-exercised-eos-r8-aerochrome', builder: 'modern-17cube-aux' },
+  { id: 'modern-17cube-paired', sizes: [78980], installEnabled: true, status: 'canon-native-hook-structurally-validated-physical-validation-required', builder: 'modern-17cube' },
+  { id: 'modern-17cube-paired-aux', sizes: [83076], installEnabled: true, status: 'canon-native-hook-offline-validated-r8-physical-revalidation-required', builder: 'modern-17cube-aux' },
   { id: 'modern-full33-paired', sizes: [431616], installEnabled: false, status: 'recognized-encoder-research-required', builder: 'modern-full33', regions: ['0x1F04', '0x1F03'] }
 ];
 
@@ -253,51 +253,32 @@ function getPropertyBytes(api, ref, property) {
 function buildModern17Carrier(nativeCarrier, family) {
   const includeAuxiliary = family.builder === 'modern-17cube-aux';
   const expectedSize = includeAuxiliary ? 83076 : 78980;
-  if (nativeCarrier.length !== expectedSize) throw new Error('Modern encoder carrier size does not match its registered family');
-  const api = compilerApi();
-  const rcInitialize = api.Initialize();
-  // EOS Utility normally initialized the parser before the hook runs. Canon
-  // returns 2 when Initialize is called again; both states are usable.
-  if (rcInitialize !== 0 && rcInitialize !== 2) throw new Error('Canon PF3 parser initialization failed: rc=' + rcInitialize);
-  const outRef = Memory.alloc(Process.pointerSize); outRef.writePointer(ptr(0));
-  const rcCreate = api.Create(Memory.allocUtf8String(armedPf3Path), 2, 0, outRef);
-  const ref = outRef.readPointer();
-  if (rcCreate !== 0 || ref.isNull()) throw new Error('Canon could not open the PF3 for modern table encoding: rc=' + rcCreate);
-  compilerBusy = true;
-  try {
-    const table70 = getPropertyBytes(api, ref, 0x40001070);
-    const table71 = getPropertyBytes(api, ref, 0x40001071);
-    const decoded1f00 = encodeMainTable(table70, MODERN_1F00_ENCODER);
-    const decoded1022 = encodeMainTable(table71, MODERN_1022_ENCODER);
-    const output = new Uint8Array(nativeCarrier);
-    output.set(xorCanon(decoded1f00, 0xB8ED), 372);
-    output.set(xorCanon(decoded1022, 0xB8ED), 39676);
-    const patchedRegions = ['0x1F00', '0x1022'];
-    if (includeAuxiliary) {
-      const nativeAux = xorCanon(sliceBytes(nativeCarrier, 78980, 83076), 0xB8ED);
-      const grid = recoverAuxiliaryGrid(nativeAux);
-      const decoded1f02 = encodeAuxiliaryTable(table70, grid);
-      output.set(xorCanon(decoded1f02, 0xB8ED), 78980);
-      patchedRegions.push('0x1F02');
-    }
-    patchPayloadName(output, MODERN_NAME_OFFSETS);
-    const validation = validateNativeRoundTrip(nativeCarrier, output);
-    return { output: output, metadata: {
-      strategy: includeAuxiliary ? 'modern-83076-pf3-table-encoder-v1' : 'modern-78980-pf3-table-encoder-v1',
-      familyId: family.id, familyStatus: family.status, outputSize: output.length,
-      tableProperties: ['0x40001070', '0x40001071'],
-      patchedRegions: patchedRegions,
-      preservedRegions: ['0x1F01', '0x102A'],
-      physicallyExercisedLook: includeAuxiliary ? 'Aerochrome on EOS R8' : null,
-      sentinelOffset: validation.sentinelOffset, meaningfulStart: validation.meaningfulStart,
-      totalDifferences: validation.totalDifferences,
-      meaningfulDifferences: validation.meaningfulDifferences,
-      cameraIdHex: bytesToHex(capturedCameraId), descriptorSize: capturedDescriptor.length
-    }};
-  } finally {
-    try { api.Release(ref); } catch (_) {}
-    compilerBusy = false;
+  if (nativeCarrier.length !== expectedSize) throw new Error('Modern Canon carrier size does not match its registered family');
+  const compiled = compilePf3WithAcceptedTables(
+    armedPf3Path, bytesToHex(capturedCameraId), bytesToHex(capturedDescriptor), includeAuxiliary
+  );
+  const compiler = compiled[0];
+  const output = new Uint8Array(compiled[1]);
+  if (!compiler.ok) throw new Error('Canon-native PF3 acceptance compile failed');
+  if (output.length !== nativeCarrier.length) {
+    throw new Error('Canon selected a ' + output.length + '-byte carrier but EOS Utility supplied ' + nativeCarrier.length + ' bytes');
   }
+  patchPayloadName(output, MODERN_NAME_OFFSETS);
+  const validation = validateNativeRoundTrip(nativeCarrier, output);
+  const patchedRegions = ['0x1F00', '0x1F01', '0x1022', '0x102A'];
+  if (includeAuxiliary) patchedRegions.push('0x1F02');
+  return { output: output, metadata: {
+    strategy: 'canon-native-pf3-acceptance-hook-v1',
+    familyId: family.id, familyStatus: family.status, outputSize: output.length,
+    tableProperties: ['0x40001070', '0x40001071'],
+    patchedRegions: patchedRegions, preservedRegions: [],
+    compilerSelectedCarrier: true,
+    acceptanceHook: compiler.acceptanceHook,
+    sentinelOffset: validation.sentinelOffset, meaningfulStart: validation.meaningfulStart,
+    totalDifferences: validation.totalDifferences,
+    meaningfulDifferences: validation.meaningfulDifferences,
+    cameraIdHex: bytesToHex(capturedCameraId), descriptorSize: capturedDescriptor.length
+  }};
 }
 
 function fixedAscii32(value) {
@@ -372,12 +353,16 @@ function compilerApi() {
 
 function compilePf3(path, cameraIdHex, descriptorHex) {
   const api = compilerApi();
+  const rcInitialize = api.Initialize();
+  if (rcInitialize !== 0 && rcInitialize !== 2) {
+    return [{ ok: false, rcInitialize: rcInitialize }, new ArrayBuffer(0)];
+  }
   const pathMemory = Memory.allocUtf8String(String(path));
   const outRef = Memory.alloc(Process.pointerSize);
   outRef.writePointer(ptr(0));
   const rcCreate = api.Create(pathMemory, 2, 0, outRef);
   const ref = outRef.readPointer();
-  if (rcCreate !== 0 || ref.isNull()) return [{ ok: false, rcCreate: rcCreate }, new ArrayBuffer(0)];
+  if (rcCreate !== 0 || ref.isNull()) return [{ ok: false, rcInitialize: rcInitialize, rcCreate: rcCreate }, new ArrayBuffer(0)];
   compilerBusy = true;
   try {
     const cameraId = hexToBytes(cameraIdHex);
@@ -399,11 +384,154 @@ function compilePf3(path, cameraIdHex, descriptorHex) {
     const rcRelease = api.Release(ref);
     return [{
       ok: rcCreate === 0 && rcId === 0 && rcDescriptor === 0 && rcSize === 0 && rcGet === 0,
-      rcCreate: rcCreate, rcId: rcId, rcDesc: rcDescriptor, rcSize: rcSize,
+      rcInitialize: rcInitialize, rcCreate: rcCreate, rcId: rcId, rcDesc: rcDescriptor, rcSize: rcSize,
       rcGet: rcGet, rcRelease: rcRelease, outputSize: outputSize, outputType: dataType.readU32()
     }, data];
   } finally {
     compilerBusy = false;
+  }
+}
+
+function assertCodeSignature(module, rva, expected) {
+  const actual = new Uint8Array(module.base.add(rva).readByteArray(expected.length));
+  for (let index = 0; index < expected.length; index++) {
+    if (actual[index] !== expected[index]) {
+      throw new Error('Unsupported EdsCFParse code signature at 0x' + rva.toString(16));
+    }
+  }
+}
+
+function installPf3AcceptanceHooks(includeAuxiliary) {
+  const module = Process.getModuleByName('EdsCFParse.dll');
+  if (module.size !== 901120) {
+    throw new Error('Unsupported EdsCFParse build for the Canon-native PF3 acceptance hook: ' + module.size);
+  }
+  assertCodeSignature(module, 0x4d8d0, [0x55, 0x8b, 0xec, 0x81, 0xec, 0x84, 0x04, 0x00, 0x00]);
+  assertCodeSignature(module, 0x46fd0, [0x55, 0x8b, 0xec, 0x33, 0xc0, 0x83, 0x7d, 0x08, 0x01]);
+  assertCodeSignature(module, 0x46a50, [0x55, 0x8b, 0xec, 0xa1]);
+  if (includeAuxiliary) {
+    assertCodeSignature(module, 0x49830, [0x55, 0x8b, 0xec, 0xb8, 0x14, 0x50, 0x00, 0x00]);
+    assertCodeSignature(module, 0x4a2b0, [0x55, 0x8b, 0xec, 0x56, 0xff, 0x75, 0x08]);
+  }
+
+  const ReadDenseGrid = new NativeFunction(
+    module.base.add(0x46fd0), 'uint32', ['pointer', 'uint32', 'pointer'], 'thiscall'
+  );
+  const DenseGridToIntermediate = new NativeFunction(
+    module.base.add(0x46a50), 'void', ['pointer', 'uint32', 'uint32', 'pointer']
+  );
+  const results = { grid: [], auxiliary: [] };
+  let overrideActive = false;
+  const hooks = [];
+
+  hooks.push(Interceptor.attach(module.base.add(0x4d8d0), {
+    onEnter(args) {
+      this.self = this.context.ecx;
+      this.gridIndex = args[0].toUInt32();
+      this.output = args[1];
+    },
+    onLeave(returnValue) {
+      const item = { index: this.gridIndex, originalResult: returnValue.toUInt32(), applied: false };
+      if (!overrideActive && (this.gridIndex === 1 || this.gridIndex === 2)) {
+        overrideActive = true;
+        try {
+          const sourceOut = Memory.alloc(Process.pointerSize);
+          sourceOut.writePointer(ptr(0));
+          const rcRead = ReadDenseGrid(this.self, this.gridIndex, sourceOut);
+          const source = sourceOut.readPointer();
+          item.readDenseGrid = rcRead;
+          if (rcRead !== 0 && !source.isNull()) {
+            this.output.writeU32(3);
+            this.output.add(4).writeU32(17);
+            this.output.add(8).writeU32(0x1cc98);
+            this.output.add(12).writeU32(2);
+            DenseGridToIntermediate(source, 0, this.gridIndex, this.output);
+            returnValue.replace(1);
+            item.applied = true;
+          }
+        } catch (error) {
+          item.error = String(error);
+        } finally {
+          overrideActive = false;
+        }
+      }
+      results.grid.push(item);
+    }
+  }));
+
+  if (includeAuxiliary) {
+    const ConvertGrid33ForCamera = new NativeFunction(
+      module.base.add(0x4cd10), 'uint32', ['pointer'], 'thiscall'
+    );
+    const ReadCompactGrid = new NativeFunction(
+      module.base.add(0x46f50), 'uint32', ['pointer', 'uint32', 'pointer'], 'thiscall'
+    );
+    const SetInternalProperty = new NativeFunction(
+      module.base.add(0x4a2b0), 'uint32',
+      ['pointer', 'uint32', 'uint32', 'pointer', 'uint32', 'uint32'], 'thiscall'
+    );
+    hooks.push(Interceptor.attach(module.base.add(0x49830), {
+      onEnter(args) {
+        this.self = this.context.ecx;
+        this.compact = Memory.alloc(0x1000);
+        this.compact.writeByteArray(new Uint8Array(0x1000));
+        const item = { converted: false, applied: false };
+        this.itemIndex = results.auxiliary.length;
+        try {
+          item.convertResult = ConvertGrid33ForCamera(this.context.ecx);
+          item.readCompactGrid = ReadCompactGrid(this.context.ecx, 1, this.compact);
+          item.converted = item.convertResult !== 0 && item.readCompactGrid !== 0;
+        } catch (error) {
+          item.error = String(error);
+        }
+        results.auxiliary.push(item);
+      },
+      onLeave(returnValue) {
+        const item = results.auxiliary[this.itemIndex];
+        if (item && item.converted && !item.error) {
+          try {
+            item.setResult = SetInternalProperty(this.self, 0x1f02, 0x1000, this.compact, 0, 1);
+            item.applied = item.setResult === 0;
+          } catch (error) {
+            item.error = String(error);
+          }
+        }
+      }
+    }));
+  }
+  return {
+    results: results,
+    detach: function() {
+      for (const hook of hooks) {
+        try { hook.detach(); } catch (_) {}
+      }
+    }
+  };
+}
+
+function compilePf3WithAcceptedTables(path, cameraIdHex, descriptorHex, includeAuxiliary) {
+  const acceptance = installPf3AcceptanceHooks(includeAuxiliary);
+  try {
+    const compiled = compilePf3(path, cameraIdHex, descriptorHex);
+    const metadata = compiled[0];
+    const gridApplied = acceptance.results.grid.filter(item => item.applied).map(item => item.index);
+    const requiredGrid = gridApplied.indexOf(1) >= 0 && gridApplied.indexOf(2) >= 0;
+    const auxiliaryApplied = !includeAuxiliary || acceptance.results.auxiliary.some(item => item.applied);
+    metadata.acceptanceHook = {
+      version: 1,
+      rcInitialize: metadata.rcInitialize,
+      gridIndicesApplied: gridApplied,
+      auxiliaryApplied: auxiliaryApplied,
+      errors: acceptance.results.grid.concat(acceptance.results.auxiliary)
+        .filter(item => item && item.error).map(item => item.error)
+    };
+    if (!metadata.ok || !requiredGrid || !auxiliaryApplied || metadata.acceptanceHook.errors.length) {
+      metadata.ok = false;
+      metadata.acceptanceError = 'Canon-native PF3 table acceptance hook did not complete every required conversion';
+    }
+    return [metadata, compiled[1]];
+  } finally {
+    acceptance.detach();
   }
 }
 
