@@ -24,7 +24,7 @@ FILES=(
     "SELF_TEST.py","REGRESSION_TESTS.py","PUBLIC_ALPHA_REGRESSION.py",
     "README.md","TESTING_GUIDE.md","PUBLIC_ALPHA_RELEASE_NOTES.md","ARCHITECTURE_STATUS.md",
     "camera_install/__init__.py","camera_install/rp_assets.py","camera_install/rp_payload.py",
-    "camera_install/eos_hook.py","camera_install/ui.py","camera_install/rp_loader_agent.js",
+    "camera_install/eos_hook.py","camera_install/ui.py",
     "camera_install/dynamic_camera_agent.js","PF3_UI_EXPORT_TEST.py",
 )
 EXAMPLES=("example_luts/hald_identity_8.png","example_luts/Lightroom_Hald_Template_512_64cube_sRGB_16bit.tif")

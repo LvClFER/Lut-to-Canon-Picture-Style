@@ -146,30 +146,35 @@ class CoreRegressionTests(unittest.TestCase):
         dynamic=(HERE/"camera_install"/"dynamic_camera_agent.js").read_text(encoding="utf-8")
         validate_agent_source(dynamic)
         self.assertIn("armdynamic",dynamic)
+        self.assertIn("EdsCfpCreateRef",dynamic)
         self.assertIn("EdsCfpGetPropertySize",dynamic)
+        self.assertIn("EdsCfpGetPropertyData",dynamic)
         self.assertIn("capturedCameraId",dynamic)
         self.assertIn("capturedDescriptor",dynamic)
-        self.assertIn("validateNativeRoundTrip",dynamic)
-        self.assertIn("meaningfulDifferences",dynamic)
-        self.assertIn("Canon compiler output is identical",dynamic)
+        self.assertIn("sameArmedPath",dynamic)
+        self.assertIn("targetRefs",dynamic)
         self.assertIn("KNOWN_CARRIER_OBSERVATIONS",dynamic)
-        self.assertIn("canon-native-pf3-compiler-universal-v2",dynamic)
-        self.assertIn("universal-live-eds-cfparse",dynamic)
-        self.assertIn("installPf3AcceptanceHooks",dynamic)
-        self.assertIn("Unsupported EdsCFParse code signature",dynamic)
-        self.assertIn("native_payload_captured",dynamic)
-        self.assertIn("0x40001070",dynamic)
-        self.assertIn("0x40001071",dynamic)
-        for rva in ("0x4d8d0", "0x48d10", "0x46fd0", "0x46a50", "0x4cd10", "0x49830", "0x4a2b0"):
-            self.assertIn(rva,dynamic)
+        self.assertIn("in-place-canon-compiler-acceptance",dynamic)
+        self.assertIn("semantic-signatures-v1",dynamic)
+        self.assertIn("installAcceptanceHooks",dynamic)
+        self.assertIn("Unsupported EdsCFParse semantic signature",dynamic)
         self.assertIn("dense10IndicesApplied",dynamic)
         self.assertIn("dense17IndicesApplied",dynamic)
+        self.assertIn("compiler_validation_pass",dynamic)
+        self.assertIn("compiler_validation_failed",dynamic)
+        self.assertIn("transportMutation: false",dynamic)
+        self.assertIn("payloadReplaced: false",dynamic)
         self.assertNotIn("armedLegacyBlock1",dynamic)
         self.assertNotIn("legacyBlock1Hex",dynamic)
         self.assertNotIn("MODERN_1F00_ENCODER",dynamic)
         self.assertNotIn("patchPayloadNameDetected",dynamic)
         self.assertNotIn("api.Set(ref, 0x01000203",dynamic)
         self.assertNotIn("this.n !== 16752",dynamic)
+        self.assertNotIn("args[3] =",dynamic)
+        self.assertNotIn("args[4] =",dynamic)
+        self.assertNotIn("module.size !==",dynamic)
+        self.assertNotIn("base.add(0x",dynamic)
+        self.assertNotIn("payload_patched",dynamic)
 
     def test_unknown_camera_payload_capture_is_read_only_and_persistent(self):
         with tempfile.TemporaryDirectory() as td:
@@ -193,7 +198,7 @@ class CoreRegressionTests(unittest.TestCase):
             self.assertTrue(saved["readOnly"]);self.assertFalse(saved["argumentsModified"])
             self.assertEqual(events[-1]["captureFile"],capture.name)
 
-    def test_dynamic_camera_report_hashes_native_carrier_without_storing_it(self):
+    def test_dynamic_camera_report_records_native_compiler_without_replacing_carrier(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);events=[]
             installer=object.__new__(EosRpInstaller)
@@ -210,13 +215,13 @@ class CoreRegressionTests(unittest.TestCase):
             self.assertEqual(installer._report["nativeCarrier"]["sha256"],hashlib.sha256(native).hexdigest())
             self.assertFalse(installer._report["nativeCarrier"]["stored"])
             self.assertFalse(any(root.glob("NATIVE_*.bin")))
-            outgoing=bytes((value^0x5a) for value in native)
-            compiler={"cameraIdHex":"81040080","descriptorSize":15076,"outputSize":len(outgoing)}
+            compiler={"mode":"in-place-canon-compiler-acceptance","outputSize":len(native),"ok":True}
             installer._on_message(
-                {"type":"send","payload":{"type":"payload_patched","slot":1,"size":len(outgoing),"compiler":compiler}},outgoing
+                {"type":"send","payload":{"type":"compiler_validation_pass","validation":compiler}},None
             )
-            self.assertEqual(installer._report["dynamicCompiler"],compiler)
-            self.assertEqual(installer._report["patchedPayloadSize"],len(outgoing))
+            self.assertEqual(installer._report["nativeCompilerValidation"],compiler)
+            self.assertNotIn("patchedPayloadSize",installer._report)
+            self.assertNotIn("actualOutgoingPayloadSha256",installer._report)
 
     def test_external_eos_rp_support_assets_when_configured(self):
         folder=os.environ.get("CANON_STYLE_STUDIO_RP_ASSETS")
@@ -263,11 +268,12 @@ class CoreRegressionTests(unittest.TestCase):
             self.assertEqual(slot,2);self.assertEqual(name,"Camara Joao");self.assertEqual(Path(armed_pf3),pf3.resolve())
             report=json.loads(Path(result["reportPath"]).read_text(encoding="utf-8"))
             self.assertTrue(report["compilerSelfTest"]["exact"]);self.assertFalse(report["cameraWritePolicy"]["patch115"])
-            self.assertEqual(report["targetCompiler"]["policy"],"current PF3 compiled by EdsCFParse with the live Canon camera ID and descriptor")
+            self.assertIn("EOS Utility compiles the selected PF3",report["targetCompiler"]["policy"])
             self.assertFalse(report["targetCompiler"]["modelSpecificBuilder"])
-            self.assertTrue(report["cameraWritePolicy"]["requireNativeSizeMatch"])
-            self.assertTrue(report["cameraWritePolicy"]["rejectIdenticalCarrier"])
-            self.assertTrue(report["cameraWritePolicy"]["requirePf3DifferencesOutsideMetadata"])
+            self.assertTrue(report["targetCompiler"]["targetPf3PathScoped"])
+            self.assertFalse(report["cameraWritePolicy"]["replace203Payload"])
+            self.assertFalse(report["cameraWritePolicy"]["modifyEdsdkArguments"])
+            self.assertEqual(report["cameraWritePolicy"]["payloadOwner"],"EOS Utility / EDSDK")
 
             blocked=EosRpInstaller(assets)
             blocked_fake=FakeScript();blocked.connect=lambda **_kwargs:setattr(blocked,"script",blocked_fake) or blocked_fake

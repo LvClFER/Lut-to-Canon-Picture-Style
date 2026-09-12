@@ -808,7 +808,7 @@ class CanonStyleStudioQt(QMainWindow):
         self.redo_btn=QToolButton(text="↷");self.redo_btn.setToolTip("Redo · Ctrl+Y");self.redo_btn.clicked.connect(self.redo);tl.addWidget(self.redo_btn)
         self.report_btn=QPushButton("Create Test Report");self.report_btn.clicked.connect(self.create_test_report);tl.addWidget(self.report_btn)
         self.about_btn=QToolButton(text="About / Alpha");self.about_btn.clicked.connect(self.show_about);tl.addWidget(self.about_btn)
-        self.camera_btn=QPushButton("SEND TO CAMERA");self.camera_btn.setToolTip("Dynamic Canon camera-family workflow; EOS RP physically validated, other bodies experimental");self.camera_btn.clicked.connect(self.open_camera_install);tl.addWidget(self.camera_btn)
+        self.camera_btn=QPushButton("SEND TO CAMERA");self.camera_btn.setToolTip("Target-scoped Canon native PF3 compiler workflow; EOS RP physically validated, other bodies experimental");self.camera_btn.clicked.connect(self.open_camera_install);tl.addWidget(self.camera_btn)
         self.export_btn=QPushButton("EXPORT PF3");self.export_btn.setObjectName("AccentButton");self.export_btn.clicked.connect(self.open_export);tl.addWidget(self.export_btn);main.addWidget(top)
 
         content=QSplitter(Qt.Orientation.Horizontal); content.setChildrenCollapsible(False); main.addWidget(content,1);self.content_splitter=content
@@ -1021,7 +1021,7 @@ class CanonStyleStudioQt(QMainWindow):
             "• Tone Curve, Six Color-Axes and Chrome-style controls (LUT-baked)\n"
             "• Compatibility with untested Canon bodies\n\n"
             "Canon software and libraries are not distributed with Canon Style Studio.\n"
-            "Send to Camera dynamically uses the connected Canon camera ID, descriptor and native carrier. EOS RP is physically validated; other bodies remain experimental until tested.\n"
+            "Send to Camera corrects arbitrary-table acceptance inside Canon's compiler for the selected PF3; EOS Utility builds and sends its original camera-native payload unchanged. EOS RP is physically validated; other bodies remain experimental until tested.\n"
             "External hash-validated support fixtures are required and are not distributed with this build.\n"
             "Canon Style Studio is independent experimental software and is not affiliated with or endorsed by Canon.")
 
@@ -1058,11 +1058,13 @@ class CanonStyleStudioQt(QMainWindow):
                 "fallback_reason":self.raw_info.get("fallback_reason"),
             },
             "camera_install":{
-                "integrated":True,"method":"dynamic Canon camera family","physically_validated_bodies":["EOS RP"],
+                "integrated":True,"method":"target-scoped Canon native PF3 compiler acceptance","physically_validated_bodies":["EOS RP"],
                 "other_bodies":"experimental until physical validation","raw_compatibility_is_camera_compatibility":False,
                 "support_assets_validated":bool(camera_assets),"support_fixture_hashes":dict(camera_assets.hashes) if camera_assets else None,
                 "live_inputs":["0x01000001","0x01000210","0x01000203"],
-                "patch_property":"0x01000203","property_0x00000115":"observation only / never patched",
+                "compiler_patch_scope":"exact selected PF3 EdsCFParse reference",
+                "edsdk_payload_replaced":False,"edsdk_arguments_modified":False,
+                "property_0x00000115":"observation only / never patched",
             },
             "settings":{
                 "picture_style":self.base_combo.currentText(),"white_balance":self.wb_combo.currentText(),

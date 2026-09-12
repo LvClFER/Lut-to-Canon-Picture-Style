@@ -73,7 +73,6 @@ def build(output_root, private_multi_camera=False):
              "--add-binary",f"{worker}{separator}.",
              "--add-data",f"{HERE/'example_luts'/'hald_identity_8.png'}{separator}example_luts",
              "--add-data",f"{HERE/'example_luts'/'Lightroom_Hald_Template_512_64cube_sRGB_16bit.tif'}{separator}example_luts",
-             "--add-data",f"{HERE/'camera_install'/'rp_loader_agent.js'}{separator}camera_install",
              "--add-data",f"{HERE/'camera_install'/'dynamic_camera_agent.js'}{separator}camera_install",
              HERE/"canon_style_studio.py"])
         built=main_dist/"CanonStyleStudio"
@@ -103,7 +102,7 @@ def build(output_root, private_multi_camera=False):
               "python_required":False,"pse_required_for_canon_raw":True,
               "canon_resources_bundled":bool(private_multi_camera),"entrypoint":"CanonStyleStudio.exe",
               "distribution":"private compatibility testing only; do not publish" if private_multi_camera else "public",
-              "camera_install":{"method":"single live Canon EdsCFParse route; Canon selects the camera representation and the hook preserves arbitrary PF3 tables","model_specific_builders":False,"offline_validated_transactions":["EOS 1300D / 16744","EOS RP / 16752","EOS R8 / 83076"],"accepted_carrier_policy":"all live Canon carriers that pass compiler and structural validation","physical_revalidation_required":True,"external_selftest_assets_required":not private_multi_camera,"support_assets_bundled":bool(private_multi_camera)},
+              "camera_install":{"method":"target-PF3-scoped EdsCFParse acceptance correction; EOS Utility compiles and sends its original camera-native payload unchanged","model_specific_builders":False,"edsdk_payload_replaced":False,"edsdk_arguments_modified":False,"compiler_symbol_resolution":"semantic signatures","offline_validated_transactions":["EOS 1300D / 16744","EOS RP / 16752","EOS R8 / 83076"],"physical_revalidation_required":True,"external_selftest_assets_required":not private_multi_camera,"support_assets_bundled":bool(private_multi_camera)},
               "portable_storage":{"settings":"app_data","support":"camera_support","camera_exports":"exported_styles"}}
     (release/"STANDALONE_MANIFEST.json").write_text(json.dumps(manifest,indent=2),encoding="utf-8")
     problems=audit(release,allow_private_support=private_multi_camera)

@@ -109,31 +109,35 @@ def validate_agent_source(source: str) -> None:
     observation = source[start:end]
     if "args[3] =" in observation or "args[4] =" in observation or "writeByteArray" in observation:
         raise RuntimeError("Unsafe 0x00000115 mutation detected in the camera agent")
-    if "this.prop === 0x01000203" not in source:
+    if "this.prop === 0x01000203" not in source and "this.prop !== 0x01000203" not in source:
         raise RuntimeError("Camera agent does not guard the 0x01000203 transaction")
     if "armdynamic" in source:
         required = (
-            "capturedCameraId", "capturedDescriptor", "EdsCfpGetPropertySize",
-            "validateNativeRoundTrip", "KNOWN_CARRIER_OBSERVATIONS",
-            "meaningfulDifferences", "Canon compiler output is identical",
-            "canon-native-pf3-compiler-universal-v2", "installPf3AcceptanceHooks",
-            "universal-live-eds-cfparse", "native_payload_captured",
-            "0x40001070", "0x40001071",
-            "0x4d8d0", "0x48d10", "0x46fd0", "0x46a50", "0x4cd10", "0x49830", "0x4a2b0",
+            "EdsCfpCreateRef", "EdsCfpGetPropertySize", "EdsCfpGetPropertyData",
+            "sameArmedPath", "targetRefs", "currentValidation",
+            "resolveAcceptanceSymbols", "semantic-signatures-v1", "installAcceptanceHooks",
+            "patch-only-the-selected-pf3-inside-edscfparse",
+            "original-canon-buffer-observation-only",
+            "in-place-canon-compiler-acceptance", "stock-canon-direct",
+            "compiler_validation_pass", "compiler_validation_failed",
+            "transportMutation: false", "argumentsModified: false", "payloadReplaced: false",
             "compilerGridPathSeen", "dense10IndicesApplied", "dense17IndicesApplied",
-            "Unsupported EdsCFParse code signature",
-            "args[3] =", "args[4] =",
+            "Unsupported EdsCFParse semantic signature",
         )
         missing = [value for value in required if value not in source]
         if missing:
             raise RuntimeError("Dynamic camera agent is missing safety guards: " + ", ".join(missing))
         if "this.n !== 16752" in source:
             raise RuntimeError("Dynamic camera agent still contains an EOS RP-only payload-size guard")
-        if "api.Set(ref, 0x01000203" in source:
-            raise RuntimeError("Dynamic camera agent feeds the native carrier back into the PF3 compiler")
+        if "args[3] =" in source or "args[4] =" in source:
+            raise RuntimeError("Dynamic camera agent mutates Canon EDSDK transport arguments")
+        if "module.size !==" in source or "base.add(0x" in source:
+            raise RuntimeError("Dynamic camera agent still depends on one fixed EdsCFParse build")
         forbidden = (
             "armedLegacyBlock1", "legacyBlock1Hex", "legacy-dual-8192-block-carrier",
-            "MODERN_1F00_ENCODER", "patchPayloadNameDetected",
+            "MODERN_1F00_ENCODER", "patchPayloadNameDetected", "payload_patched",
+            "buildCanonNativeCarrier", "compileForNativeCarrier", "validateNativeRoundTrip",
+            "api.Set(ref, 0x01000203",
         )
         present = [value for value in forbidden if value in source]
         if present:

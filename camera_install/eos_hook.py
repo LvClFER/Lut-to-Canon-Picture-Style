@@ -67,11 +67,11 @@ def find_eos_utility():
 class EosRpInstaller:
     """Fail-closed Canon camera-registration coordinator.
 
-    EOS Utility remains the transaction owner. The agent captures the live
-    Canon camera ID, descriptor and genuine 0x01000203 carrier, then asks the
-    installed Canon compiler to generate that camera's native representation
-    from the current PF3. No model-specific payload builder is selected by the
-    application. 0x00000115 is observation-only.
+    EOS Utility remains the transaction owner and compiles the selected PF3
+    itself. The agent scopes the arbitrary-table acceptance correction to that
+    exact EdsCFParse reference. EDSDK receives Canon's original pointer and
+    size unchanged. No model-specific payload builder is selected by the
+    application; 0x00000115 is observation-only.
     """
 
     def __init__(self, assets: RpAssetSet, event_callback=None, agent_path=None):
@@ -91,6 +91,7 @@ class EosRpInstaller:
         self._lock = threading.RLock()
         self._report = None
         self._report_path = None
+        self._compiler_hook_info = None
         self.armed = False
 
     @staticmethod
@@ -118,6 +119,12 @@ class EosRpInstaller:
         event = dict(message.get("payload") or {})
         raw = bytes(data) if data else b""
         kind = event.get("type")
+        if kind == "compiler_hooks_resolved":
+            self._compiler_hook_info = {
+                "method": event.get("resolver"),
+                "moduleSize": event.get("moduleSize"),
+                "addresses": event.get("addresses"),
+            }
         if raw:
             event["binarySize"] = len(raw)
             event["binarySha256"] = sha256_bytes(raw)
@@ -161,11 +168,13 @@ class EosRpInstaller:
                         "builder": event.get("builder"),
                         "size": event.get("size"),
                     }
+                elif kind == "compiler_hooks_resolved":
+                    self._report["compilerHookResolver"] = dict(self._compiler_hook_info or {})
+                elif kind == "target_pf3_opened":
+                    self._report["targetPf3Observed"] = True
+                elif kind in {"compiler_validation_pass", "compiler_validation_failed"}:
+                    self._report["nativeCompilerValidation"] = dict(event.get("validation") or {})
                 self._report.setdefault("events", []).append(dict(event))
-                if kind == "payload_patched" and raw:
-                    self._report["actualOutgoingPayloadSha256"] = sha256_bytes(raw)
-                    self._report["dynamicCompiler"] = dict(event.get("compiler") or {})
-                    self._report["patchedPayloadSize"] = len(raw)
                 if kind == "install_success":
                     self.armed = False
                     self._report["status"] = "SUCCESS"
@@ -268,10 +277,10 @@ class EosRpInstaller:
         report_path = output_dir / "CANON_CAMERA_INSTALL_REPORT.json"
         report = {
             "format": "CanonStyleStudio.DynamicCameraInstallReport",
-            "version": 2,
+            "version": 3,
             "status": "ARMED",
             "createdAt": _utc_now(),
-            "cameraCompatibility": "Canon-native live descriptor/carrier compilation; physical confirmation remains per body",
+            "cameraCompatibility": "EOS Utility native compiler/transport with target-PF3-scoped table acceptance; physical confirmation remains per body",
             "rawCompatibilityDoesNotImplyCameraCompatibility": True,
             "sourcePf3": pf3_path.name,
             "sourcePf3Sha256": sha256_bytes(pf3_path.read_bytes()),
@@ -282,16 +291,19 @@ class EosRpInstaller:
                 "exact": True, "blockSha256": selftest_hash, "meta": selftest_meta,
             },
             "targetCompiler": {
-                "policy": "current PF3 compiled by EdsCFParse with the live Canon camera ID and descriptor",
+                "policy": "EOS Utility compiles the selected PF3 with its native live camera path; only EdsCFParse table acceptance is corrected",
                 "modelSpecificBuilder": False,
-                "pendingLiveCanonInputs": True,
+                "targetPf3PathScoped": True,
+                "semanticSignatureResolver": True,
             },
+            "compilerHookResolver": dict(self._compiler_hook_info or {}),
             "cameraWritePolicy": {
-                "patch203PayloadOnlyAfterDynamicValidation": True, "patch115": False,
-                "requireNativeSizeMatch": True, "requireHeaderMatch": True,
-                "requireSentinelMatchWhenPresent": True,
-                "rejectIdenticalCarrier": True, "requirePf3DifferencesOutsideMetadata": True,
-                "reason": "0x00000115 is opaque binary state/control data",
+                "payloadOwner": "EOS Utility / EDSDK",
+                "replace203Payload": False,
+                "modifyEdsdkArguments": False,
+                "compilerValidationRequired": True,
+                "patch115": False,
+                "reason": "Canon selects and sends the camera-native payload; 0x00000115 is opaque binary state/control data",
             },
             "fixtureHashes": dict(self.assets.hashes),
             "events": [],
@@ -301,7 +313,7 @@ class EosRpInstaller:
             self._report_path = report_path
             self._save_report()
 
-        self._emit({"type": "stage", "message": "Arming the Canon-native PF3 compiler path…"})
+        self._emit({"type": "stage", "message": "Arming target-scoped Canon PF3 compiler acceptance…"})
         armed = self.script.exports_sync.armdynamic(slot, str(pf3_path), style_name)
         if not armed:
             raise RuntimeError("EOS Utility hook did not arm")
