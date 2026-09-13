@@ -7,13 +7,12 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtWidgets import (
-    QComboBox, QDialog, QFileDialog, QHBoxLayout, QLabel,
+    QDialog, QFileDialog, QHBoxLayout, QLabel,
     QLineEdit, QMessageBox, QProgressBar, QPushButton, QTextEdit, QVBoxLayout,
 )
 
 from canon_engine import export_pf3
 from canon_runtime import camera_support_dir, exported_styles_dir
-from .direct_edsdk import DirectCanonInstaller, find_direct_canon_runtime
 from .eos_hook import EosRpInstaller, find_eos_utility
 from .rp_assets import (
     RpAssetError, discover_rp_assets, import_rp_support_folder,
@@ -58,10 +57,14 @@ class CameraInstallDialog(QDialog):
         title = QLabel("Send to Camera · Canon Native")
         title.setStyleSheet("font-size:18pt;font-weight:700;")
         layout.addWidget(title)
-        self.warning = QLabel()
-        self.warning.setWordWrap(True)
-        self.warning.setStyleSheet("color:#FFB86B;font-weight:600;")
-        layout.addWidget(self.warning)
+        warning = QLabel(
+            "EOS Utility opens and compiles the selected PF3 through Canon's native camera path. The app only "
+            "corrects the internal compiler gate that otherwise discards arbitrary PF3 tables. Canon selects the "
+            "camera representation and EDSDK sends Canon's original buffer unchanged."
+        )
+        warning.setWordWrap(True)
+        warning.setStyleSheet("color:#FFB86B;font-weight:600;")
+        layout.addWidget(warning)
 
         assets_row = QHBoxLayout()
         assets_row.addWidget(QLabel("Canon compiler self-test files"))
@@ -83,24 +86,11 @@ class CameraInstallDialog(QDialog):
         support_help.setObjectName("Muted")
         layout.addWidget(support_help)
 
-        method_row = QHBoxLayout()
-        method_row.addWidget(QLabel("Installation method"))
-        self.method_combo = QComboBox()
-        self.method_combo.addItem("Direct from Canon Style Studio · experimental", "direct")
-        self.method_combo.addItem("EOS Utility guided fallback", "eos")
-        self.method_combo.currentIndexChanged.connect(self.update_workflow_text)
-        method_row.addWidget(self.method_combo, 1)
-        method_row.addWidget(QLabel("Target slot"))
-        self.slot_combo = QComboBox()
-        for slot in (1, 2, 3):
-            self.slot_combo.addItem(f"User Def. {slot}", slot)
-        method_row.addWidget(self.slot_combo)
-        layout.addLayout(method_row)
-
         target_row = QHBoxLayout()
         target_row.addWidget(QLabel("Target"))
-        self.target = QLabel()
+        self.target = QLabel("Automatic · original EOS Utility compiler and camera transport")
         target_row.addWidget(self.target, 1)
+        target_row.addWidget(QLabel("Choose User Def. 1, 2 or 3 in EOS Utility"))
         layout.addLayout(target_row)
 
         name_row = QHBoxLayout()
@@ -141,7 +131,7 @@ class CameraInstallDialog(QDialog):
         self.eos_button.clicked.connect(self.open_eos_utility)
         buttons.addWidget(self.eos_button)
         buttons.addStretch()
-        self.prepare_button = QPushButton("Install Directly")
+        self.prepare_button = QPushButton("Prepare / Capture")
         self.prepare_button.setObjectName("AccentButton")
         self.prepare_button.clicked.connect(self.start_prepare)
         buttons.addWidget(self.prepare_button)
@@ -149,7 +139,6 @@ class CameraInstallDialog(QDialog):
 
         self.refresh_assets()
         self.refresh_summary()
-        self.update_workflow_text()
 
     def append(self, text):
         self.log.append(str(text))
@@ -165,41 +154,6 @@ class CameraInstallDialog(QDialog):
             f"Current editor state: <b>{self.main.base_combo.currentText()}</b> · {validity} · "
             f"{active} active LUT layer(s) · Creative Color {'active' if creative_active else 'neutral'} · Canon 33³/12-bit export"
         )
-        self.update_prepare_enabled()
-
-    def current_method(self):
-        return self.method_combo.currentData() or "direct"
-
-    def update_workflow_text(self):
-        direct = self.current_method() == "direct"
-        self.slot_combo.setEnabled(direct)
-        self.eos_button.setVisible(not direct)
-        if direct:
-            self.warning.setText(
-                "Canon Style Studio opens its own isolated EDSDK session. Canon's installed compiler chooses the "
-                "camera representation; the app validates it against the live camera carrier before writing. "
-                "EOS Utility must be installed for its current Canon runtime, but it is not opened."
-            )
-            self.target.setText("Automatic · connected Canon camera · model-independent native compiler")
-            self.steps.setText(
-                "Workflow: export PF3 → exact compiler self-test → open direct EDSDK session → read live camera "
-                "ID, descriptor, carrier and state → Canon-native compile → register selected slot. "
-                "Property 0x00000115 is read live and replayed byte-for-byte, never fabricated or patched."
-            )
-            self.prepare_button.setText("Install Directly")
-        else:
-            self.warning.setText(
-                "EOS Utility opens and compiles the selected PF3 through Canon's native camera path. The app only "
-                "corrects the internal compiler gate that otherwise discards arbitrary PF3 tables. Canon selects "
-                "the camera representation and EDSDK sends Canon's original buffer unchanged."
-            )
-            self.target.setText("Automatic · original EOS Utility compiler and camera transport")
-            self.steps.setText(
-                "Workflow: export PF3 → exact compiler self-test → identify that exact PF3 when EOS Utility opens "
-                "it → correct Canon's internal table acceptance → observe the unchanged EDSDK transaction. "
-                "Property 0x00000115 remains untouched."
-            )
-            self.prepare_button.setText("Prepare / Capture")
         self.update_prepare_enabled()
 
     def refresh_assets(self):
@@ -286,8 +240,6 @@ class CameraInstallDialog(QDialog):
             reasons.append("Import the Manual Loader v2.4 ZIP or locate its extracted folder")
         if not bool((self.main.base_resolution or {}).get("validated")):
             reasons.append("Select a hash-validated Canon base PF3 (the imported ZIP supplies these bases)")
-        if self.current_method() == "direct" and find_direct_canon_runtime() is None:
-            reasons.append("Install EOS Utility 3 for the current Canon EDSDK/EdsCFParse runtime")
         return reasons
 
     def update_prepare_enabled(self):
@@ -297,8 +249,7 @@ class CameraInstallDialog(QDialog):
             self.requirements.setText("Before preparing:\n• " + "\n• ".join(reasons))
             self.requirements.setStyleSheet("color:#FFB86B;font-weight:600;")
         else:
-            action = "install directly" if self.current_method() == "direct" else "prepare the guided workflow"
-            self.requirements.setText(f"✓ Ready to {action}")
+            self.requirements.setText("✓ Ready to prepare the dynamic Canon camera workflow")
             self.requirements.setStyleSheet("color:#72D58A;font-weight:600;")
         # Keep the button clickable while prerequisites are missing so a click
         # explains the blockers instead of appearing to do nothing. Safety is
@@ -339,8 +290,7 @@ class CameraInstallDialog(QDialog):
             ]
             controls = dict(self.main.controls_dict())
             style_name = canon_style_name(self.style_name.text(), self.main.project_name.text())
-            method = self.current_method()
-            slot = int(self.slot_combo.currentData()) if method == "direct" else 0
+            slot = 0  # The genuine EOS Utility transaction determines the slot.
             base_style = self.main.base_combo.currentText()
         except Exception as exc:
             QMessageBox.critical(self, "Cannot prepare camera installation", str(exc))
@@ -349,8 +299,7 @@ class CameraInstallDialog(QDialog):
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         output_dir = exported_styles_dir() / f"{stamp}_{safe_file_stem(style_name)}"
         pf3_path = output_dir / (safe_file_stem(style_name) + ".pf3")
-        installer_class = DirectCanonInstaller if method == "direct" else EosRpInstaller
-        self.installer = installer_class(assets, event_callback=lambda event:self.worker.signals.event.emit(event))
+        self.installer = EosRpInstaller(assets, event_callback=lambda event:self.worker.signals.event.emit(event))
         self.preparing = True
         self.completed = False
         self.progress.setValue(0)
@@ -361,8 +310,6 @@ class CameraInstallDialog(QDialog):
         self.update_prepare_enabled()
         self.assets_button.setEnabled(False)
         self.import_zip_button.setEnabled(False)
-        self.method_combo.setEnabled(False)
-        self.slot_combo.setEnabled(False)
 
         def work():
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -377,19 +324,15 @@ class CameraInstallDialog(QDialog):
                 "pf3":pf3_path.name, "pf3Size":size, "pf3Sha256":digest,
                 "basePictureStyle":base_style, "baseTemplateValidated":True,
                 "basePf3Sha256":base_info.get("sha256"),
-                "cameraTarget":"Canon-native live compiler", "slot":slot or None,
-                "slotPolicy":"selectedDirectSlot" if method == "direct" else "dynamicUserDef1To3",
-                "installationMethod":method,
+                "cameraTarget":"Canon-native live compiler", "slot":None, "slotPolicy":"dynamicUserDef1To3",
             }
             pf3_path.with_suffix(".manifest.json").write_text(
                 json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
             )
             self.worker.signals.event.emit({"type":"pf3_ready", "size":size, "sha256":digest})
-            if method == "direct":
-                return self.installer.prepare_and_install(
-                    pf3_path, slot, style_name, output_dir,
-                )
-            return self.installer.prepare_and_arm(pf3_path, slot, style_name, output_dir, launch_eos=True)
+            return self.installer.prepare_and_arm(
+                pf3_path, slot, style_name, output_dir, launch_eos=True,
+            )
 
         self.worker = CameraPrepareWorker(work)
         # Rebind the installer callback now that the worker/signal object exists.
@@ -413,17 +356,7 @@ class CameraInstallDialog(QDialog):
         elif kind == "selftest_pass":
             self.append("Compiler self-test: EXACT 8192-byte match.")
         elif kind == "ready":
-            if self.current_method() == "direct":
-                self.append("Canon compiler acceptance hooks ready inside the isolated app host.")
-            else:
-                self.append("Canon native compiler acceptance + read-only EDSDK observer ready inside EOS Utility.")
-        elif kind == "direct_runtime_ready":
-            self.append("Isolated Canon x86 runtime loaded from the installed EOS Utility folder.")
-        elif kind == "direct_camera_connected":
-            self.append(
-                f"Direct camera session opened · {event.get('description') or 'Canon camera'} · "
-                f"{event.get('portName') or 'USB'}"
-            )
+            self.append("Canon native compiler acceptance + read-only EDSDK observer ready inside EOS Utility.")
         elif kind == "compiler_hooks_resolved":
             self.append("EdsCFParse internal functions resolved by semantic signatures.")
         elif kind == "armed":
@@ -465,11 +398,6 @@ class CameraInstallDialog(QDialog):
             self.append("ERROR: Could not capture native registration payload · " + str(event.get("error")))
         elif kind == "control115_seen":
             self.append(f"0x00000115 observed ({event.get('size')} bytes) · UNTOUCHED")
-        elif kind == "direct_state_captured":
-            self.append(
-                f"Live camera state captured · carrier {event.get('nativeCarrierSize')} bytes · "
-                f"0x00000115 {event.get('control115Size')} bytes, preserved unchanged"
-            )
         elif kind == "registration_return":
             self.append(
                 f"Canon registration returned rc={event.get('rc')} · "
@@ -485,11 +413,6 @@ class CameraInstallDialog(QDialog):
             )
             self.prepare_button.setText("Installed")
             self.prepare_button.setEnabled(False)
-        elif kind == "direct_install_success":
-            self.append(
-                f"✓ Direct Canon registration completed · User Def. {event.get('slot')} · "
-                f"{event.get('payloadSize')} bytes · {event.get('compilerPath')}"
-            )
         elif kind in {"install_error", "hook_error", "frida_error"}:
             self.append("ERROR: " + str(event.get("reason") or event.get("error")))
         elif kind == "disarmed":
@@ -497,32 +420,9 @@ class CameraInstallDialog(QDialog):
 
     def prepared(self, result):
         self.preparing = False
-        if result.get("mode") == "direct":
-            self.completed = True
-            self.progress.setValue(5)
-            self.assets_button.setEnabled(True)
-            self.import_zip_button.setEnabled(True)
-            self.method_combo.setEnabled(True)
-            self.slot_combo.setEnabled(True)
-            camera = result.get("camera") or {}
-            self.append(f"PF3: {Path(result['pf3']).name}")
-            self.append(f"Install report: {Path(result['reportPath']).name}")
-            self.append(
-                f"✓ Installed directly on {camera.get('description') or 'Canon camera'} · "
-                f"User Def. {result.get('slot')}"
-            )
-            self.steps.setText(
-                "Direct Canon EDSDK installation completed. Confirm the Picture Style name and LUT appearance "
-                "on the camera; this physical result remains the final ground truth."
-            )
-            self.prepare_button.setText("Installed")
-            self.update_prepare_enabled()
-            return
         self.progress.setValue(4)
         self.assets_button.setEnabled(True)
         self.import_zip_button.setEnabled(True)
-        self.method_combo.setEnabled(True)
-        self.slot_combo.setEnabled(self.current_method() == "direct")
         self.append("✓ ARMED · exact compiler self-test passed; live Canon compilation is waiting")
         self.append(f"PF3: {Path(result['pf3']).name}")
         self.append(f"Install report: {Path(result['reportPath']).name}")
@@ -543,8 +443,6 @@ class CameraInstallDialog(QDialog):
         self.preparing = False
         self.assets_button.setEnabled(True)
         self.import_zip_button.setEnabled(True)
-        self.method_combo.setEnabled(True)
-        self.slot_combo.setEnabled(self.current_method() == "direct")
         self.append("ERROR: " + message)
         self.append(trace)
         if self.installer:
@@ -558,7 +456,7 @@ class CameraInstallDialog(QDialog):
             if confirm:
                 answer = QMessageBox.question(
                     self, "Disarm Canon camera installation",
-                    "The Canon camera workflow is active. Close this window and disarm it?",
+                    "The EOS Utility hook is armed. Close this window and disarm it?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
                 )

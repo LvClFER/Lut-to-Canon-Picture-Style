@@ -28,7 +28,6 @@ from dpp_client import DppBackendClient, DppBackendError
 from project_state import HistoryManager, ProjectDocument, load_project, save_project
 from render_geometry import fit_size_within_box, oriented_native_size
 from camera_install.rp_assets import RpAssetSet, discover_rp_assets, validate_rp_asset_folder
-from camera_install.direct_edsdk import DirectCanonInstaller, find_direct_canon_runtime, find_x86_host
 from camera_install.eos_hook import EosRpInstaller
 from camera_install.rp_payload import (
     BLOCK_SIZE, LEGACY_SIZE, NAME_OFFSETS, RP_BLOCK_OFFSET, RP_PAYLOAD_SIZE,
@@ -176,27 +175,6 @@ class CoreRegressionTests(unittest.TestCase):
         self.assertNotIn("module.size !==",dynamic)
         self.assertNotIn("base.add(0x",dynamic)
         self.assertNotIn("payload_patched",dynamic)
-
-        direct=(HERE/"camera_install"/"direct_edsdk_extension.js").read_text(encoding="utf-8")
-        DirectCanonInstaller._validate_extension(direct)
-        self.assertIn("directReadProperty(0x00000115",direct)
-        self.assertIn("directWriteProperty(0x00000115, inParam, control115.bytes)",direct)
-        self.assertLess(
-            direct.index("directReadProperty(0x00000115"),
-            direct.index("directWriteProperty(0x00000114, inParam, selector114.bytes)"),
-        )
-        self.assertIn("native203.size !== payload.length",direct)
-        self.assertNotIn("RP_SUPERIA_TEMPLATE",direct)
-        self.assertNotIn("1300D_DESCRIPTOR",direct)
-
-    def test_direct_canon_runtime_discovery_is_in_place(self):
-        runtime=find_direct_canon_runtime()
-        if runtime is not None:
-            self.assertTrue((runtime/"EDSDK.dll").is_file())
-            self.assertTrue((runtime/"EdsCFParse.dll").is_file())
-        host=find_x86_host()
-        self.assertIsNotNone(host)
-        self.assertTrue(host.is_file())
 
     def test_unknown_camera_payload_capture_is_read_only_and_persistent(self):
         with tempfile.TemporaryDirectory() as td:

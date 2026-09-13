@@ -25,7 +25,7 @@ FILES=(
     "README.md","TESTING_GUIDE.md","PUBLIC_ALPHA_RELEASE_NOTES.md","ARCHITECTURE_STATUS.md",
     "camera_install/__init__.py","camera_install/rp_assets.py","camera_install/rp_payload.py",
     "camera_install/eos_hook.py","camera_install/ui.py",
-    "camera_install/dynamic_camera_agent.js","camera_install/direct_edsdk_extension.js","PF3_UI_EXPORT_TEST.py",
+    "camera_install/dynamic_camera_agent.js","PF3_UI_EXPORT_TEST.py",
 )
 EXAMPLES=("example_luts/hald_identity_8.png","example_luts/Lightroom_Hald_Template_512_64cube_sRGB_16bit.tif")
 FORBIDDEN_SUFFIXES={".dll",".exe",".icc",".icm",".pf3",".cr2",".cr3",".crw",".dmp",".log",".pyc"}
