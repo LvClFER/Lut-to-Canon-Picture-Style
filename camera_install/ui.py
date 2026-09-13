@@ -7,17 +7,13 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtWidgets import (
-    QDialog, QFileDialog, QHBoxLayout, QLabel,
+    QDialog, QHBoxLayout, QLabel,
     QLineEdit, QMessageBox, QProgressBar, QPushButton, QTextEdit, QVBoxLayout,
 )
 
 from canon_engine import export_pf3
-from canon_runtime import camera_support_dir, exported_styles_dir
+from canon_runtime import exported_styles_dir
 from .eos_hook import EosRpInstaller, find_eos_utility
-from .rp_assets import (
-    RpAssetError, discover_rp_assets, import_rp_support_folder,
-    import_rp_support_zip, validate_rp_asset_folder,
-)
 from .rp_payload import canon_style_name, safe_file_stem
 
 
@@ -51,7 +47,6 @@ class CameraInstallDialog(QDialog):
         self.installer = None
         self.preparing = False
         self.completed = False
-        self.assets = None
 
         layout = QVBoxLayout(self)
         title = QLabel("Send to Camera · Canon Native")
@@ -60,31 +55,12 @@ class CameraInstallDialog(QDialog):
         warning = QLabel(
             "EOS Utility opens and compiles the selected PF3 through Canon's native camera path. The app only "
             "corrects the internal compiler gate that otherwise discards arbitrary PF3 tables. Canon selects the "
-            "camera representation and EDSDK sends Canon's original buffer unchanged."
+            "camera representation; validated EDSDK calls keep Canon's original buffer unchanged, while any "
+            "unvalidated call is blocked before it reaches the camera."
         )
         warning.setWordWrap(True)
         warning.setStyleSheet("color:#FFB86B;font-weight:600;")
         layout.addWidget(warning)
-
-        assets_row = QHBoxLayout()
-        assets_row.addWidget(QLabel("Canon compiler self-test files"))
-        self.assets_status = QLabel("Not configured")
-        self.assets_status.setWordWrap(True)
-        assets_row.addWidget(self.assets_status, 1)
-        self.assets_button = QPushButton("Import Folder…")
-        self.assets_button.clicked.connect(self.locate_assets)
-        assets_row.addWidget(self.assets_button)
-        self.import_zip_button = QPushButton("Import Manual Loader ZIP…")
-        self.import_zip_button.clicked.connect(self.import_assets_zip)
-        assets_row.addWidget(self.import_zip_button)
-        layout.addLayout(assets_row)
-        support_help = QLabel(
-            "The existing Manual Loader support set is retained only for the exact fail-closed Canon compiler "
-            "self-test and validated base PF3 files. It is not used to build or select a camera payload."
-        )
-        support_help.setWordWrap(True)
-        support_help.setObjectName("Muted")
-        layout.addWidget(support_help)
 
         target_row = QHBoxLayout()
         target_row.addWidget(QLabel("Target"))
@@ -108,9 +84,9 @@ class CameraInstallDialog(QDialog):
         layout.addWidget(self.requirements)
 
         self.steps = QLabel(
-            "Workflow: export PF3 → exact compiler self-test → identify that exact PF3 when EOS Utility opens it → "
-            "correct Canon's internal table acceptance during its original compilation → validate the conversion → "
-            "observe the unchanged Canon EDSDK transaction. Property 0x00000115 remains untouched."
+            "Workflow: export PF3 → identify that exact PF3 when EOS Utility opens it → correct Canon's internal "
+            "table acceptance during its original compilation → validate both 33³ tables and compare the compiler "
+            "output byte-for-byte with Canon's EDSDK buffer. Property 0x00000115 remains untouched."
         )
         self.steps.setWordWrap(True)
         layout.addWidget(self.steps)
@@ -137,7 +113,6 @@ class CameraInstallDialog(QDialog):
         buttons.addWidget(self.prepare_button)
         layout.addLayout(buttons)
 
-        self.refresh_assets()
         self.refresh_summary()
 
     def append(self, text):
@@ -145,7 +120,7 @@ class CameraInstallDialog(QDialog):
 
     def refresh_summary(self):
         base = dict(self.main.base_resolution or {})
-        validity = "validated local PF3 base" if base.get("validated") else "EXPERIMENTAL base — camera arm blocked"
+        validity = "validated local PF3 base" if base.get("validated") else "Canon-serialized runtime base · experimental"
         active = sum(1 for item in self.main.luts if item.get("enabled") and item.get("opacity", 0) > 0)
         creative = self.main.controls_dict().get("creative") or {}
         axes = creative.get("color_axes") or {}
@@ -156,90 +131,10 @@ class CameraInstallDialog(QDialog):
         )
         self.update_prepare_enabled()
 
-    def refresh_assets(self):
-        configured = self.main.settings.data.get("camera_assets_folder") or ""
-        self.assets = discover_rp_assets(configured)
-        if self.assets:
-            portable_parent = camera_support_dir().resolve()
-            try:
-                already_portable = self.assets.root.resolve().is_relative_to(portable_parent)
-            except (OSError, ValueError):
-                already_portable = False
-            if not already_portable:
-                try:
-                    self.assets = import_rp_support_folder(self.assets.root, portable_parent)
-                except Exception as exc:
-                    self.assets = None
-                    self.assets_status.setText("Portable import failed · " + str(exc))
-        if configured and not self.assets:
-            try:validate_rp_asset_folder(configured)
-            except Exception as exc:self.assets_status.setText("Invalid · " + str(exc))
-        if self.assets:
-            self.assets_status.setText("Validated Manual Loader v2.4 support set")
-            self.assets_status.setToolTip(str(self.assets.root))
-            if str(self.assets.root) != configured:
-                self.main.settings.data["camera_assets_folder"] = str(self.assets.root)
-                self.main.settings.data["base_pf3_folder"] = str(self.assets.root)
-                self.main.settings.save()
-                self.main.base_resolution = None
-                self.main.update_base_source_status()
-        elif not configured:
-            self.assets_status.setText("Required external research/support files are not configured")
-        self.update_prepare_enabled()
-
-    def locate_assets(self):
-        start = self.main.settings.data.get("camera_assets_folder") or str(Path.home())
-        selected = QFileDialog.getExistingDirectory(self, "Import Manual Loader v2.4 support folder", start)
-        if not selected:
-            return
-        try:
-            assets = import_rp_support_folder(selected, camera_support_dir())
-        except RpAssetError as exc:
-            QMessageBox.critical(self, "Invalid EOS RP support folder", str(exc))
-            return
-        self.assets = assets
-        self.main.settings.data["camera_assets_folder"] = str(assets.root)
-        # The same validated loader package contains the five exact Canon base
-        # templates. The editor's independent hash checks still decide whether
-        # the currently selected base is valid.
-        self.main.settings.data["base_pf3_folder"] = str(assets.root)
-        self.main.settings.save()
-        self.main.base_resolution = None
-        self.main.update_base_source_status()
-        self.assets_status.setText("Validated Manual Loader v2.4 support set")
-        self.assets_status.setToolTip(str(assets.root))
-        self.refresh_summary()
-        self.append(f"Support fixtures copied into the app and validated: {assets.root}")
-
-    def import_assets_zip(self):
-        start = Path.home() / "Downloads"
-        selected, _ = QFileDialog.getOpenFileName(
-            self, "Import Manual Loader v2.4 support ZIP", str(start), "Manual Loader ZIP (*.zip)"
-        )
-        if not selected:
-            return
-        try:
-            assets = import_rp_support_zip(selected, camera_support_dir())
-        except Exception as exc:
-            QMessageBox.critical(self, "Invalid Manual Loader ZIP", str(exc))
-            return
-        self.assets = assets
-        self.main.settings.data["camera_assets_folder"] = str(assets.root)
-        self.main.settings.data["base_pf3_folder"] = str(assets.root)
-        self.main.settings.save()
-        self.main.base_resolution = None
-        self.main.update_base_source_status()
-        self.assets_status.setText("Imported into app · SHA-256 validated private copy")
-        self.assets_status.setToolTip(str(assets.root))
-        self.refresh_summary()
-        self.append(f"Manual Loader ZIP imported into the app: {assets.root}")
-
     def prepare_block_reasons(self):
         reasons = []
-        if not self.assets:
-            reasons.append("Import the Manual Loader v2.4 ZIP or locate its extracted folder")
-        if not bool((self.main.base_resolution or {}).get("validated")):
-            reasons.append("Select a hash-validated Canon base PF3 (the imported ZIP supplies these bases)")
+        if not bool((self.main.base_resolution or {}).get("cameraReady")):
+            reasons.append("Canon Picture Style Editor is required to generate the selected PF3 base")
         return reasons
 
     def update_prepare_enabled(self):
@@ -276,12 +171,11 @@ class CameraInstallDialog(QDialog):
             QMessageBox.warning(self, "Cannot prepare camera installation", message)
             return
         try:
-            assets = validate_rp_asset_folder(self.main.settings.data.get("camera_assets_folder") or "")
             dll = self.main.dll_path()
             base = self.main.current_base_path()
             base_info = dict(self.main.base_resolution or {})
-            if not base_info.get("validated"):
-                raise RuntimeError("Camera installation requires a hash-validated Canon PF3 base")
+            if not base_info.get("cameraReady"):
+                raise RuntimeError("The selected PF3 base could not be generated with Canon EdsCFParse")
             # Immutable request snapshot: no Qt state is touched by the worker.
             luts = [
                 {"id": item.get("id"), "cube": item["cube"],
@@ -299,18 +193,16 @@ class CameraInstallDialog(QDialog):
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         output_dir = exported_styles_dir() / f"{stamp}_{safe_file_stem(style_name)}"
         pf3_path = output_dir / (safe_file_stem(style_name) + ".pf3")
-        self.installer = EosRpInstaller(assets, event_callback=lambda event:self.worker.signals.event.emit(event))
+        self.installer = EosRpInstaller(event_callback=lambda event:self.worker.signals.event.emit(event))
         self.preparing = True
         self.completed = False
         self.progress.setValue(0)
         self.log.clear()
         self.append("Current editor state captured on the UI thread.")
-        self.append(f"Base: {base_style} · validated template")
+        base_label = "validated local template" if base_info.get("validated") else "Canon-serialized runtime template · experimental"
+        self.append(f"Base: {base_style} · {base_label}")
         self.append(f"Persistent export folder: {output_dir}")
         self.update_prepare_enabled()
-        self.assets_button.setEnabled(False)
-        self.import_zip_button.setEnabled(False)
-
         def work():
             output_dir.mkdir(parents=True, exist_ok=True)
             self.worker.signals.event.emit({"type":"stage", "message":"Exporting current Canon 33³ PF3…"})
@@ -322,7 +214,9 @@ class CameraInstallDialog(QDialog):
             manifest = {
                 "format":"CanonStyleStudio.CameraExport", "version":1,
                 "pf3":pf3_path.name, "pf3Size":size, "pf3Sha256":digest,
-                "basePictureStyle":base_style, "baseTemplateValidated":True,
+                "basePictureStyle":base_style, "baseTemplateValidated":bool(base_info.get("validated")),
+                "baseCameraReady":bool(base_info.get("cameraReady")),
+                "baseTemplateSource":base_info.get("source"),
                 "basePf3Sha256":base_info.get("sha256"),
                 "cameraTarget":"Canon-native live compiler", "slot":None, "slotPolicy":"dynamicUserDef1To3",
             }
@@ -354,7 +248,7 @@ class CameraInstallDialog(QDialog):
         elif kind == "eos_started":
             self.append("EOS Utility 3 started. Waiting for Canon modules…")
         elif kind == "selftest_pass":
-            self.append("Compiler self-test: EXACT 8192-byte match.")
+            self.append("Legacy fixture compiler self-test passed.")
         elif kind == "ready":
             self.append("Canon native compiler acceptance + read-only EDSDK observer ready inside EOS Utility.")
         elif kind == "compiler_hooks_resolved":
@@ -371,6 +265,11 @@ class CameraInstallDialog(QDialog):
                 "✓ Canon-native PF3 compilation validated · "
                 f"{validation.get('compilerPath')} · EDSDK payload replacement not required"
             )
+        elif kind == "compiler_transport_match":
+            if event.get("exact"):
+                self.append(f"✓ Compiler output matches Canon's EDSDK buffer byte-for-byte · {event.get('size')} bytes")
+            else:
+                self.append("ERROR: Compiler output does not match Canon's outgoing EDSDK buffer")
         elif kind == "compiler_validation_failed":
             self.append("ERROR: " + str(event.get("reason")))
         elif kind == "compiler_input_captured":
@@ -403,6 +302,8 @@ class CameraInstallDialog(QDialog):
                 f"Canon registration returned rc={event.get('rc')} · "
                 "original buffer/size unchanged"
             )
+        elif kind == "registration_blocked":
+            self.append("BLOCKED BEFORE CAMERA WRITE: " + str(event.get("reason")))
         elif kind == "install_success":
             self.completed = True
             self.progress.setValue(5)
@@ -421,9 +322,7 @@ class CameraInstallDialog(QDialog):
     def prepared(self, result):
         self.preparing = False
         self.progress.setValue(4)
-        self.assets_button.setEnabled(True)
-        self.import_zip_button.setEnabled(True)
-        self.append("✓ ARMED · exact compiler self-test passed; live Canon compilation is waiting")
+        self.append("✓ ARMED · live target-PF3 validation is waiting; no external support files are required")
         self.append(f"PF3: {Path(result['pf3']).name}")
         self.append(f"Install report: {Path(result['reportPath']).name}")
         self.steps.setText(
@@ -441,8 +340,6 @@ class CameraInstallDialog(QDialog):
 
     def failed(self, message, trace):
         self.preparing = False
-        self.assets_button.setEnabled(True)
-        self.import_zip_button.setEnabled(True)
         self.append("ERROR: " + message)
         self.append(trace)
         if self.installer:

@@ -31,7 +31,6 @@ class SettingsStore:
             "last_dll_folder": "",
             "manual_pse_path": "",
             "base_pf3_folder": "",
-            "camera_assets_folder": "",
         }
         self.load()
 

@@ -8,10 +8,9 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .rp_assets import RpAssetSet
 from .rp_payload import (
     canon_style_name, sha256_bytes,
-    validate_agent_source, validate_compiler_selftest,
+    validate_agent_source,
 )
 
 try:
@@ -74,10 +73,9 @@ class EosRpInstaller:
     application; 0x00000115 is observation-only.
     """
 
-    def __init__(self, assets: RpAssetSet, event_callback=None, agent_path=None):
+    def __init__(self, event_callback=None, agent_path=None):
         if frida is None:
             raise RuntimeError("Frida is not installed in this runtime")
-        self.assets = assets
         self.event_callback = event_callback or (lambda event: None)
         self.agent_path = Path(agent_path) if agent_path else Path(__file__).with_name("dynamic_camera_agent.js")
         self.agent_source = self.agent_path.read_text(encoding="utf-8")
@@ -164,8 +162,9 @@ class EosRpInstaller:
                     self._report["detectedCarrierFamily"] = {
                         "id": event.get("familyId"),
                         "status": event.get("familyStatus"),
-                        "installEnabled": bool(event.get("installEnabled")),
-                        "builder": event.get("builder"),
+                        "compilerRoute": event.get("compilerRoute"),
+                        "modelSpecificBuilder": bool(event.get("modelSpecificBuilder")),
+                        "validatedForWrite": bool(event.get("validatedForWrite")),
                         "size": event.get("size"),
                     }
                 elif kind == "compiler_hooks_resolved":
@@ -174,12 +173,25 @@ class EosRpInstaller:
                     self._report["targetPf3Observed"] = True
                 elif kind in {"compiler_validation_pass", "compiler_validation_failed"}:
                     self._report["nativeCompilerValidation"] = dict(event.get("validation") or {})
+                    self._report.setdefault("validation", {})["semanticStatus"] = (
+                        "passed" if kind == "compiler_validation_pass" else "failed"
+                    )
+                elif kind == "compiler_transport_match":
+                    self._report["compilerTransportValidation"] = {
+                        "exact": bool(event.get("exact")),
+                        "size": event.get("size"),
+                        "method": "byte-for-byte in process",
+                    }
+                    self._report.setdefault("validation", {})["transportStatus"] = (
+                        "passed" if event.get("exact") else "failed"
+                    )
                 self._report.setdefault("events", []).append(dict(event))
                 if kind == "install_success":
                     self.armed = False
                     self._report["status"] = "SUCCESS"
+                    self._report.setdefault("validation", {})["status"] = "passed"
                     self._report["completedAt"] = _utc_now()
-                elif kind == "install_error":
+                elif kind in {"install_error", "registration_blocked"}:
                     self._report["status"] = "ERROR"
                     self._report["error"] = event.get("reason")
                 try:self._save_report()
@@ -234,19 +246,6 @@ class EosRpInstaller:
             f"open EOS Utility and try again{detail}"
         )
 
-    def _compile(self, pf3_path: Path):
-        if self.script is None:
-            raise RuntimeError("EOS Utility compiler session is not connected")
-        result = self.script.exports_sync.compile(
-            str(Path(pf3_path).resolve()),
-            self.assets.camera_id.read_bytes().hex(),
-            self.assets.descriptor.read_bytes().hex(),
-        )
-        if not isinstance(result, (list, tuple)) or len(result) != 2:
-            raise RuntimeError("Unexpected binary response from the Canon compiler")
-        metadata, data = result
-        return dict(metadata or {}), bytes(data or b"")
-
     def prepare_and_arm(self, pf3_path, slot, style_name, output_dir, launch_eos=True, base_pf3_path=None):
         pf3_path = Path(pf3_path).resolve()
         if not pf3_path.is_file() or pf3_path.stat().st_size != 434_511:
@@ -265,19 +264,10 @@ class EosRpInstaller:
         self._emit({"type": "stage", "message": "Connecting to EOS Utility 3…"})
         self.connect(timeout=35.0, launch_if_missing=bool(launch_eos))
 
-        self._emit({"type": "stage", "message": "Running exact Canon compiler self-test…"})
-        selftest_meta, selftest_legacy = self._compile(self.assets.selftest_pf3)
-        if not selftest_meta.get("ok"):
-            raise RuntimeError("Canon compiler rejected the known-good self-test PF3")
-        selftest_hash = validate_compiler_selftest(
-            selftest_legacy, self.assets.read_selftest_block()
-        )
-        self._emit({"type": "selftest_pass", "blockSha256": selftest_hash})
-
         report_path = output_dir / "CANON_CAMERA_INSTALL_REPORT.json"
         report = {
             "format": "CanonStyleStudio.DynamicCameraInstallReport",
-            "version": 3,
+            "version": 4,
             "status": "ARMED",
             "createdAt": _utc_now(),
             "cameraCompatibility": "EOS Utility native compiler/transport with target-PF3-scoped table acceptance; physical confirmation remains per body",
@@ -287,8 +277,13 @@ class EosRpInstaller:
             "slot": slot or None,
             "slotPolicy": "dynamicUserDef1To3" if slot == 0 else "suggestedSlot",
             "pictureStyleName": style_name,
-            "compilerSelfTest": {
-                "exact": True, "blockSha256": selftest_hash, "meta": selftest_meta,
+            "validation": {
+                "mode": "liveTargetPf3",
+                "externalFixturesRequired": False,
+                "targetPathExact": True,
+                "semanticTableValidationRequired": True,
+                "compilerToEdsdkByteMatchRequired": True,
+                "status": "pendingCanonTransaction",
             },
             "targetCompiler": {
                 "policy": "EOS Utility compiles the selected PF3 with its native live camera path; only EdsCFParse table acceptance is corrected",
@@ -302,10 +297,11 @@ class EosRpInstaller:
                 "replace203Payload": False,
                 "modifyEdsdkArguments": False,
                 "compilerValidationRequired": True,
+                "compilerToTransportByteMatchRequired": True,
+                "unvalidatedTransportBlockedBeforeOriginalCall": True,
                 "patch115": False,
                 "reason": "Canon selects and sends the camera-native payload; 0x00000115 is opaque binary state/control data",
             },
-            "fixtureHashes": dict(self.assets.hashes),
             "events": [],
         }
         with self._lock:
@@ -323,7 +319,6 @@ class EosRpInstaller:
             "slot": slot,
             "styleName": style_name,
             "reportPath": report_path,
-            "compilerSelfTestSha256": selftest_hash,
             "pid": self.pid,
         }
 

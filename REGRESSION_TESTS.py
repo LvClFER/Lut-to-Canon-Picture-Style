@@ -20,7 +20,7 @@ from canon_engine import (
     sample_custom_wb, wb_shift_gains, load_reference_image, read_base_properties, PICTURE_STYLE_IDS,
 )
 from canon_runtime import (
-    app_data_dir, application_root, camera_support_dir, discover_pse,
+    app_data_dir, application_root, discover_pse,
     ensure_runtime_input_profile, exported_styles_dir,
 )
 from test_report import create_test_report_zip, validate_test_report_zip
@@ -101,7 +101,6 @@ class CoreRegressionTests(unittest.TestCase):
         root=application_root().resolve()
         self.assertEqual(app_data_dir().resolve().parent,root)
         self.assertEqual(exported_styles_dir().resolve().parent,root)
-        self.assertEqual(camera_support_dir().resolve().parent,root)
         self.assertNotIn("AppData\\Local\\CanonStyleStudio",str(app_data_dir()))
 
     def test_eos_rp_payload_preserves_carrier_outside_validated_fields(self):
@@ -162,6 +161,11 @@ class CoreRegressionTests(unittest.TestCase):
         self.assertIn("dense17IndicesApplied",dynamic)
         self.assertIn("compiler_validation_pass",dynamic)
         self.assertIn("compiler_validation_failed",dynamic)
+        self.assertIn("Interceptor.replace",dynamic)
+        self.assertIn("registration_blocked",dynamic)
+        self.assertIn("originalCalled: false",dynamic)
+        self.assertIn("unvalidated-no-grid-conversion",dynamic)
+        self.assertIn("operation === 'data'",dynamic)
         self.assertIn("transportMutation: false",dynamic)
         self.assertIn("payloadReplaced: false",dynamic)
         self.assertNotIn("armedLegacyBlock1",dynamic)
@@ -175,6 +179,11 @@ class CoreRegressionTests(unittest.TestCase):
         self.assertNotIn("module.size !==",dynamic)
         self.assertNotIn("base.add(0x",dynamic)
         self.assertNotIn("payload_patched",dynamic)
+        blocked=dynamic.rfind("type: 'registration_blocked'")
+        original=dynamic.find("// The original Canon call is reached only after all target-PF3 checks pass.")
+        self.assertGreaterEqual(blocked,0);self.assertGreater(original,blocked)
+        self.assertIn("return 1;",dynamic[blocked:original])
+        self.assertIn("lastValidatedCompile = null;",dynamic[dynamic.index("function startCompilerCall"):dynamic.index("function endCompilerCall")])
 
     def test_unknown_camera_payload_capture_is_read_only_and_persistent(self):
         with tempfile.TemporaryDirectory() as td:
@@ -220,8 +229,30 @@ class CoreRegressionTests(unittest.TestCase):
                 {"type":"send","payload":{"type":"compiler_validation_pass","validation":compiler}},None
             )
             self.assertEqual(installer._report["nativeCompilerValidation"],compiler)
+            installer._on_message(
+                {"type":"send","payload":{"type":"compiler_transport_match","exact":True,"size":len(native)}},None
+            )
+            self.assertTrue(installer._report["compilerTransportValidation"]["exact"])
+            self.assertEqual(installer._report["validation"]["transportStatus"],"passed")
             self.assertNotIn("patchedPayloadSize",installer._report)
             self.assertNotIn("actualOutgoingPayloadSha256",installer._report)
+
+    def test_unvalidated_camera_transport_is_reported_as_blocked(self):
+        with tempfile.TemporaryDirectory() as td:
+            installer=object.__new__(EosRpInstaller)
+            installer.event_callback=lambda _event:None
+            installer._lock=threading.RLock()
+            installer._report={"status":"ARMED","events":[]}
+            installer._report_path=Path(td)/"CANON_CAMERA_INSTALL_REPORT.json"
+            installer.armed=True
+            installer._ready=threading.Event()
+            installer._on_message({"type":"send","payload":{
+                "type":"registration_blocked","reason":"mismatch",
+                "slot":1,"size":83076,"originalCalled":False,
+            }},None)
+            self.assertEqual(installer._report["status"],"ERROR")
+            self.assertEqual(installer._report["error"],"mismatch")
+            self.assertFalse(installer._report["events"][-1]["originalCalled"])
 
     def test_external_eos_rp_support_assets_when_configured(self):
         folder=os.environ.get("CANON_STYLE_STUDIO_RP_ASSETS")
@@ -231,7 +262,7 @@ class CoreRegressionTests(unittest.TestCase):
         self.assertEqual(len(assets.read_carrier()),16752)
         self.assertEqual(discover_rp_assets(folder).root,assets.root)
 
-    def test_eos_rp_prepare_flow_arms_only_after_exact_selftest(self):
+    def test_camera_prepare_uses_live_validation_without_external_fixtures(self):
         class FakeExports:
             def __init__(self):self.calls=[]
             def armdynamic(self,slot,pf3_path,name):
@@ -240,48 +271,32 @@ class CoreRegressionTests(unittest.TestCase):
             def __init__(self):self.exports_sync=FakeExports()
 
         with tempfile.TemporaryDirectory() as td:
-            root=Path(td);expected=bytes((index*13)&0xff for index in range(BLOCK_SIZE))
-            paths={
-                "selftest_pf3":root/"selftest.pf3","selftest_block":root/"expected.bin",
-                "rp_carrier":root/"carrier.bin","camera_id":root/"camera.bin","descriptor":root/"descriptor.bin",
-            }
-            paths["selftest_pf3"].write_bytes(bytes(434511));paths["selftest_block"].write_bytes(expected)
-            paths["rp_carrier"].write_bytes(bytes([0xA5])*RP_PAYLOAD_SIZE)
-            paths["camera_id"].write_bytes(bytes(4));paths["descriptor"].write_bytes(bytes(7772))
-            assets=RpAssetSet(root=root,hashes={"fixture":"test"},**paths)
+            root=Path(td)
             pf3_data=bytearray(434511);pf3_data[4:7]=b"PSP"
             pf3=root/"current.pf3";pf3.write_bytes(pf3_data)
-            base_pf3=root/"base.pf3";base_pf3.write_bytes(pf3_data)
 
-            events=[];installer=EosRpInstaller(assets,event_callback=events.append)
+            events=[];installer=object.__new__(EosRpInstaller)
+            installer.event_callback=events.append
+            installer._lock=threading.RLock();installer._report=None;installer._report_path=None
+            installer._compiler_hook_info=None;installer.script=None;installer.pid=None;installer.armed=False
             fake=FakeScript();installer.connect=lambda **_kwargs:setattr(installer,"script",fake) or fake
-            compiled=iter((
-                ({"ok":True},bytes(360)+expected+expected),
-            ))
-            installer._compile=lambda _path:next(compiled)
             result=installer.prepare_and_arm(
                 pf3,2,"Câmara João",root/"output",launch_eos=False,
-                base_pf3_path=base_pf3,
             )
             self.assertTrue(installer.armed);self.assertEqual(len(fake.exports_sync.calls),1)
             slot,armed_pf3,name=fake.exports_sync.calls[0]
             self.assertEqual(slot,2);self.assertEqual(name,"Camara Joao");self.assertEqual(Path(armed_pf3),pf3.resolve())
             report=json.loads(Path(result["reportPath"]).read_text(encoding="utf-8"))
-            self.assertTrue(report["compilerSelfTest"]["exact"]);self.assertFalse(report["cameraWritePolicy"]["patch115"])
+            self.assertFalse(report["validation"]["externalFixturesRequired"])
+            self.assertTrue(report["validation"]["semanticTableValidationRequired"])
+            self.assertTrue(report["validation"]["compilerToEdsdkByteMatchRequired"])
+            self.assertFalse(report["cameraWritePolicy"]["patch115"])
             self.assertIn("EOS Utility compiles the selected PF3",report["targetCompiler"]["policy"])
             self.assertFalse(report["targetCompiler"]["modelSpecificBuilder"])
             self.assertTrue(report["targetCompiler"]["targetPf3PathScoped"])
             self.assertFalse(report["cameraWritePolicy"]["replace203Payload"])
             self.assertFalse(report["cameraWritePolicy"]["modifyEdsdkArguments"])
             self.assertEqual(report["cameraWritePolicy"]["payloadOwner"],"EOS Utility / EDSDK")
-
-            blocked=EosRpInstaller(assets)
-            blocked_fake=FakeScript();blocked.connect=lambda **_kwargs:setattr(blocked,"script",blocked_fake) or blocked_fake
-            bad=bytearray(expected);bad[0]^=1
-            blocked._compile=lambda _path:({"ok":True},bytes(360)+bytes(bad)+bytes(bad))
-            with self.assertRaisesRegex(RuntimeError,"byte-for-byte"):
-                blocked.prepare_and_arm(pf3,1,"Blocked",root/"blocked",launch_eos=False)
-            self.assertFalse(blocked.armed);self.assertEqual(blocked_fake.exports_sync.calls,[])
 
     def test_runtime_generated_canon_styles(self):
         dll=find_dll()
@@ -291,6 +306,17 @@ class CoreRegressionTests(unittest.TestCase):
             data=path.read_bytes()
             self.assertEqual(len(data),434511,name)
             self.assertEqual(data[4:7],b"PSP",name)
+            props=read_base_properties(dll,path,wanted=[(0x00000114,4),(0x40001070,215628),(0x40001071,215628)])
+            self.assertEqual(int.from_bytes(props[0x00000114],"little"),PICTURE_STYLE_IDS[name])
+            self.assertEqual(props[0x40001070],props[0x40001071])
+        with tempfile.TemporaryDirectory() as td:
+            folder=Path(td)
+            standard=ensure_runtime_base_pf3(dll,"Standard",folder)
+            neutral=ensure_runtime_base_pf3(dll,"Neutral",folder)
+            standard.write_bytes(neutral.read_bytes())
+            repaired=ensure_runtime_base_pf3(dll,"Standard",folder)
+            selector=read_base_properties(dll,repaired,wanted=[(0x00000114,4)])[0x00000114]
+            self.assertEqual(int.from_bytes(selector,"little"),PICTURE_STYLE_IDS["Standard"])
 
     def test_validated_local_base_selection(self):
         dll=find_dll()

@@ -28,7 +28,7 @@ FILES=(
     "camera_install/dynamic_camera_agent.js","PF3_UI_EXPORT_TEST.py",
 )
 EXAMPLES=("example_luts/hald_identity_8.png","example_luts/Lightroom_Hald_Template_512_64cube_sRGB_16bit.tif")
-FORBIDDEN_SUFFIXES={".dll",".exe",".icc",".icm",".pf3",".cr2",".cr3",".crw",".dmp",".log",".pyc"}
+FORBIDDEN_SUFFIXES={".bin",".dll",".exe",".icc",".icm",".pf3",".cr2",".cr3",".crw",".dmp",".log",".pyc"}
 FORBIDDEN_NAMES={"superia_expected_block_8192.bin","rp_superia_template_16752.bin","1300d_camera_id.bin","1300d_descriptor_7772.bin"}
 FORBIDDEN_PARTS={"__pycache__","bases","canon_resources","native_probe_results","test_files","samples","app_data","camera_support","exported_styles"}
 TEXT_SUFFIXES={".py",".js",".md",".txt",".bat",".json",".toml",".ini",".cfg"}
@@ -68,8 +68,8 @@ def build(output_root: Path):
         target=package/name;target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(source,target);copied.append(target)
     manifest={"name":PACKAGE_NAME,"version":PUBLIC_VERSION,"build_id":BUILD_ID,"created_utc":datetime.now(timezone.utc).isoformat(),
               "legal":"No Canon DLL, executable, ICC/ICM, PF3, RAW or internal resource is distributed.",
-              "camera_install":{"validated_bodies":["EOS RP"],"external_support_assets_required":True,"support_assets_bundled":False},
-              "portable_storage":{"settings":"app_data","support":"camera_support","camera_exports":"exported_styles"},
+              "camera_install":{"physically_tested_bodies":["EOS RP","EOS R8"],"external_support_assets_required":False,"support_assets_bundled":False,"unvalidated_write_blocked_before_original_call":True,"validation":"live target PF3 plus exact compiler-to-EDSDK buffer comparison"},
+              "portable_storage":{"settings":"app_data","camera_exports":"exported_styles"},
               "files":[{"path":str(p.relative_to(package)).replace("\\","/"),"bytes":p.stat().st_size,"sha256":sha(p)} for p in copied]}
     manifest_path=package/"PUBLIC_PACKAGE_MANIFEST.json";manifest_path.write_text(json.dumps(manifest,indent=2,ensure_ascii=False),encoding="utf-8")
     problems=audit_tree(package)

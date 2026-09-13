@@ -52,7 +52,6 @@ from canon_runtime import (
 )
 from test_report import create_test_report_zip
 from camera_install.ui import CameraInstallDialog
-from camera_install.rp_assets import discover_rp_assets
 from creative_controls import (
     AXIS_NAMES, DEFAULT_CREATIVE_CONTROLS, DEFAULT_RECIPE_WB, IDENTITY_TONE_CURVE,
     evaluate_tone_curve, normalize_creative_controls, normalize_recipe_wb,
@@ -1021,8 +1020,8 @@ class CanonStyleStudioQt(QMainWindow):
             "• Tone Curve, Six Color-Axes and Chrome-style controls (LUT-baked)\n"
             "• Compatibility with untested Canon bodies\n\n"
             "Canon software and libraries are not distributed with Canon Style Studio.\n"
-            "Send to Camera corrects arbitrary-table acceptance inside Canon's compiler for the selected PF3; EOS Utility builds and sends its original camera-native payload unchanged. EOS RP is physically validated; other bodies remain experimental until tested.\n"
-            "External hash-validated support fixtures are required and are not distributed with this build.\n"
+            "Send to Camera corrects arbitrary-table acceptance inside Canon's compiler for the selected PF3; EOS Utility builds and sends its original camera-native payload unchanged. EOS RP and EOS R8 have been physically exercised; other bodies remain experimental until tested.\n"
+            "No external support binaries or Manual Loader package is required; live compiler validation uses the Canon software installed on this PC.\n"
             "Canon Style Studio is independent experimental software and is not affiliated with or endorsed by Canon.")
 
     def test_report_payload(self):
@@ -1040,7 +1039,6 @@ class CanonStyleStudioQt(QMainWindow):
                 "sha256":sha256_file(path) if path and path.is_file() else None,**(entry.get("metadata") or {}),
             })
         fallback=bool(self.raw_info.get("fallback_reason") or "fallback" in str(self.raw_info.get("decoder","")).lower())
-        camera_assets=discover_rp_assets(self.settings.data.get("camera_assets_folder"))
         report={
             "application":{"name":PUBLIC_NAME,"version":APP_VERSION,"build_id":BUILD_ID},
             "system":system_summary(),
@@ -1058,9 +1056,9 @@ class CanonStyleStudioQt(QMainWindow):
                 "fallback_reason":self.raw_info.get("fallback_reason"),
             },
             "camera_install":{
-                "integrated":True,"method":"target-scoped Canon native PF3 compiler acceptance","physically_validated_bodies":["EOS RP"],
+                "integrated":True,"method":"target-scoped Canon native PF3 compiler acceptance","physically_tested_bodies":["EOS RP","EOS R8"],
                 "other_bodies":"experimental until physical validation","raw_compatibility_is_camera_compatibility":False,
-                "support_assets_validated":bool(camera_assets),"support_fixture_hashes":dict(camera_assets.hashes) if camera_assets else None,
+                "external_support_assets_required":False,"validation_mode":"live target-PF3 compiler and transport",
                 "live_inputs":["0x01000001","0x01000210","0x01000203"],
                 "compiler_patch_scope":"exact selected PF3 EdsCFParse reference",
                 "edsdk_payload_replaced":False,"edsdk_arguments_modified":False,
@@ -1229,19 +1227,18 @@ class CanonStyleStudioQt(QMainWindow):
 
     def resolve_current_base(self,optional=False):
         if self.base_combo.currentText()=="Imported PF3" and self.custom_base_path:
-            path=Path(self.custom_base_path);return {"path":path,"style":"Imported PF3","source":"imported PF3","validated":True,"sha256":sha256_file(path) if path.is_file() else None}
+            path=Path(self.custom_base_path);return {"path":path,"style":"Imported PF3","source":"imported PF3","validated":True,"cameraReady":True,"sha256":sha256_file(path) if path.is_file() else None}
         dll=self.dll_path(optional=optional)
         if dll is None:return None
         style=self.base_combo.currentText()
         search=[self.settings.data.get("base_pf3_folder"),HERE/"bases"]
-        portable_assets=discover_rp_assets(self.settings.data.get("camera_assets_folder"))
-        if portable_assets:
-            search.insert(0,portable_assets.root)
         result=resolve_validated_base_pf3(dll,style,search)
-        if result:return result
+        if result:
+            result["cameraReady"]=True
+            return result
         try:
             path=ensure_runtime_base_pf3(dll,style)
-            return {"path":path,"style":style,"source":"runtime-generated experimental base","validated":False,"sha256":sha256_file(path)}
+            return {"path":path,"style":style,"source":"Canon EdsCFParse runtime-generated base","validated":False,"cameraReady":True,"sha256":sha256_file(path)}
         except Exception:
             if optional:return None
             raise
@@ -1253,7 +1250,7 @@ class CanonStyleStudioQt(QMainWindow):
         if not self.base_resolution:self.base_source_label.setText("Export base: unavailable · install/locate PSE")
         elif self.base_resolution.get("validated"):
             self.base_source_label.setText(f"Export base: {self.base_resolution['style']} · validated local template")
-        else:self.base_source_label.setText(f"Export base: {self.base_resolution['style']} · EXPERIMENTAL generated template · use Bases… for exact validated export")
+        else:self.base_source_label.setText(f"Export base: {self.base_resolution['style']} · Canon-serialized runtime template · EXPERIMENTAL")
 
     def current_base_path(self,optional=False):
         self.base_resolution=self.resolve_current_base(optional=optional)
@@ -1263,7 +1260,7 @@ class CanonStyleStudioQt(QMainWindow):
     def edit_state_dict(self):
         base=self.current_base_path(optional=True)
         base_style=self.base_combo.currentText()
-        return {"base_name":base_style,"basePictureStyle":base_style,"baseTemplateSource":(self.base_resolution or {}).get("source"),"baseTemplateValidated":bool((self.base_resolution or {}).get("validated")),"base_path":str(base or ""),"custom_pf3":str(self.custom_base_path or ""),**self.controls_dict(),"raw_wb_mode":self.wb_combo.currentText(),"raw_kelvin":self.kelvin.value(),"raw_exposure":self.exposure.value(),"raw_shot_index":self.shot_index.value(),"wb_ab_shift":int(self.ab_shift.value()),"wb_gm_shift":int(self.gm_shift.value()),"custom_wb_mult":self.custom_wb_mult,"preview_quality_mode":"canon33" if self.render_mode.currentText().startswith("Canon") else "working","luts":[{"id":e["id"],"path":str(e["cube"]["path"]),"enabled":bool(e.get("enabled",True)),"opacity":float(e.get("opacity",1.0)),"metadata":e.get("metadata") or {}} for e in self.luts]}
+        return {"base_name":base_style,"basePictureStyle":base_style,"baseTemplateSource":(self.base_resolution or {}).get("source"),"baseTemplateValidated":bool((self.base_resolution or {}).get("validated")),"baseCameraReady":bool((self.base_resolution or {}).get("cameraReady")),"base_path":str(base or ""),"custom_pf3":str(self.custom_base_path or ""),**self.controls_dict(),"raw_wb_mode":self.wb_combo.currentText(),"raw_kelvin":self.kelvin.value(),"raw_exposure":self.exposure.value(),"raw_shot_index":self.shot_index.value(),"wb_ab_shift":int(self.ab_shift.value()),"wb_gm_shift":int(self.gm_shift.value()),"custom_wb_mult":self.custom_wb_mult,"preview_quality_mode":"canon33" if self.render_mode.currentText().startswith("Canon") else "working","luts":[{"id":e["id"],"path":str(e["cube"]["path"]),"enabled":bool(e.get("enabled",True)),"opacity":float(e.get("opacity",1.0)),"metadata":e.get("metadata") or {}} for e in self.luts]}
     def project_document(self):
         zoom=0.0 if self.viewer.zoom_mode=="Fit" else float(self.viewer.zoom_mode.rstrip("%"))/100.0
         return ProjectDocument(name=self.project_name.text().strip().rstrip("*") or "Untitled",edit=self.edit_state_dict(),references=[str(x) for x in self.references],current_reference=max(0,self.current_reference),compare_mode=self.compare_combo.currentText(),zoom=zoom,pan_x=self.viewer.center[0],pan_y=self.viewer.center[1],split=self.viewer.split,snapshots=self.snapshots.copy())
@@ -1698,9 +1695,6 @@ class CanonStyleStudioQt(QMainWindow):
     def open_export(self):
         try:self.dll_path();self.current_base_path()
         except Exception as e:QMessageBox.critical(self,"Export",str(e));return
-        if self.base_combo.currentText()!="Imported PF3" and not bool((self.base_resolution or {}).get("validated")):
-            answer=QMessageBox.warning(self,"Experimental PF3 base","A hash-validated local PF3 template was not found for this Canon base.\n\nThe generated runtime template is experimental and does not preserve all properties of the validated Canon base. Use Bases… to locate the validated templates.\n\nContinue with experimental export?",QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No,QMessageBox.StandardButton.No)
-            if answer!=QMessageBox.StandardButton.Yes:return
         ExportDialog(self,self).exec()
     def dragEnterEvent(self,event):
         if event.mimeData().hasUrls():

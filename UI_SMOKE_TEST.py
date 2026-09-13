@@ -99,7 +99,7 @@ def main():
             window.zoom_combo.setCurrentText("Fit")
             assert tuple(window.viewer.center)==(0.5,0.5),window.viewer.center
             window.base_combo.setCurrentText("Standard");app.processEvents()
-            assert window.base_resolution and window.base_resolution.get("validated"),window.base_resolution
+            assert window.base_resolution and window.base_resolution.get("cameraReady"),window.base_resolution
             assert window.project_document().edit.get("basePictureStyle")=="Standard"
             state["creative_reference"]=np.asarray(window.viewer.result_pil,dtype=np.int16).copy()
             window.color_chrome.setCurrentText("Strong")
@@ -135,17 +135,14 @@ def main():
             QTimer.singleShot(50,export_dialog.close_button.click)
             dialog_result=export_dialog.exec()
             assert not export_dialog.isVisible(),"PF3 export dialog did not close"
-            camera_ready=False
-            asset_folder=(os.environ.get("CANON_STYLE_STUDIO_RP_ASSETS") or
-                          window.settings.data.get("camera_assets_folder"))
-            if asset_folder:
-                window.settings.data["camera_assets_folder"]=asset_folder
-                camera_dialog=CameraInstallDialog(window,window)
-                app.processEvents()
-                assert camera_dialog.assets is not None
-                assert camera_dialog.prepare_button.isEnabled()
-                camera_ready=True
-                camera_dialog.close()
+            camera_dialog=CameraInstallDialog(window,window)
+            app.processEvents()
+            assert not hasattr(camera_dialog,"assets_button")
+            assert not hasattr(camera_dialog,"import_zip_button")
+            assert window.base_resolution.get("cameraReady"),window.base_resolution
+            assert camera_dialog.prepare_button.isEnabled()
+            camera_ready=True
+            camera_dialog.close()
             rendered_portrait=window.last_canon_base.size;native_size=window.source_native_size
             identity=HERE/"example_luts"/"hald_identity_8.png"
             window.add_lut_paths([identity]);app.processEvents()

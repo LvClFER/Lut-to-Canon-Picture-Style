@@ -18,8 +18,8 @@ Thank you for testing Canon Style Studio. Use copies of important work and compa
 12. Test Undo/Redo and snapshots A/B/C. Save a `.canonstyleproject`, copy it to another folder/computer, remove or rename the original LUT files, reopen it, and confirm every setting plus every current/snapshot LUT is restored. The photo must be requested separately and the previous viewer image must not remain visible.
 13. Open JPEG and TIFF references and confirm LUT/Creative Color editing still works.
 14. Resize the left sidebar wider and narrower. It must extend beyond 390 px and must never show a horizontal scrollbar.
-15. Import the Manual Loader ZIP and verify `camera_support/` appears beside the executable. Prepare a style and verify a new persistent folder appears under `exported_styles/`; a second preparation must create another folder and preserve the first.
-16. Move the complete extracted application folder to another writable path/user. Settings and imported support files must remain available without relying on the original Windows username.
+15. Without copying or importing support files, prepare a style and verify a new persistent folder appears under `exported_styles/`; a second preparation must create another folder and preserve the first.
+16. Move the complete extracted application folder to another writable path/user. Settings and locally generated runtime data must remain available without relying on the original Windows username; no support-file import may be requested.
 
 ## Compatibility matrix
 
@@ -46,16 +46,16 @@ The regression matrix scans the supplied folder recursively and writes `PUBLIC_A
 
 This Public Alpha integrates the loader-assisted EOS RP workflow under **Send to Camera**. Successfully opening a CR2/CR3 still validates only RAW compatibility with the locally installed DPP4Lib; it does not validate a camera-registration payload for that model.
 
-The arbitrary-LUT installation path has been physically validated only on EOS RP. It requires EOS Utility 3 plus the external Manual Loader v2.4 support folder because captured carriers/descriptors/self-test binaries are intentionally not distributed. Do not report another body as installation-compatible merely because its RAW opens or an exported PF3 parses.
+The arbitrary-LUT installation path has been physically exercised on EOS RP and EOS R8. It requires EOS Utility 3 but no external Manual Loader fixtures. Other bodies remain experimental until a real camera confirms the result; RAW compatibility alone does not validate camera installation.
 
 EOS RP physical test:
 
 1. Close EOS Utility completely, connect the EOS RP and open **Send to Camera**.
-2. Import the Manual Loader v2.4 ZIP/folder. The app copies its allow-listed private files into `camera_support/`; all five fixtures must pass exact SHA-256 validation.
-3. Select User Def. 1, 2 or 3 and confirm the connected body is an EOS RP.
-4. Click **Prepare and Arm EOS RP**. The known-good compiler self-test must match exactly before the target PF3 is compiled. Standard-based targets may report different target Block1/Block2 hashes; the validated RP recipe deliberately uses exact target Block1 only.
+2. Do not add any support folder. Confirm the same public build reaches the ready state using only the locally installed Canon software.
+3. Click **Prepare / Capture** and wait for the target-PF3 hook to arm.
+4. In EOS Utility choose User Def. 1, 2 or 3 and select the generated PF3.
 5. In EOS Utility, perform a normal Picture Style registration using the PF3 opened by the app.
-6. Confirm the log shows the genuine `0x01000203` write, `patched=True`, `rc=0`, and that `0x00000115` was untouched.
+6. Confirm the log reports semantic table validation, an exact compiler-to-EDSDK buffer match, `rc=0`, and that `0x00000115` was untouched.
 7. Close/reopen EOS Utility before another registration.
 
 For serious colour calibration, keep these comparisons distinct:

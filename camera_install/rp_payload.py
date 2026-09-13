@@ -97,7 +97,8 @@ def build_rp_payload(carrier: bytes, block1: bytes, style_name: str) -> bytes:
 
 def validate_agent_source(source: str) -> None:
     """Static guard for the critical transaction-property boundary."""
-    if "this.prop === 0x00000115" not in source or "untouched: true" not in source:
+    state_guard = "this.prop === 0x00000115" in source or "prop === 0x00000115" in source
+    if not state_guard or "untouched: true" not in source:
         raise RuntimeError("Camera agent no longer contains the 0x00000115 observation guard")
     start = source.index("// 0x00000115 is binary state/control data")
     legacy_boundary = source.find("if (!armed) return", start)
@@ -109,7 +110,11 @@ def validate_agent_source(source: str) -> None:
     observation = source[start:end]
     if "args[3] =" in observation or "args[4] =" in observation or "writeByteArray" in observation:
         raise RuntimeError("Unsafe 0x00000115 mutation detected in the camera agent")
-    if "this.prop === 0x01000203" not in source and "this.prop !== 0x01000203" not in source:
+    transport_guard = any(value in source for value in (
+        "this.prop === 0x01000203", "this.prop !== 0x01000203",
+        "prop === 0x01000203", "prop !== 0x01000203",
+    ))
+    if not transport_guard:
         raise RuntimeError("Camera agent does not guard the 0x01000203 transaction")
     if "armdynamic" in source:
         required = (
@@ -118,10 +123,13 @@ def validate_agent_source(source: str) -> None:
             "resolveAcceptanceSymbols", "semantic-signatures-v1", "installAcceptanceHooks",
             "patch-only-the-selected-pf3-inside-edscfparse",
             "original-canon-buffer-observation-only",
-            "in-place-canon-compiler-acceptance", "stock-canon-direct",
+            "in-place-canon-compiler-acceptance", "unvalidated-direct-full33",
             "compiler_validation_pass", "compiler_validation_failed",
             "transportMutation: false", "argumentsModified: false", "payloadReplaced: false",
             "compilerGridPathSeen", "dense10IndicesApplied", "dense17IndicesApplied",
+            "compiler_transport_match", "bytesEqual", "lastValidatedOutput",
+            "Interceptor.replace", "registration_blocked", "originalCalled: false",
+            "directFull33Payload", "unvalidated-no-grid-conversion",
             "Unsupported EdsCFParse semantic signature",
         )
         missing = [value for value in required if value not in source]
@@ -131,6 +139,14 @@ def validate_agent_source(source: str) -> None:
             raise RuntimeError("Dynamic camera agent still contains an EOS RP-only payload-size guard")
         if "args[3] =" in source or "args[4] =" in source:
             raise RuntimeError("Dynamic camera agent mutates Canon EDSDK transport arguments")
+        if "return 1;" not in source:
+            raise RuntimeError("Dynamic camera agent cannot block an unvalidated camera write")
+        blocked = source.rfind("type: 'registration_blocked'")
+        original_boundary = source.find("// The original Canon call is reached only after all target-PF3 checks pass.")
+        if blocked < 0 or original_boundary < 0 or blocked >= original_boundary:
+            raise RuntimeError("Unvalidated camera writes are not blocked before the original EDSDK call")
+        if "return 1;" not in source[blocked:original_boundary]:
+            raise RuntimeError("Camera write rejection does not return before the original EDSDK call")
         if "module.size !==" in source or "base.add(0x" in source:
             raise RuntimeError("Dynamic camera agent still depends on one fixed EdsCFParse build")
         forbidden = (

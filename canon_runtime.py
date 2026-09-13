@@ -14,8 +14,8 @@ from pathlib import Path
 
 APP_NAME = "CanonStyleStudio"
 PUBLIC_NAME = "Canon Style Studio Public Alpha"
-PUBLIC_VERSION = "1.0.0-alpha.23"
-BUILD_ID = "2026-09-13-EOS-UTILITY-CANON-NATIVE-ALPHA-23"
+PUBLIC_VERSION = "1.0.0-alpha.24"
+BUILD_ID = "2026-09-13-ZERO-SETUP-LIVE-VALIDATION-ALPHA-24"
 
 
 def application_root() -> Path:
@@ -42,12 +42,6 @@ def app_data_dir() -> Path:
 
 def exported_styles_dir() -> Path:
     path = application_root() / "exported_styles"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def camera_support_dir() -> Path:
-    path = application_root() / "camera_support"
     path.mkdir(parents=True, exist_ok=True)
     return path
 

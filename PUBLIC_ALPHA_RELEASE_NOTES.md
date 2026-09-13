@@ -1,3 +1,13 @@
+# Canon Style Studio 1.0.0-alpha.24
+
+Build: `2026-09-13-ZERO-SETUP-LIVE-VALIDATION-ALPHA-24`
+
+- Public and development/test builds now use the same zero-setup camera workflow.
+- Removed the runtime dependency on Manual Loader/support binaries and model-specific carriers.
+- Canon EdsCFParse generates the selected base locally; EOS Utility compiles for the connected camera.
+- Live validation covers both 33³ table conversions and an exact compiler-to-EDSDK buffer comparison.
+- No Canon-derived support files are bundled or requested.
+
 # Canon Style Studio 1.0.0-alpha.17
 
 Build: `2026-09-05-FUJI-WB-CALIBRATION-PF3-ALPHA-17`
@@ -15,7 +25,7 @@ Build: `2026-08-23-PORTABLE-STORAGE-ALPHA-7`
 
 - Removed camera preparation output from `%LOCALAPPDATA%`: every attempt now remains under `exported_styles/<timestamp>_<style>/` beside the application.
 - The PF3, manifest, compiled Block1, complete EOS RP payload and install report are retained. Existing attempts are never automatically deleted or overwritten.
-- Manual Loader ZIP/folder import now copies the allow-listed, hash-validated private support set into `camera_support/` beside the application. Selecting a folder no longer stores only an external absolute link.
+- Send to Camera now performs target-specific live validation using the installed Canon compiler; Manual Loader support files are no longer required or imported.
 - Settings, caches, logs, reports and extracted portable-project LUTs now use `app_data/` beside the application. Old AppData settings are copied once for migration and left untouched.
 - Portable support discovery takes priority and survives moving the complete application folder to another user/computer.
 - Historical camera-install attempts from this development machine were copied into `exported_styles/legacy_*`; their AppData originals were retained.
@@ -112,7 +122,7 @@ Build: `2026-08-23-PORTABLE-STORAGE-ALPHA-7`
 
 ## Camera-install safety boundary
 
-PF3 properties and EDSDK registration transaction properties are separate layers. In the EOS RP registration path, `0x00000115` is an opaque binary state/control blob and is never renamed, resized or patched. The integrated workflow replaces only the outgoing `0x01000203` payload during a genuine EOS Utility transaction, after the exact compiler self-test passes. It requires external hash-validated support fixtures and remains physically validated only for EOS RP.
+PF3 properties and EDSDK registration transaction properties are separate layers. In camera registration, `0x00000115` is an opaque binary state/control blob and is never renamed, resized or patched. The current workflow corrects table acceptance only while Canon compiles the exact selected PF3; it never replaces the outgoing `0x01000203` buffer. Live semantic and byte-for-byte transport validation require no external fixtures. EOS RP and EOS R8 have been physically exercised; other bodies remain experimental.
 
 ## Distribution integrity
 

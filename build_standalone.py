@@ -17,13 +17,12 @@ from canon_runtime import BUILD_ID, PUBLIC_VERSION
 
 HERE=Path(__file__).resolve().parent
 PUBLIC_RELEASE_NAME=f"CanonStyleStudio_Public_Alpha_{PUBLIC_VERSION}_Windows_x64"
-PRIVATE_RELEASE_NAME=f"CanonStyleStudio_{PUBLIC_VERSION}_PRIVATE_MULTI_CAMERA_TEST"
 CANON_FORBIDDEN_NAMES=(
     "dppcore.dll","edscfparse.dll","pseditor.exe","dppviewer.exe",
     "superia_selftest.pf3","superia_expected_block_8192.bin",
     "rp_superia_template_16752.bin","1300d_camera_id.bin","1300d_descriptor_7772.bin",
 )
-FORBIDDEN_SUFFIXES={".icc",".icm",".pf3",".cr2",".cr3",".crw",".dmp",".log",".py",".pyc"}
+FORBIDDEN_SUFFIXES={".bin",".icc",".icm",".pf3",".cr2",".cr3",".crw",".dmp",".log",".py",".pyc"}
 INCOMPATIBLE_COLLECTED_QT_DLLS=("icuuc.dll","icudt78.dll")
 
 
@@ -39,24 +38,21 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def audit(root, allow_private_support=False):
+def audit(root):
     problems=[]
     for path in root.rglob("*"):
         if not path.is_file():continue
-        if allow_private_support:
-            try:
-                if path.is_relative_to(root/"camera_support"):continue
-            except ValueError:
-                pass
+        if any(part.lower()=="camera_support" for part in path.relative_to(root).parts):
+            problems.append(str(path.relative_to(root)))
         lower=path.name.lower()
         if lower in CANON_FORBIDDEN_NAMES or path.suffix.lower() in FORBIDDEN_SUFFIXES:problems.append(str(path.relative_to(root)))
         if any(part.lower()=="__pycache__" for part in path.parts):problems.append(str(path.relative_to(root)))
     return sorted(set(problems))
 
 
-def build(output_root, private_multi_camera=False):
+def build(output_root, folder_only=False):
     output_root=output_root.resolve();output_root.mkdir(parents=True,exist_ok=True)
-    release_name=PRIVATE_RELEASE_NAME if private_multi_camera else PUBLIC_RELEASE_NAME
+    release_name=PUBLIC_RELEASE_NAME
     release=output_root/release_name
     if release.exists():shutil.rmtree(release)
     with tempfile.TemporaryDirectory(prefix="canon_style_build_",dir=output_root) as temp_name:
@@ -90,26 +86,18 @@ def build(output_root, private_multi_camera=False):
         shutil.copy2(HERE/name,release/name)
     (release/"START_CANON_STYLE_STUDIO.bat").write_text(
         '@echo off\r\ncd /d "%~dp0"\r\nstart "" "CanonStyleStudio.exe"\r\n',encoding="ascii")
-    if private_multi_camera:
-        support=HERE/"camera_support"
-        if not support.is_dir():raise RuntimeError("Private camera support folder is unavailable")
-        shutil.copytree(support,release/"camera_support")
-        (release/"PRIVATE_TEST_PACKAGE.txt").write_text(
-            "Private multi-camera compatibility build. Canon/Manual Loader research fixtures are included.\n"
-            "Do not publish or redistribute this folder publicly.\n",encoding="utf-8")
     manifest={"name":release_name,"version":PUBLIC_VERSION,"build_id":BUILD_ID,
               "created_utc":datetime.now(timezone.utc).isoformat(),"architecture":"Windows x64",
               "python_required":False,"pse_required_for_canon_raw":True,
-              "canon_resources_bundled":bool(private_multi_camera),"entrypoint":"CanonStyleStudio.exe",
-              "distribution":"private compatibility testing only; do not publish" if private_multi_camera else "public",
-              "camera_install":{"method":"target-PF3-scoped EdsCFParse acceptance correction; EOS Utility compiles and sends its original camera-native payload unchanged","model_specific_builders":False,"edsdk_payload_replaced":False,"edsdk_arguments_modified":False,"compiler_symbol_resolution":"semantic signatures","offline_validated_transactions":["EOS 1300D / 16744","EOS RP / 16752","EOS R8 / 83076"],"physical_revalidation_required":True,"external_selftest_assets_required":not private_multi_camera,"support_assets_bundled":bool(private_multi_camera)},
-              "portable_storage":{"settings":"app_data","support":"camera_support","camera_exports":"exported_styles"}}
+              "canon_resources_bundled":False,"entrypoint":"CanonStyleStudio.exe","distribution":"public",
+              "camera_install":{"method":"target-PF3-scoped EdsCFParse acceptance correction; EOS Utility compiles and sends its original camera-native payload unchanged after live validation","model_specific_builders":False,"edsdk_payload_replaced":False,"edsdk_arguments_modified":False,"unvalidated_write_blocked_before_original_call":True,"compiler_symbol_resolution":"semantic signatures","validation":"live target PF3 plus exact compiler-to-EDSDK buffer comparison","offline_validated_transactions":["EOS 1300D / 16744","EOS RP / 16752","EOS R8 / 83076"],"physical_revalidation_required":True,"external_selftest_assets_required":False,"support_assets_bundled":False},
+              "portable_storage":{"settings":"app_data","camera_exports":"exported_styles"}}
     (release/"STANDALONE_MANIFEST.json").write_text(json.dumps(manifest,indent=2),encoding="utf-8")
-    problems=audit(release,allow_private_support=private_multi_camera)
+    problems=audit(release)
     if problems:raise RuntimeError("Standalone audit found forbidden files:\n"+"\n".join(problems))
-    if private_multi_camera:
+    if folder_only:
         print(f"[PASS] {release}")
-        print("[PASS] Private folder only; no ZIP generated")
+        print("[PASS] Public folder only; no ZIP generated")
         return release,None
     zip_path=output_root/f"{release_name}.zip";temp_zip=zip_path.with_suffix(".zip.tmp")
     if temp_zip.exists():temp_zip.unlink()
@@ -127,8 +115,8 @@ def build(output_root, private_multi_camera=False):
 
 def main(argv=None):
     parser=argparse.ArgumentParser();parser.add_argument("--output-root",type=Path,default=HERE.parent/"PUBLIC_ALPHA_STANDALONE")
-    parser.add_argument("--private-multi-camera",action="store_true")
-    args=parser.parse_args(argv);build(args.output_root,private_multi_camera=args.private_multi_camera);return 0
+    parser.add_argument("--folder-only",action="store_true")
+    args=parser.parse_args(argv);build(args.output_root,folder_only=args.folder_only);return 0
 
 
 if __name__=="__main__":raise SystemExit(main())

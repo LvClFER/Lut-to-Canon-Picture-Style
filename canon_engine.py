@@ -777,10 +777,12 @@ def ensure_runtime_base_pf3(dll_path,style="Neutral",directory=None):
     path=directory/(style.lower().replace(" ","_")+".pf3")
     try:
         if path.is_file() and path.stat().st_size==434511:
-            validate_pf3_header(path);return path
+            validate_generated_base_pf3(dll_path,path,style);return path
     except Exception:
         pass
-    return create_generated_base_pf3(dll_path,path,style)
+    create_generated_base_pf3(dll_path,path,style)
+    validate_generated_base_pf3(dll_path,path,style)
+    return path
 
 
 def read_base_properties(dll_path,base_path,wanted=None):
@@ -796,6 +798,19 @@ def read_base_properties(dll_path,base_path,wanted=None):
             except Exception: pass
             try: api.terminate()
             except Exception: pass
+
+
+def validate_generated_base_pf3(dll_path,path,style):
+    """Reject stale/corrupt runtime bases before treating them as camera-ready."""
+    style=style if style in PICTURE_STYLE_IDS else "Neutral"
+    validate_pf3_header(path)
+    expected=generated_pf3_properties(style,style)
+    actual=read_base_properties(dll_path,path)
+    mismatched=[prop for prop,_size in PROPERTY_ORDER if actual.get(prop)!=expected[prop]]
+    if mismatched:
+        names=", ".join(f"0x{prop:08X}" for prop in mismatched[:4])
+        raise RuntimeError(f"Runtime PF3 base validation failed for {style}: {names}")
+    return Path(path)
 
 
 def resolve_validated_base_pf3(dll_path,style,search_directories=()):
@@ -823,7 +838,8 @@ def resolve_validated_base_pf3(dll_path,style,search_directories=()):
                 if style_id!=PICTURE_STYLE_IDS[style]:continue
                 digest=hashlib.sha256(path.read_bytes()).hexdigest()
                 exact=digest.lower()==VALIDATED_BASE_SHA256.get(style,"").lower()
-                return {"path":path,"style":style,"source":"validated local PF3","validated":exact,"sha256":digest}
+                if not exact:continue
+                return {"path":path,"style":style,"source":"validated local PF3","validated":True,"sha256":digest}
             except Exception:
                 continue
     return None

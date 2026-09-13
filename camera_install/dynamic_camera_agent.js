@@ -14,6 +14,7 @@ let readySent = false;
 let compilerHooked = false;
 let compilerHookFailed = false;
 let edsHooked = false;
+let edsReplacement = null;
 let armed = false;
 let armedSlot = 0;
 let armedPf3Path = '';
@@ -22,6 +23,7 @@ let capturedCameraId = null;
 let capturedDescriptor = null;
 let validationSeq = 0;
 let lastValidatedCompile = null;
+let lastValidatedOutput = null;
 let lastCompilerValidation = null;
 
 const targetRefs = Object.create(null);
@@ -73,6 +75,12 @@ function bytesToHex(value) {
 function readBytes(pointer, size) {
   if (pointer.isNull() || size <= 0 || size > 1048576) throw new Error('invalid native buffer');
   return new Uint8Array(pointer.readByteArray(size));
+}
+
+function bytesEqual(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
 }
 
 function copyToMemory(bytes) {
@@ -225,7 +233,14 @@ function startCompilerCall(ref, operation, requestedSize) {
   const key = pointerKey(ref);
   const state = targetRefs[key];
   if (!state) return null;
-  if (operation === 'size' || !state.validation || state.validation.completed) {
+  // A result from an earlier compile must never authorize a concurrent or
+  // subsequent camera write while Canon is producing a new result.
+  lastValidatedCompile = null;
+  lastValidatedOutput = null;
+  // GetPropertyData receives a fresh context so only conversions performed
+  // while producing the captured output buffer can validate that buffer.
+  // Evidence from GetPropertySize must never bleed into the data generation.
+  if (operation === 'size' || operation === 'data' || !state.validation || state.validation.completed) {
     state.validation = newValidation(key);
   }
   state.validation.operation = operation;
@@ -246,7 +261,11 @@ function summarizeValidation(context) {
   const dense17Seen = context.dense17.length > 0;
   const dense10Seen = context.dense10.length > 0;
   const stockCanonDirectPath = !dense17Seen && !dense10Seen;
-  const selectedDenseValid = stockCanonDirectPath ? true : dense17Seen
+  // 431616 has been observed as a full-size Canon representation, but size
+  // alone cannot prove that both arbitrary PF3 tables survived normalization.
+  // Keep it identifiable for research while rejecting every no-builder route.
+  const directFull33Payload = stockCanonDirectPath && context.outputSize === 431616;
+  const selectedDenseValid = stockCanonDirectPath ? false : dense17Seen
     ? dense17Indices.indexOf(1) >= 0 && dense17Indices.indexOf(2) >= 0
     : dense10Seen && dense10Indices.indexOf(1) >= 0 && dense10Indices.indexOf(2) >= 0;
   const auxiliarySeen = context.auxiliary.length > 0;
@@ -260,9 +279,12 @@ function summarizeValidation(context) {
     mode: 'in-place-canon-compiler-acceptance',
     targetRef: context.refKey,
     outputSize: context.outputSize,
-    compilerPath: stockCanonDirectPath ? 'stock-canon-direct' : (dense17Seen ? 'canon-17-node' : 'canon-10-node'),
+    compilerPath: stockCanonDirectPath
+      ? (directFull33Payload ? 'unvalidated-direct-full33' : 'unvalidated-no-grid-conversion')
+      : (dense17Seen ? 'canon-17-node' : 'canon-10-node'),
     acceptanceMutationRequired: !stockCanonDirectPath,
     compilerGridPathSeen: dense17Seen || dense10Seen,
+    directFull33Payload: directFull33Payload,
     dense17BuilderSeen: dense17Seen,
     dense17IndicesApplied: dense17Indices,
     dense10BuilderSeen: dense10Seen,
@@ -418,6 +440,10 @@ function hookCompiler() {
       this.path = readNativePath(args[0]);
       this.outRef = args[3];
       this.isTarget = sameArmedPath(this.path);
+      if (this.isTarget) {
+        lastValidatedCompile = null;
+        lastValidatedOutput = null;
+      }
     },
     onLeave(returnValue) {
       if (!this.isTarget || returnValue.toUInt32() !== 0 || !this.outRef || this.outRef.isNull()) return;
@@ -427,6 +453,7 @@ function hookCompiler() {
         const key = pointerKey(ref);
         targetRefs[key] = { refKey: key, path: this.path, validation: null };
         lastValidatedCompile = null;
+        lastValidatedOutput = null;
         emit({ type: 'target_pf3_opened', path: this.path, ref: key });
       } catch (error) {
         emit({ type: 'compiler_target_error', reason: String(error) });
@@ -440,6 +467,10 @@ function hookCompiler() {
       if (!state) return;
       const property = args[1].toUInt32();
       const size = args[3].toUInt32();
+      // Any target-ref input mutation invalidates evidence from an earlier
+      // compiler output, including a previous camera ID or descriptor.
+      lastValidatedCompile = null;
+      lastValidatedOutput = null;
       try {
         if (property === 0x01000001 && size === 4) {
           capturedCameraId = readBytes(args[4], size);
@@ -479,6 +510,7 @@ function hookCompiler() {
       this.ref = args[0];
       this.property = args[1].toUInt32();
       this.requestedSize = args[3].toUInt32();
+      this.output = args[4];
       this.validation = this.property === 0x01000203
         ? startCompilerCall(this.ref, 'data', this.requestedSize) : null;
       if (this.validation) emit({ type: 'target_pf3_compile_started', size: this.requestedSize });
@@ -492,10 +524,24 @@ function hookCompiler() {
       this.validation.completed = true;
       endCompilerCall(this.validation);
       if (originalRc === 0 && summary.ok) {
-        lastValidatedCompile = summary;
-        emit({ type: 'compiler_validation_pass', validation: summary });
+        try {
+          lastValidatedOutput = readBytes(this.output, this.requestedSize);
+          lastValidatedCompile = summary;
+          emit({ type: 'compiler_validation_pass', validation: summary });
+        } catch (error) {
+          lastValidatedCompile = null;
+          lastValidatedOutput = null;
+          summary.ok = false;
+          returnValue.replace(1);
+          emit({
+            type: 'compiler_validation_failed',
+            reason: 'Could not retain the validated Canon compiler output: ' + String(error),
+            validation: summary
+          });
+        }
       } else {
         lastValidatedCompile = null;
+        lastValidatedOutput = null;
         summary.ok = false;
         if (originalRc === 0) returnValue.replace(1);
         emit({
@@ -530,78 +576,80 @@ function hookEdsdk() {
   try { module = Process.getModuleByName('EDSDK.dll'); } catch (_) { return false; }
   const target = ex(module, 'EdsSetPropertyData');
   if (!target) return false;
-  Interceptor.attach(target.address, {
-    onEnter(args) {
-      this.prop = args[1].toUInt32();
-      this.param = args[2].toInt32();
-      this.n = args[3].toUInt32();
-      this.isTargetRegistration = false;
-      this.compilerValidated = false;
-      const observedSlot = this.param - 32;
-      const isUserDefSlot = observedSlot >= 1 && observedSlot <= 3;
+  const abi = Process.arch === 'ia32' ? 'stdcall' : 'default';
+  const argumentTypes = ['pointer', 'uint32', 'int32', 'uint32', 'pointer'];
+  const OriginalEdsSetPropertyData = new NativeFunction(target.address, 'uint32', argumentTypes, abi);
+  edsReplacement = new NativeCallback(function(cameraRef, property, inParam, size, data) {
+    const prop = Number(property) >>> 0;
+    const param = Number(inParam) | 0;
+    const n = Number(size) >>> 0;
+    const observedSlot = param - 32;
+    const isUserDefSlot = observedSlot >= 1 && observedSlot <= 3;
 
-      // 0x00000115 is binary state/control data. Observe only; do not modify.
-      if (this.prop === 0x00000115 && armed && isUserDefSlot) {
-        emit({ type: 'control115_seen', slot: observedSlot, size: this.n, untouched: true });
-      }
-      if (!armed || this.prop !== 0x01000203 || !isUserDefSlot) return;
-      this.isTargetRegistration = true;
-      this.compilerValidated = !!lastValidatedCompile && lastValidatedCompile.outputSize === this.n;
+    // 0x00000115 is binary state/control data. Observe only; do not modify.
+    if (prop === 0x00000115 && armed && isUserDefSlot) {
+      emit({ type: 'control115_seen', slot: observedSlot, size: n, untouched: true });
+    }
+    if (!armed || prop !== 0x01000203 || !isUserDefSlot) {
+      return OriginalEdsSetPropertyData(cameraRef, prop, param, n, data);
+    }
+
+    let nativeCarrier = null;
+    let compilerValidated = false;
+    try {
+      if (n <= 0 || n > 1048576 || data.isNull()) throw new Error('Canon registration buffer is invalid');
+      nativeCarrier = readBytes(data, n);
+      compilerValidated = !!lastValidatedCompile &&
+        lastValidatedCompile.outputSize === n && bytesEqual(lastValidatedOutput, nativeCarrier);
       emit({
-        type: 'registration_seen', slot: observedSlot, inParam: this.param, size: this.n,
-        armed: true, compilerValidated: this.compilerValidated,
+        type: 'registration_seen', slot: observedSlot, inParam: param, size: n,
+        armed: true, compilerValidated: compilerValidated,
         argumentsModified: false, payloadReplaced: false
       });
-      if (this.n <= 0 || this.n > 1048576 || args[4].isNull()) {
-        emit({ type: 'install_error', reason: 'Canon registration buffer is invalid', size: this.n, slot: observedSlot });
-        return;
+      emit({ type: 'compiler_transport_match', exact: compilerValidated, size: n, slot: observedSlot });
+      if (!compilerValidated) {
+        const reason = 'EOS Utility transport buffer did not exactly match a fully validated target-PF3 compiler output';
+        emit({ type: 'registration_blocked', reason: reason, size: n, slot: observedSlot, originalCalled: false });
+        return 1;
       }
-      try {
-        const nativeCarrier = readBytes(args[4], this.n);
-        const family = detectCarrierFamily(this.n);
-        emit({
-          type: 'carrier_family_detected', familyId: family.id,
-          familyStatus: family.known ? 'known-observation' : 'new-observation',
-          compilerRoute: 'original-eos-utility-native-compiler', size: this.n,
-          modelSpecificBuilder: false
-        });
-        emit({
-          type: 'native_payload_observed', slot: observedSlot, inParam: this.param,
-          size: this.n, readOnly: true, argumentsModified: false, payloadReplaced: false
-        }, nativeCarrier.buffer);
-        if (!this.compilerValidated) {
-          emit({
-            type: 'install_error',
-            reason: 'EOS Utility reached camera transport without a matching validated target-PF3 compilation',
-            size: this.n, slot: observedSlot
-          });
-        }
-      } catch (error) {
-        emit({ type: 'install_error', reason: 'Could not validate Canon original registration buffer: ' + String(error), size: this.n, slot: observedSlot });
-      }
-    },
-    onLeave(returnValue) {
-      if (!this.isTargetRegistration) return;
-      const rc = returnValue.toUInt32();
-      const slot = this.param - 32;
+      const family = detectCarrierFamily(n);
       emit({
-        type: 'registration_return', slot: slot, rc: rc, size: this.n,
-        patched: false, argumentsModified: false, payloadReplaced: false,
-        compilerValidated: this.compilerValidated
+        type: 'carrier_family_detected', familyId: family.id,
+        familyStatus: family.known ? 'known-observation' : 'new-observation',
+        compilerRoute: 'original-eos-utility-native-compiler', size: n,
+        modelSpecificBuilder: false, validatedForWrite: true
       });
-      if (!this.compilerValidated) return;
-      if (rc === 0) {
-        armed = false;
-        emit({
-          type: 'install_success', slot: slot, styleName: armedName,
-          payloadWriteOK: true, control115Patched: false,
-          payloadReplaced: false, originalCanonTransaction: true
-        });
-      } else {
-        emit({ type: 'install_error', reason: 'Canon original registration write failed', rc: rc, slot: slot });
-      }
+      emit({
+        type: 'native_payload_observed', slot: observedSlot, inParam: param,
+        size: n, readOnly: true, argumentsModified: false, payloadReplaced: false
+      }, nativeCarrier.buffer);
+    } catch (error) {
+      const reason = 'Could not validate Canon original registration buffer: ' + String(error);
+      emit({ type: 'registration_blocked', reason: reason, size: n, slot: observedSlot, originalCalled: false });
+      return 1;
     }
-  });
+
+    // The original Canon call is reached only after all target-PF3 checks pass.
+    // Pointer, size, property and inParam are forwarded byte-for-byte unchanged.
+    const rc = Number(OriginalEdsSetPropertyData(cameraRef, prop, param, n, data)) >>> 0;
+    emit({
+      type: 'registration_return', slot: observedSlot, rc: rc, size: n,
+      patched: false, argumentsModified: false, payloadReplaced: false,
+      compilerValidated: true
+    });
+    if (rc === 0) {
+      armed = false;
+      emit({
+        type: 'install_success', slot: observedSlot, styleName: armedName,
+        payloadWriteOK: true, control115Patched: false,
+        payloadReplaced: false, originalCanonTransaction: true
+      });
+    } else {
+      emit({ type: 'install_error', reason: 'Canon original registration write failed', rc: rc, slot: observedSlot });
+    }
+    return rc;
+  }, 'uint32', argumentTypes, abi);
+  Interceptor.replace(target.address, edsReplacement);
   edsHooked = true;
   return true;
 }
@@ -613,6 +661,7 @@ function clearTargetState() {
   capturedCameraId = null;
   capturedDescriptor = null;
   lastValidatedCompile = null;
+  lastValidatedOutput = null;
   lastCompilerValidation = null;
 }
 

@@ -1,6 +1,6 @@
 # Canon Style Studio Public Alpha
 
-Version **1.0.0-alpha.18** · Build **2026-09-05-FUJI-COLOR-R8-NAME-ALPHA-18**
+Version **1.0.0-alpha.24** · Build **2026-09-13-ZERO-SETUP-LIVE-VALIDATION-ALPHA-24**
 
 Canon Style Studio is an experimental Windows editor for developing Canon RAW files through the Canon DPP4Lib runtime installed with Picture Style Editor, building sequential LUT stacks, previewing Canon's 33³/12-bit LUT result and exporting PF3 Picture Style files.
 
@@ -9,13 +9,13 @@ Canon Style Studio is an experimental Windows editor for developing Canon RAW fi
 - Windows 10 or 11, 64-bit.
 - Canon **Picture Style Editor** installed. The app discovers standard 64-bit and 32-bit Canon install locations; use **Locate PSE…** if it is installed elsewhere.
 - Canon Digital Photo Professional is **not required**.
-- **Send to Camera** additionally requires EOS Utility 3 and the externally supplied, hash-validated Manual Loader v2.4 EOS RP support folder.
+- **Send to Camera** additionally requires EOS Utility 3. No Manual Loader package or external support binaries are required: the selected PF3 is validated live against Canon's own compiler and outgoing EDSDK buffer.
 
 The Windows x64 standalone build includes its own Python runtime and application dependencies. Testers do **not** need to install Python or packages.
 
 ## Portable storage
 
-Application-owned files stay beside `CanonStyleStudio.exe`: `app_data/` contains settings, caches and logs; `camera_support/` contains the user's private imported support copy; and `exported_styles/` is the default folder for normal PF3 exports and permanently retains each camera preparation attempt. Moving the complete application folder therefore carries this state to another writable location/computer. The former `%LOCALAPPDATA%\CanonStyleStudio` settings are read once for non-destructive migration and are never deleted.
+Application-owned files stay beside `CanonStyleStudio.exe`: `app_data/` contains settings, caches and logs, and `exported_styles/` retains normal PF3 exports and every camera preparation attempt. Moving the complete application folder therefore carries this state to another writable location/computer. The former `%LOCALAPPDATA%\CanonStyleStudio` settings are read once for non-destructive migration and are never deleted.
 
 The distribution contains no Canon DLL, executable, ICC/ICM profile, PF3 base, RAW image, native carrier, descriptor or captured payload. At runtime it uses DPP4Lib and an input profile from the user's own local Picture Style Editor installation. Generated working PF3 data and caches are stored beside the application.
 
@@ -36,15 +36,15 @@ Without PSE, JPEG/PNG/TIFF and LUT work remains available. Canon RAW rendering a
 - Save a portable `.canonstyleproject` archive containing every editor setting and all CUBE/Hald LUTs used by the current edit or snapshots. Reference photographs are deliberately not embedded; only their filenames are retained as reconnect hints.
 - Switch to **Canon 33³ Preview** to simulate only the final sequential LUT stack quantized to Canon's 33³/12-bit table.
 - Export PF3 through Canon's locally installed EdsCFParse serializer. The default destination is the portable `exported_styles/` folder, and `.pf3` is added automatically. No Picture Style is applied a second time by Canon 33³ Preview.
-- Use **Send to Camera** for the integrated, loader-assisted EOS RP workflow. The app exports the current editor state, runs the exact compiler self-test, builds Block1/carrier, arms the hook and then waits while you perform a normal EOS Utility registration.
+- Use **Send to Camera** for the Canon-native EOS Utility workflow. The app exports the current state, arms validation for that exact PF3 and waits while you perform a normal EOS Utility registration. Canon selects the connected camera representation; the app validates both converted tables and requires an exact compiler-to-EDSDK buffer match.
 
-The editor records `basePictureStyle` in projects and PF3 manifests. Public releases do not contain extracted Canon base PF3 files. When a hash-validated local base set is available, select it with **Bases…**; otherwise generated PSE/EdsCFParse templates are clearly labelled experimental before export.
+The editor records `basePictureStyle` in projects and PF3 manifests. Public releases do not contain extracted Canon base PF3 files. By default the app creates an identity-table base locally through the installed Canon EdsCFParse serializer; this zero-setup base remains clearly labelled experimental.
 
 Highlight, Shadow, Color, Tone Curve, Six Color-Axes and both Chrome-style controls are LUT-baked creative transforms, not claimed Canon-native PF3 controls. Working Preview places Recipe Color before the user LUT stack and the remaining creative stage after it. Canon 33³ Preview recomposes the same ordered pipeline into the final 33³/12-bit transform, matching PF3 table export.
 
 Portable projects validate embedded LUT sizes and SHA-256 hashes before extraction, reject unsafe archive paths, and remain backward-compatible with the earlier plain-JSON project format. Local Canon PF3/DLL/ICC resources and RAW/JPEG/TIFF references are never embedded. An Imported PF3 must be selected again on the destination computer.
 
-**Send to Camera remains experimental outside the physically validated EOS RP path.** Dynamic carrier-family detection recognizes the currently mapped legacy and modern layouts; the 83076-byte path has been physically exercised on an EOS R8 with Aerochrome. Opening a RAW from a body does not validate its registration payload, and a valid PF3 is not equivalent to a validated EDSDK transaction. The hook remains fail-closed when its compiler self-test, carrier family or structural checks do not match.
+**Send to Camera has been physically exercised on EOS RP and EOS R8 and remains experimental on other bodies.** Canon's installed compiler selects the live camera representation; no model-specific carrier is bundled or selected by Canon Style Studio. Opening a RAW from a body still does not validate camera installation.
 
 Fit, zoom and pan share stable view state. Zooming a RAW requests validated higher-detail Canon output where safe; portrait RAW is developed using the validated landscape-stage pipeline and returned in portrait orientation.
 
