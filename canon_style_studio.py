@@ -808,7 +808,7 @@ class CanonStyleStudioQt(QMainWindow):
         self.redo_btn=QToolButton(text="↷");self.redo_btn.setToolTip("Redo · Ctrl+Y");self.redo_btn.clicked.connect(self.redo);tl.addWidget(self.redo_btn)
         self.report_btn=QPushButton("Create Test Report");self.report_btn.clicked.connect(self.create_test_report);tl.addWidget(self.report_btn)
         self.about_btn=QToolButton(text="About / Alpha");self.about_btn.clicked.connect(self.show_about);tl.addWidget(self.about_btn)
-        self.camera_btn=QPushButton("SEND TO CAMERA");self.camera_btn.setToolTip("Target-scoped Canon native PF3 compiler workflow; EOS RP physically validated, other bodies experimental");self.camera_btn.clicked.connect(self.open_camera_install);tl.addWidget(self.camera_btn)
+        self.camera_btn=QPushButton("SEND TO CAMERA");self.camera_btn.setObjectName("AccentButton");self.camera_btn.setToolTip("Target-scoped Canon native PF3 compiler workflow; EOS RP physically validated, other bodies experimental");self.camera_btn.clicked.connect(self.open_camera_install);tl.addWidget(self.camera_btn)
         self.export_btn=QPushButton("EXPORT PF3");self.export_btn.setObjectName("AccentButton");self.export_btn.clicked.connect(self.open_export);tl.addWidget(self.export_btn);main.addWidget(top)
 
         content=QSplitter(Qt.Orientation.Horizontal); content.setChildrenCollapsible(False); main.addWidget(content,1);self.content_splitter=content

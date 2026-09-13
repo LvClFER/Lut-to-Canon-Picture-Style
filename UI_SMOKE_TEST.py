@@ -41,6 +41,7 @@ def main():
 
     def exercise():
         try:
+            assert window.camera_btn.objectName()=="AccentButton"
             # The control sidebar used to be capped at 390 px, making several
             # rows overflow and creating a horizontal scrollbar. It must remain
             # user-resizable while the viewer receives the remaining width.
