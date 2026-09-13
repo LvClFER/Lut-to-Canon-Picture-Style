@@ -140,7 +140,7 @@ def main():
             if asset_folder:
                 window.settings.data["camera_assets_folder"]=asset_folder
                 camera_dialog=CameraInstallDialog(window,window)
-                camera_dialog.confirm_rp.setChecked(True);app.processEvents()
+                app.processEvents()
                 assert camera_dialog.assets is not None
                 assert camera_dialog.prepare_button.isEnabled()
                 camera_ready=True

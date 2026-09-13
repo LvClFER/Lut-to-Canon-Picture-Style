@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QFileDialog, QHBoxLayout, QLabel,
+    QComboBox, QDialog, QFileDialog, QHBoxLayout, QLabel,
     QLineEdit, QMessageBox, QProgressBar, QPushButton, QTextEdit, QVBoxLayout,
 )
 
@@ -116,12 +116,6 @@ class CameraInstallDialog(QDialog):
         self.requirements = QLabel()
         self.requirements.setWordWrap(True)
         layout.addWidget(self.requirements)
-
-        self.confirm_rp = QCheckBox(
-            "Proceed only when the Canon-native compiler and live payload validations pass"
-        )
-        self.confirm_rp.toggled.connect(self.update_prepare_enabled)
-        layout.addWidget(self.confirm_rp)
 
         self.steps = QLabel(
             "Workflow: export PF3 → exact compiler self-test → identify that exact PF3 when EOS Utility opens it → "
@@ -292,8 +286,6 @@ class CameraInstallDialog(QDialog):
             reasons.append("Import the Manual Loader v2.4 ZIP or locate its extracted folder")
         if not bool((self.main.base_resolution or {}).get("validated")):
             reasons.append("Select a hash-validated Canon base PF3 (the imported ZIP supplies these bases)")
-        if not self.confirm_rp.isChecked():
-            reasons.append("Confirm the Canon-native live validation notice")
         if self.current_method() == "direct" and find_direct_canon_runtime() is None:
             reasons.append("Install EOS Utility 3 for the current Canon EDSDK/EdsCFParse runtime")
         return reasons
