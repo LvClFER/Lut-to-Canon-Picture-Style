@@ -1,12 +1,13 @@
-# Canon Style Studio 1.0.0-alpha.24
+# Canon Style Studio 1.0.0-alpha.25
 
-Build: `2026-09-13-ZERO-SETUP-LIVE-VALIDATION-ALPHA-24`
+Build: `2026-09-14-REPEATED-CREATE-REF-FIX-ALPHA-25`
 
 - Public and development/test builds now use the same zero-setup camera workflow.
 - Removed the runtime dependency on Manual Loader/support binaries and model-specific carriers.
 - Canon EdsCFParse generates the selected base locally; EOS Utility compiles for the connected camera.
 - Live validation covers both 33³ table conversions and an exact compiler-to-EDSDK buffer comparison.
 - No Canon-derived support files are bundled or requested.
+- EOS Utility may reopen the same PF3 immediately before registration; that metadata-only reopen no longer discards a completed validation. New compiler inputs or a new compile still invalidate it immediately.
 
 # Canon Style Studio 1.0.0-alpha.17
 

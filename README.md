@@ -1,6 +1,6 @@
 # Canon Style Studio Public Alpha
 
-Version **1.0.0-alpha.24** · Build **2026-09-13-ZERO-SETUP-LIVE-VALIDATION-ALPHA-24**
+Version **1.0.0-alpha.25** · Build **2026-09-14-REPEATED-CREATE-REF-FIX-ALPHA-25**
 
 Canon Style Studio is an experimental Windows editor for developing Canon RAW files through the Canon DPP4Lib runtime installed with Picture Style Editor, building sequential LUT stacks, previewing Canon's 33³/12-bit LUT result and exporting PF3 Picture Style files.
 

@@ -184,6 +184,8 @@ class CoreRegressionTests(unittest.TestCase):
         self.assertGreaterEqual(blocked,0);self.assertGreater(original,blocked)
         self.assertIn("return 1;",dynamic[blocked:original])
         self.assertIn("lastValidatedCompile = null;",dynamic[dynamic.index("function startCompilerCall"):dynamic.index("function endCompilerCall")])
+        create_hook=dynamic[dynamic.index("Interceptor.attach(createExport.address"):dynamic.index("Interceptor.attach(setExport.address")]
+        self.assertNotIn("lastValidatedCompile = null;",create_hook)
 
     def test_unknown_camera_payload_capture_is_read_only_and_persistent(self):
         with tempfile.TemporaryDirectory() as td:

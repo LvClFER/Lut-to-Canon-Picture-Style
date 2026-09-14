@@ -440,10 +440,6 @@ function hookCompiler() {
       this.path = readNativePath(args[0]);
       this.outRef = args[3];
       this.isTarget = sameArmedPath(this.path);
-      if (this.isTarget) {
-        lastValidatedCompile = null;
-        lastValidatedOutput = null;
-      }
     },
     onLeave(returnValue) {
       if (!this.isTarget || returnValue.toUInt32() !== 0 || !this.outRef || this.outRef.isNull()) return;
@@ -452,8 +448,6 @@ function hookCompiler() {
         if (ref.isNull()) throw new Error('EdsCfpCreateRef returned a null reference');
         const key = pointerKey(ref);
         targetRefs[key] = { refKey: key, path: this.path, validation: null };
-        lastValidatedCompile = null;
-        lastValidatedOutput = null;
         emit({ type: 'target_pf3_opened', path: this.path, ref: key });
       } catch (error) {
         emit({ type: 'compiler_target_error', reason: String(error) });
