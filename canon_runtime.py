@@ -14,8 +14,8 @@ from pathlib import Path
 
 APP_NAME = "CanonStyleStudio"
 PUBLIC_NAME = "Canon Style Studio Public Alpha"
-PUBLIC_VERSION = "1.0.0-alpha.25"
-BUILD_ID = "2026-09-14-REPEATED-CREATE-REF-FIX-ALPHA-25"
+PUBLIC_VERSION = "1.0.0-alpha.26"
+BUILD_ID = "2026-09-14-LEGACY-16744-COMPATIBILITY-ALPHA-26"
 
 
 def application_root() -> Path:

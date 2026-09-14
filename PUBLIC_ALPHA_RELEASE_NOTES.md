@@ -1,6 +1,6 @@
-# Canon Style Studio 1.0.0-alpha.25
+# Canon Style Studio 1.0.0-alpha.26
 
-Build: `2026-09-14-REPEATED-CREATE-REF-FIX-ALPHA-25`
+Build: `2026-09-14-LEGACY-16744-COMPATIBILITY-ALPHA-26`
 
 - Public and development/test builds now use the same zero-setup camera workflow.
 - Removed the runtime dependency on Manual Loader/support binaries and model-specific carriers.
@@ -8,6 +8,7 @@ Build: `2026-09-14-REPEATED-CREATE-REF-FIX-ALPHA-25`
 - Live validation covers both 33³ table conversions and an exact compiler-to-EDSDK buffer comparison.
 - No Canon-derived support files are bundled or requested.
 - EOS Utility may reopen the same PF3 immediately before registration; that metadata-only reopen no longer discards a completed validation. New compiler inputs or a new compile still invalidate it immediately.
+- Restored the Canon-native 16744-byte legacy family after a 12-vector matrix matched every known EOS 1300D compiler reference exactly. Other unproven no-builder routes remain blocked.
 
 # Canon Style Studio 1.0.0-alpha.17
 

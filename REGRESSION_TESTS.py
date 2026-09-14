@@ -186,6 +186,8 @@ class CoreRegressionTests(unittest.TestCase):
         self.assertIn("lastValidatedCompile = null;",dynamic[dynamic.index("function startCompilerCall"):dynamic.index("function endCompilerCall")])
         create_hook=dynamic[dynamic.index("Interceptor.attach(createExport.address"):dynamic.index("Interceptor.attach(setExport.address")]
         self.assertNotIn("lastValidatedCompile = null;",create_hook)
+        self.assertIn("validatedLegacyDirect = stockCanonDirectPath && context.outputSize === 16744",dynamic)
+        self.assertIn("validated-legacy-16744-direct",dynamic)
 
     def test_unknown_camera_payload_capture_is_read_only_and_persistent(self):
         with tempfile.TemporaryDirectory() as td:

@@ -130,6 +130,7 @@ def validate_agent_source(source: str) -> None:
             "compiler_transport_match", "bytesEqual", "lastValidatedOutput",
             "Interceptor.replace", "registration_blocked", "originalCalled: false",
             "directFull33Payload", "unvalidated-no-grid-conversion",
+            "validatedLegacyDirect", "validated-legacy-16744-direct",
             "Unsupported EdsCFParse semantic signature",
         )
         missing = [value for value in required if value not in source]

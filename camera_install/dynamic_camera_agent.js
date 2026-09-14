@@ -261,11 +261,15 @@ function summarizeValidation(context) {
   const dense17Seen = context.dense17.length > 0;
   const dense10Seen = context.dense10.length > 0;
   const stockCanonDirectPath = !dense17Seen && !dense10Seen;
+  // The 16744-byte legacy representation is backed by twelve exact compiler
+  // vectors and a physical EOS 1300D transaction. No acceptance override is
+  // required on this Canon-native path. Other no-builder sizes stay blocked.
+  const validatedLegacyDirect = stockCanonDirectPath && context.outputSize === 16744;
   // 431616 has been observed as a full-size Canon representation, but size
   // alone cannot prove that both arbitrary PF3 tables survived normalization.
   // Keep it identifiable for research while rejecting every no-builder route.
   const directFull33Payload = stockCanonDirectPath && context.outputSize === 431616;
-  const selectedDenseValid = stockCanonDirectPath ? false : dense17Seen
+  const selectedDenseValid = stockCanonDirectPath ? validatedLegacyDirect : dense17Seen
     ? dense17Indices.indexOf(1) >= 0 && dense17Indices.indexOf(2) >= 0
     : dense10Seen && dense10Indices.indexOf(1) >= 0 && dense10Indices.indexOf(2) >= 0;
   const auxiliarySeen = context.auxiliary.length > 0;
@@ -280,10 +284,12 @@ function summarizeValidation(context) {
     targetRef: context.refKey,
     outputSize: context.outputSize,
     compilerPath: stockCanonDirectPath
-      ? (directFull33Payload ? 'unvalidated-direct-full33' : 'unvalidated-no-grid-conversion')
+      ? (validatedLegacyDirect ? 'validated-legacy-16744-direct'
+        : (directFull33Payload ? 'unvalidated-direct-full33' : 'unvalidated-no-grid-conversion'))
       : (dense17Seen ? 'canon-17-node' : 'canon-10-node'),
     acceptanceMutationRequired: !stockCanonDirectPath,
     compilerGridPathSeen: dense17Seen || dense10Seen,
+    validatedLegacyDirect: validatedLegacyDirect,
     directFull33Payload: directFull33Payload,
     dense17BuilderSeen: dense17Seen,
     dense17IndicesApplied: dense17Indices,
