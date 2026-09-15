@@ -123,14 +123,15 @@ def validate_agent_source(source: str) -> None:
             "resolveAcceptanceSymbols", "semantic-signatures-v1", "installAcceptanceHooks",
             "patch-only-the-selected-pf3-inside-edscfparse",
             "original-canon-buffer-observation-only",
-            "in-place-canon-compiler-acceptance", "unvalidated-direct-full33",
+            "in-place-canon-compiler-acceptance", "canon-full33-direct",
             "compiler_validation_pass", "compiler_validation_failed",
             "transportMutation: false", "argumentsModified: false", "payloadReplaced: false",
             "compilerGridPathSeen", "dense10IndicesApplied", "dense17IndicesApplied",
             "compiler_transport_match", "bytesEqual", "lastValidatedOutput",
             "Interceptor.replace", "registration_blocked", "originalCalled: false",
-            "directFull33Payload", "unvalidated-no-grid-conversion",
-            "validatedLegacyDirect", "validated-legacy-16744-direct",
+            "directFull33Payload", "full33IndicesApplied", "unvalidated-no-grid-conversion",
+            "validatedLegacyDirect", "validated-legacy-direct-",
+            "readPf3DenseTable", "encodeFull33Planar", "applyFull33Tables",
             "Unsupported EdsCFParse semantic signature",
         )
         missing = [value for value in required if value not in source]

@@ -159,6 +159,9 @@ class CoreRegressionTests(unittest.TestCase):
         self.assertIn("Unsupported EdsCFParse semantic signature",dynamic)
         self.assertIn("dense10IndicesApplied",dynamic)
         self.assertIn("dense17IndicesApplied",dynamic)
+        self.assertIn("full33IndicesApplied",dynamic)
+        self.assertIn("encodeFull33Planar",dynamic)
+        self.assertIn("applyFull33Tables",dynamic)
         self.assertIn("compiler_validation_pass",dynamic)
         self.assertIn("compiler_validation_failed",dynamic)
         self.assertIn("Interceptor.replace",dynamic)
@@ -186,8 +189,9 @@ class CoreRegressionTests(unittest.TestCase):
         self.assertIn("lastValidatedCompile = null;",dynamic[dynamic.index("function startCompilerCall"):dynamic.index("function endCompilerCall")])
         create_hook=dynamic[dynamic.index("Interceptor.attach(createExport.address"):dynamic.index("Interceptor.attach(setExport.address")]
         self.assertNotIn("lastValidatedCompile = null;",create_hook)
-        self.assertIn("validatedLegacyDirect = stockCanonDirectPath && context.outputSize === 16744",dynamic)
-        self.assertIn("validated-legacy-16744-direct",dynamic)
+        self.assertIn("legacyDirectSizes = [8528, 16720, 16744, 16752]",dynamic)
+        self.assertIn("validated-legacy-direct-",dynamic)
+        self.assertIn("canon-full33-direct",dynamic)
 
     def test_unknown_camera_payload_capture_is_read_only_and_persistent(self):
         with tempfile.TemporaryDirectory() as td:

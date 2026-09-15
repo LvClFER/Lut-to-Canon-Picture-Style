@@ -30,6 +30,13 @@ const targetRefs = Object.create(null);
 const activeCompilerCalls = Object.create(null);
 const internalOverrideThreads = Object.create(null);
 
+const PF3_DENSE_TABLE_SIZE = 215628;
+const PF3_DENSE_TABLE_HEADER = 6;
+const FULL33_NODE_COUNT = 33 * 33 * 33;
+const FULL33_PROPERTY_SIZE = FULL33_NODE_COUNT * 3 * 2;
+const FULL33_HEADER_SIZE = 372;
+const FULL33_PROPERTY_OFFSETS = [FULL33_HEADER_SIZE, FULL33_HEADER_SIZE + FULL33_PROPERTY_SIZE];
+
 // Diagnostic labels only. Carrier size never selects a builder: the buffer is
 // produced and sent unchanged by Canon's own EOS Utility/EdsCFParse/EDSDK path.
 const KNOWN_CARRIER_OBSERVATIONS = [
@@ -220,7 +227,7 @@ function newValidation(refKey) {
   return {
     id: ++validationSeq,
     refKey: refKey,
-    dense17: [], dense10: [], auxiliary: [], errors: [],
+    dense17: [], dense10: [], full33: [], auxiliary: [], errors: [],
     outputSize: 0, startedAt: Date.now(), completed: false
   };
 }
@@ -258,24 +265,26 @@ function endCompilerCall(context) {
 function summarizeValidation(context) {
   const dense17Indices = context.dense17.filter(item => item.applied).map(item => item.index);
   const dense10Indices = context.dense10.filter(item => item.applied).map(item => item.index);
+  const full33Indices = context.full33.filter(item => item.applied).map(item => item.index);
   const dense17Seen = context.dense17.length > 0;
   const dense10Seen = context.dense10.length > 0;
   const stockCanonDirectPath = !dense17Seen && !dense10Seen;
-  // The 16744-byte legacy representation is backed by twelve exact compiler
-  // vectors and a physical EOS 1300D transaction. No acceptance override is
-  // required on this Canon-native path. Other no-builder sizes stay blocked.
-  const validatedLegacyDirect = stockCanonDirectPath && context.outputSize === 16744;
-  // 431616 has been observed as a full-size Canon representation, but size
-  // alone cannot prove that both arbitrary PF3 tables survived normalization.
-  // Keep it identifiable for research while rejecting every no-builder route.
+  // Canon's direct legacy compiler paths were compared with five independent
+  // 33^3 vectors. 16720 and direct 16752 contain the same two exact 8192-byte
+  // blocks as the physically validated 16744 path; 8528 is Canon's single-block
+  // representation and reacts to all five vectors. No EDSDK carrier is built.
+  const legacyDirectSizes = [8528, 16720, 16744, 16752];
+  const validatedLegacyDirect = stockCanonDirectPath && legacyDirectSizes.indexOf(context.outputSize) >= 0;
   const directFull33Payload = stockCanonDirectPath && context.outputSize === 431616;
-  const selectedDenseValid = stockCanonDirectPath ? validatedLegacyDirect : dense17Seen
+  const full33Valid = directFull33Payload &&
+    full33Indices.indexOf(1) >= 0 && full33Indices.indexOf(2) >= 0;
+  const selectedDenseValid = stockCanonDirectPath ? (validatedLegacyDirect || full33Valid) : dense17Seen
     ? dense17Indices.indexOf(1) >= 0 && dense17Indices.indexOf(2) >= 0
     : dense10Seen && dense10Indices.indexOf(1) >= 0 && dense10Indices.indexOf(2) >= 0;
   const auxiliarySeen = context.auxiliary.length > 0;
   const auxiliaryApplied = !auxiliarySeen || context.auxiliary.some(item => item.applied);
   const errors = context.errors.concat(
-    context.dense17.concat(context.dense10, context.auxiliary)
+    context.dense17.concat(context.dense10, context.full33, context.auxiliary)
       .filter(item => item.error).map(item => item.error)
   );
   return {
@@ -284,13 +293,16 @@ function summarizeValidation(context) {
     targetRef: context.refKey,
     outputSize: context.outputSize,
     compilerPath: stockCanonDirectPath
-      ? (validatedLegacyDirect ? 'validated-legacy-16744-direct'
-        : (directFull33Payload ? 'unvalidated-direct-full33' : 'unvalidated-no-grid-conversion'))
+      ? (full33Valid ? 'canon-full33-direct'
+        : (validatedLegacyDirect ? 'validated-legacy-direct-' + context.outputSize
+          : (directFull33Payload ? 'unvalidated-direct-full33' : 'unvalidated-no-grid-conversion')))
       : (dense17Seen ? 'canon-17-node' : 'canon-10-node'),
-    acceptanceMutationRequired: !stockCanonDirectPath,
-    compilerGridPathSeen: dense17Seen || dense10Seen,
+    acceptanceMutationRequired: !stockCanonDirectPath || full33Valid,
+    compilerGridPathSeen: dense17Seen || dense10Seen || context.full33.length > 0,
     validatedLegacyDirect: validatedLegacyDirect,
+    legacyDirectSize: validatedLegacyDirect ? context.outputSize : null,
     directFull33Payload: directFull33Payload,
+    full33IndicesApplied: full33Indices,
     dense17BuilderSeen: dense17Seen,
     dense17IndicesApplied: dense17Indices,
     dense10BuilderSeen: dense10Seen,
@@ -300,6 +312,59 @@ function summarizeValidation(context) {
     errors: errors,
     ok: selectedDenseValid && auxiliaryApplied && errors.length === 0
   };
+}
+
+function readPf3DenseTable(GetPropertyData, ref, property) {
+  const memory = Memory.alloc(PF3_DENSE_TABLE_SIZE);
+  memory.writeByteArray(new Uint8Array(PF3_DENSE_TABLE_SIZE));
+  const rc = GetPropertyData(ref, property, 0, PF3_DENSE_TABLE_SIZE, memory);
+  if (rc !== 0) throw new Error('Could not read PF3 dense table 0x' + property.toString(16) + ': ' + rc);
+  if (memory.readU16() !== 12 || memory.add(2).readU16() !== 3 || memory.add(4).readU16() !== 33) {
+    throw new Error('PF3 dense table 0x' + property.toString(16) + ' has an invalid 12-bit RGB 33^3 header');
+  }
+  return new Uint8Array(memory.add(PF3_DENSE_TABLE_HEADER).readByteArray(FULL33_PROPERTY_SIZE));
+}
+
+function encodeFull33Planar(table) {
+  if (!table || table.length !== FULL33_PROPERTY_SIZE) throw new Error('Invalid PF3 dense table payload');
+  const output = new Uint8Array(FULL33_PROPERTY_SIZE);
+  const planeBytes = FULL33_NODE_COUNT * 2;
+  for (let node = 0; node < FULL33_NODE_COUNT; node++) {
+    for (let channel = 0; channel < 3; channel++) {
+      const sourceOffset = (node * 3 + channel) * 2;
+      const value = table[sourceOffset] | (table[sourceOffset + 1] << 8);
+      if (value > 4095) throw new Error('PF3 dense table contains a value above 12-bit range');
+      // Canon's full33 representation is planar RGB at 0..32768. Identity and
+      // PSE-authored Emerald vectors agree with this conversion within the
+      // unavoidable <=5-level error introduced by the source's 12-bit grid.
+      const scaled = Math.floor((value * 32768 + 2047) / 4095);
+      const targetOffset = channel * planeBytes + node * 2;
+      output[targetOffset] = scaled & 0xff;
+      output[targetOffset + 1] = (scaled >>> 8) & 0xff;
+    }
+  }
+  return output;
+}
+
+function applyFull33Tables(GetPropertyData, ref, output) {
+  const records = [];
+  for (let index = 1; index <= 2; index++) {
+    const item = { index: index, applied: false };
+    try {
+      const property = index === 1 ? 0x40001070 : 0x40001071;
+      const source = readPf3DenseTable(GetPropertyData, ref, property);
+      const encoded = encodeFull33Planar(source);
+      output.add(FULL33_PROPERTY_OFFSETS[index - 1]).writeByteArray(encoded);
+      item.property = '0x' + property.toString(16);
+      item.offset = FULL33_PROPERTY_OFFSETS[index - 1];
+      item.size = encoded.length;
+      item.applied = true;
+    } catch (error) {
+      item.error = String(error);
+    }
+    records.push(item);
+  }
+  return records;
 }
 
 function installAcceptanceHooks(module, symbols) {
@@ -440,6 +505,9 @@ function hookCompiler() {
 
   const symbols = resolveAcceptanceSymbols(module);
   installAcceptanceHooks(module, symbols);
+  const GetPropertyData = new NativeFunction(
+    getExport.address, 'uint32', ['pointer', 'uint32', 'uint32', 'uint32', 'pointer']
+  );
 
   Interceptor.attach(createExport.address, {
     onEnter(args) {
@@ -518,6 +586,10 @@ function hookCompiler() {
     onLeave(returnValue) {
       if (!this.validation) return;
       const originalRc = returnValue.toUInt32();
+      if (originalRc === 0 && this.requestedSize === 431616 && this.output && !this.output.isNull() &&
+          this.validation.dense17.length === 0 && this.validation.dense10.length === 0) {
+        this.validation.full33 = applyFull33Tables(GetPropertyData, this.ref, this.output);
+      }
       const summary = summarizeValidation(this.validation);
       summary.originalRc = originalRc;
       lastCompilerValidation = summary;
