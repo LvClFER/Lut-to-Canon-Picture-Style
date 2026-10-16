@@ -36,7 +36,32 @@ def main():
 
     def open_portrait():
         if not RAW.exists():
-            state.update(code=0,skip="portrait sample unavailable");window.dirty=False;window.close();return
+            try:
+                assert window.camera_btn.objectName()=="AccentButton"
+                window.content_splitter.setSizes([620,1060]);app.processEvents()
+                assert window.sidebar.width()>=520,window.sidebar.width()
+                assert window.sidebar_scroll.horizontalScrollBarPolicy()==Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+                viewer=window.viewer
+                portrait=Image.new("RGB",(400,600),(70,120,180))
+                viewer.setImages(portrait,portrait,logical_size=(4000,6000))
+                viewer.setViewState(0.37,0.61,0.44,"100%")
+                before=(tuple(viewer.center),viewer.split,viewer.zoom_mode)
+                viewer.setRendering(True)
+                viewer.setImages(portrait.resize((800,1200)),portrait.resize((800,1200)),logical_size=(4000,6000))
+                app.processEvents()
+                assert (tuple(viewer.center),viewer.split,viewer.zoom_mode)==before
+                assert viewer.logical_size==(4000,6000)
+                viewer.setZoomMode("Fit");app.processEvents()
+                assert tuple(viewer.center)==(0.5,0.5)
+                viewer.setEyedropper(True)
+                assert viewer.cursor().shape()==Qt.CursorShape.CrossCursor
+                viewer.setEyedropper(False)
+                viewer.clearImages()
+                assert viewer.input_pil is None and viewer.logical_size is None
+                state.update(code=0,synthetic_viewer=True,raw_checks="SKIPPED: portrait sample unavailable")
+            except Exception:
+                state["error"]=traceback.format_exc()
+            finish();return
         window.references=[RAW];window.filmstrip.set_references(window.references,0);window.select_reference(0)
 
     def exercise():

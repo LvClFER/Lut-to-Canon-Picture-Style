@@ -1,3 +1,12 @@
+# Canon Style Studio 1.0.0-alpha.29
+
+Build: `2026-10-16-PF3-BASE-CONTROLS-FIX-ALPHA-29`
+
+- Generated PF3 bases now use identity matrices and neutral post-LUT curves instead of zero coefficients that could produce black camera output.
+- Corrected PF3 Contrast and Sharpness Strength offsets without changing camera-registration state.
+- Added offline compiler/protocol reference code and regression tests to the source repository. The independent camera path remains experimental and is not enabled in the public editor.
+- Windows x64 standalone includes Python and dependencies; Picture Style Editor and EOS Utility requirements are unchanged. No proprietary Canon resources are bundled.
+
 # Canon Style Studio 1.0.0-alpha.26
 
 Build: `2026-09-14-LEGACY-16744-COMPATIBILITY-ALPHA-26`

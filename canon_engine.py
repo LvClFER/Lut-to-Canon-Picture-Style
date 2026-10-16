@@ -439,9 +439,11 @@ def modify_basic_0115(base, contrast, saturation, color_tone, sharpness_override
         raise ValueError("Expected 32-byte property 0x00000115.")
     b=bytearray(base)
     def put(offset,value): b[offset:offset+4]=int(value).to_bytes(4,"little",signed=True)
-    put(4,contrast); put(8,saturation); put(12,color_tone)
+    # PF3 Basic aggregate: contrast at 0 (record 1031), strength at 4
+    # (record 1030). This is not EDSDK camera-registration state 0x115.
+    put(0,contrast); put(8,saturation); put(12,color_tone)
     if sharpness_override:
-        put(0,sharp_strength); put(24,fineness); put(28,threshold)
+        put(4,sharp_strength); put(24,fineness); put(28,threshold)
     return bytes(b)
 
 
@@ -450,7 +452,7 @@ def parse_basic_0115(data):
         raise ValueError("Expected 32-byte property 0x00000115.")
     def get(offset): return int.from_bytes(data[offset:offset+4], "little", signed=True)
     return {
-        "sharp_strength": get(0), "contrast": get(4), "saturation": get(8),
+        "sharp_strength": get(4), "contrast": get(0), "saturation": get(8),
         "color_tone": get(12), "fineness": get(24), "threshold": get(28),
     }
 
@@ -741,6 +743,19 @@ def generated_pf3_properties(style="Neutral",title=None):
     props={prop:bytes(expected) for prop,expected in PROPERTY_ORDER}
     props[0x00000114]=int(PICTURE_STYLE_IDS[style]).to_bytes(4,"little")
     props[0x00000115]=bytes(32)
+    # Zero coefficients/zero-point curves are NOT neutral: Canon's later
+    # compact pixel stage applies them after the user LUT and produces black.
+    coefficients=[0]*60
+    for index in (0,21,42):coefficients[index]=65536
+    for prop in (0x40001021,0x40001029):
+        props[prop]=struct.pack('<60i',*coefficients)
+    curve=struct.pack('<25I',2,0,0,255,255,*([0]*20))
+    for prop in (0x40001018,0x40001019,0x40001065):
+        props[prop]=curve*3
+    for prop in (0x40001061,0x40001062):
+        props[prop]=struct.pack('<2I',2,0)+bytes(504)
+    for prop in (0x40001023,0x4000102B):
+        props[prop]=struct.pack('<2I',1,0)
     props[0x40001002]=title+b"\x00"*(32-len(title))
     # User-defined marker and format version are small public field values, not
     # copied resources. EdsCFParse will reject them if an installed version differs.

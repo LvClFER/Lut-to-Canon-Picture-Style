@@ -16,6 +16,7 @@ import struct
 import sys
 import uuid
 from ctypes import wintypes
+from camera_install.canon_events import extract_property_values
 
 
 _MANAGER_CLSID = "0af10cec-2ecd-4b92-9581-34f6ae0637f3"
@@ -158,7 +159,10 @@ def _set_buffer(values: ctypes.c_void_p, key: _PropertyKey, value: bytes) -> Non
     )
 
 
-def _get_buffer(ole32, values: ctypes.c_void_p, key: _PropertyKey) -> bytes:
+def _get_buffer(
+    ole32, values: ctypes.c_void_p, key: _PropertyKey,
+    max_bytes: int = _MAX_EVENT_BYTES,
+) -> bytes:
     pointer = ctypes.c_void_p()
     length = wintypes.DWORD()
     getter = _method(
@@ -172,6 +176,8 @@ def _get_buffer(ole32, values: ctypes.c_void_p, key: _PropertyKey) -> bytes:
     if length.value and not pointer.value:
         raise RuntimeError("WPD returned a null transfer buffer")
     try:
+        if length.value > max_bytes:
+            raise RuntimeError("WPD transfer buffer exceeded the requested limit")
         return ctypes.string_at(pointer, length.value) if length.value else b""
     finally:
         if pointer.value:
@@ -342,6 +348,7 @@ def _mtp_read(
             results = _send_wpd(device, params)
             chunk = _get_buffer(
                 ole32, results, _PropertyKey.create(_MTP_CATEGORY, 1012),
+                max_bytes=requested,
             )
             try:
                 actual = _get_unsigned(
@@ -464,35 +471,7 @@ def _extract_property_event_values(
     data: bytes, property_code: int, max_value_bytes: int = 1024 * 1024,
 ) -> list[bytes]:
     """Extract one requested C189 value internally; callers must not log it."""
-    if not 0 <= property_code <= 0xFFFFFFFF:
-        raise ValueError("property_code must be an unsigned 32-bit integer")
-    if max_value_bytes <= 0:
-        raise ValueError("max_value_bytes must be positive")
-    output: list[bytes] = []
-    offset = 0
-    while offset < len(data):
-        if len(data) - offset < 8:
-            raise ValueError("Truncated Canon event header")
-        length, event_code = struct.unpack_from("<II", data, offset)
-        if length == 0 and not any(data[offset:]):
-            break
-        if length == 8 and event_code == 0:
-            if any(data[offset + 8:]):
-                raise ValueError("Non-zero data follows the Canon event terminator")
-            break
-        if length < 8 or length > len(data) - offset:
-            raise ValueError("Invalid Canon event record length")
-        if event_code == 0xC189:
-            if length < 12:
-                raise ValueError("Truncated Canon property event")
-            event_property = struct.unpack_from("<I", data, offset + 8)[0]
-            if event_property == property_code:
-                value = data[offset + 12:offset + length]
-                if len(value) > max_value_bytes:
-                    raise ValueError("Canon property event exceeds the safety limit")
-                output.append(value)
-        offset += length
-    return output
+    return extract_property_values(data, property_code, max_value_bytes)
 
 
 def _supported_vendor_operations(ole32, device_id: str) -> list[str]:
@@ -680,8 +659,6 @@ def _canon_event_summary(ole32, device_id: str) -> dict:
         response_code, data = _mtp_read(ole32, device, 0x9116)
         summary = _summarize_event_data(data)
         summary["responseCode"] = f"0x{response_code:04X}"
-        summary["temporarySessionCommands"] = ["0x9114", "0x9115", "0x9116"]
-        summary["cleanup"] = cleanup
         return summary
     finally:
         _release(client)
@@ -691,7 +668,7 @@ def _canon_event_summary(ole32, device_id: str) -> dict:
 
 
 def _canon_event_session_summary(ole32, device_id: str) -> dict:
-    """Temporarily enable Canon event mode, poll once, then restore the session."""
+    """Temporarily enable Canon event mode, poll once, then disable it."""
     device = _create_instance(ole32, _DEVICE_CLSID, _DEVICE_IID)
     client = ctypes.c_void_p()
     opened = False
@@ -715,6 +692,8 @@ def _canon_event_session_summary(ole32, device_id: str) -> dict:
         response_code, data = _mtp_read(ole32, device, 0x9116)
         summary = _summarize_event_data(data)
         summary["responseCode"] = f"0x{response_code:04X}"
+        summary["temporarySessionCommands"] = ["0x9114", "0x9115", "0x9116"]
+        summary["cleanup"] = cleanup
         return summary
     finally:
         if events_enabled:
@@ -839,8 +818,11 @@ def enumerate_portable_devices(
     inspect_events: bool = False,
     inspect_event_session: bool = False,
     inspect_registration_state: bool = False,
+    _on_device=None,
 ) -> list[dict]:
     """List WPD devices; do not expose serial-bearing PnP identifiers."""
+    if _on_device is not None and not callable(_on_device):
+        raise TypeError('Internal device callback must be callable')
     if sys.platform != "win32":
         raise RuntimeError("Windows Portable Devices is available only on Windows")
     ole32 = ctypes.WinDLL("ole32")
@@ -882,6 +864,9 @@ def enumerate_portable_devices(
                     _device_text(manager, 6, device_id),
                     _device_text(manager, 7, device_id),
                 )
+                # Internal selection only; raw IDs never enter discovery reports.
+                if _on_device is not None:
+                    _on_device(device_id, dict(device))
                 if (
                     inspect_operations or inspect_readability or inspect_events
                     or inspect_event_session or inspect_registration_state

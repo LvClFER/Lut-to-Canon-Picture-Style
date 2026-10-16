@@ -1,0 +1,16 @@
+[
+  {"model":"EOS D30","cameraId":"0x01140000"},
+  {"model":"EOS D60","cameraId":"0x01668000"},
+  {"model":"EOS-1D","cameraId":"0x80000001"},
+  {"model":"EOS-1Ds","cameraId":"0x80000167"},
+  {"model":"EOS 10D","cameraId":"0x80000168"},
+  {"model":"EOS 300D","cameraId":"0x80000170"},
+  {"model":"EOS-1D Mark II","cameraId":"0x80000174"},
+  {"model":"EOS 20D","cameraId":"0x80000175"},
+  {"model":"EOS-1Ds Mark II","cameraId":"0x80000188"},
+  {"model":"EOS 350D","cameraId":"0x80000189"},
+  {"model":"EOS 5D","cameraId":"0x80000213"},
+  {"model":"EOS-1D Mark II N","cameraId":"0x80000232"},
+  {"model":"EOS 30D","cameraId":"0x80000234"},
+  {"model":"EOS 400D","cameraId":"0x80000236"}
+]

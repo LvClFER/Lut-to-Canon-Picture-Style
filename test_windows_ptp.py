@@ -4,6 +4,10 @@ import struct
 import sys
 import ctypes
 import unittest
+from contextlib import ExitStack
+from unittest.mock import Mock, patch
+
+from camera_install import windows_wpd_probe as wpd
 
 from camera_install.ptp_capture import (
     build_canon_property_packet, build_rp_d163_packet,
@@ -21,6 +25,59 @@ from camera_install.windows_wpd_probe import (
 
 
 class WindowsPtpResearchTests(unittest.TestCase):
+    def mock_session(self):
+        stack = self.enterContext(ExitStack())
+        stack.enter_context(patch.object(wpd, "_create_instance", return_value=ctypes.c_void_p(1)))
+        stack.enter_context(patch.object(wpd, "_set_unsigned"))
+        stack.enter_context(patch.object(wpd, "_release"))
+        method = stack.enter_context(patch.object(wpd, "_method"))
+        method.return_value.return_value = 0
+        read = stack.enter_context(patch.object(wpd, "_mtp_read", return_value=(0x2001, struct.pack("<II", 8, 0))))
+        commands = stack.enter_context(patch.object(wpd, "_mtp_no_data", return_value=0x2001))
+        return read, commands
+
+    def test_plain_event_poll_does_not_toggle_session(self):
+        read, commands = self.mock_session()
+        result = wpd._canon_event_summary(None, "mock-device")
+        self.assertTrue(result["structurallyValid"])
+        self.assertEqual(result["responseCode"], "0x2001")
+        self.assertNotIn("cleanup", result)
+        commands.assert_not_called()
+        self.assertEqual(read.call_args.args[2], 0x9116)
+
+    def test_event_session_reports_cleanup_failure(self):
+        _read, commands = self.mock_session()
+        commands.side_effect = [0x2001, 0x2001, OSError("event disable failed"), 0x2001]
+        result = wpd._canon_event_session_summary(None, "mock-device")
+        self.assertEqual(result["cleanup"]["eventModeError"], "event disable failed")
+        self.assertEqual(result["cleanup"]["remoteMode"], "0x2001")
+        self.assertEqual(
+            [(call.args[2], call.args[3]) for call in commands.call_args_list],
+            [(0x9114, (1,)), (0x9115, (1,)), (0x9115, (0,)), (0x9114, (0,))],
+        )
+
+    def test_failed_event_read_still_disables_both_modes(self):
+        read, commands = self.mock_session()
+        read.side_effect = OSError("camera disconnected")
+        with self.assertRaisesRegex(OSError, "camera disconnected"):
+            wpd._canon_event_session_summary(None, "mock-device")
+        self.assertEqual(
+            [(call.args[2], call.args[3]) for call in commands.call_args_list][-2:],
+            [(0x9115, (0,)), (0x9114, (0,))],
+        )
+
+    def test_oversized_transfer_buffer_rejected_before_copy(self):
+        ole32 = Mock()
+        def getter(_values, _key, pointer, length):
+            ctypes.cast(pointer, ctypes.POINTER(ctypes.c_void_p))[0] = 123
+            ctypes.cast(length, ctypes.POINTER(ctypes.c_ulong))[0] = 9
+            return 0
+        with patch.object(wpd, "_method", return_value=getter), patch.object(ctypes, "string_at") as copy:
+            with self.assertRaisesRegex(RuntimeError, "exceeded"):
+                wpd._get_buffer(ole32, ctypes.c_void_p(1), _PropertyKey.create(wpd._MTP_CATEGORY, 1012), max_bytes=8)
+            copy.assert_not_called()
+        ole32.CoTaskMemFree.assert_called_once()
+
     @staticmethod
     def fixture():
         carrier = bytes((n * 7) & 255 for n in range(16752))
@@ -125,6 +182,7 @@ class WindowsPtpResearchTests(unittest.TestCase):
             ctypes.POINTER(_Guid), ctypes.POINTER(ctypes.c_void_p),
         )
         ole32.CoCreateInstance.restype = ctypes.c_long
+        ole32.CoTaskMemFree.argtypes = (ctypes.c_void_p,)
         _check_hr(ole32.CoInitializeEx(None, 0), "CoInitializeEx")
         values = ctypes.c_void_p()
         device = ctypes.c_void_p()

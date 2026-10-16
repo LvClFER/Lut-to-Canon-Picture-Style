@@ -27,6 +27,21 @@ def build_canon_property_packet(property_code: int, value: bytes) -> bytes:
     return struct.pack("<III", len(value) + 12, property_code, len(value) + 4) + value
 
 
+def parse_canon_property_packet(packet: bytes) -> tuple[int, bytes]:
+    """Decode the observed 0x9110 data record, not WPD or USB framing.
+
+    This validates framing only; it does not authorize a property write or
+    establish that arbitrary cameras use this representation.
+    """
+    packet = bytes(packet)
+    if not 13 <= len(packet) <= 1024 * 1024 + 12:
+        raise ValueError("Invalid Canon property record size")
+    total, code, value_size = struct.unpack_from("<III", packet)
+    if total != len(packet) or value_size != len(packet) - 8:
+        raise ValueError("Inconsistent Canon property record lengths")
+    return code, packet[12:]
+
+
 def build_rp_d170_packet(carrier203: bytes) -> bytes:
     """Repack one validated 16,752-byte RP carrier as the D170 data phase."""
     carrier203 = bytes(carrier203)
