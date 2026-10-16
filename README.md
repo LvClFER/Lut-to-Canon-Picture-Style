@@ -6,6 +6,12 @@ Alpha.29 fixes black camera output from generated PF3 bases and corrects the Con
 
 Canon Style Studio is an experimental Windows editor for developing Canon RAW files through the Canon DPP4Lib runtime installed with Picture Style Editor, building sequential LUT stacks, previewing Canon's 33³/12-bit LUT result and exporting PF3 Picture Style files.
 
+## Changes in alpha.29
+
+- Fixed generated PF3 bases that could produce black camera output by using identity matrices and neutral post-LUT curves.
+- Corrected the PF3 Contrast and Sharpness Strength field mapping. Camera-registration state is not modified by this correction.
+- Added compiler and transport reference implementations with automated tests to the source repository. They do not replace the editor's existing Canon workflow.
+
 ## Requirements
 
 - Windows 10 or 11, 64-bit.
@@ -23,7 +29,7 @@ The distribution contains no Canon DLL, executable, ICC/ICM profile, PF3 base, R
 
 ## Start
 
-1. Extract the entire ZIP to a normal writable folder.
+1. Copy the complete application folder to a writable location, or extract the entire ZIP there.
 2. Run `CanonStyleStudio.exe` (or `START_CANON_STYLE_STUDIO.bat`).
 3. In the app, press **Test** beside RAW engine. If PSE was not found, press **Locate PSE…** and select the folder containing `PSEditor.exe` and `DPP4Lib`.
 
@@ -55,6 +61,14 @@ Fit, zoom and pan share stable view state. Zooming a RAW requests validated high
 Use **Create Test Report** in the top bar when reporting a problem. It includes app/runtime versions, camera model, dimensions, settings, LUT metadata and sanitized logs. Usernames and personal paths are replaced. The original RAW is **off by default** and is included only after two explicit confirmations.
 
 See [TESTING_GUIDE.md](TESTING_GUIDE.md) for the tester matrix and bug-report format, and [PUBLIC_ALPHA_RELEASE_NOTES.md](PUBLIC_ALPHA_RELEASE_NOTES.md) for validated and experimental boundaries.
+
+## Validation and independent-mode research
+
+Alpha.29 passed 601 automated tests, including a run from a clean source copy without private research fixtures. The packaged Windows executable also passed its startup smoke test without an external Python installation. These checks do not replace physical camera testing; no new camera registration was performed for this build.
+
+Compilation and registration without Canon software remain unfinished. An authorized EOS RP diagnostic opened an independent Windows Portable Devices session and queried capabilities, but the first remote-mode command failed. No style was sent. This path is not enabled in the editor.
+
+See the [independent session results](research/RP_INDEPENDENT_SESSION_20261011.md) and [remaining cipher dependency](research/CIPHER_DEPENDENCY_20261011.md) for the evidence and current blockers. macOS and Android builds are not available.
 
 ## Legal notice
 
