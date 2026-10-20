@@ -43,7 +43,7 @@ class DppBackendClient:
             return
         self.close(force=True)
         self.log_handle = self._log_path().open("a", encoding="utf-8", errors="replace")
-        frozen_worker=self.worker_path.suffix.lower()==".exe"
+        frozen_worker=self.worker_path.suffix.lower()!='.py'
         command=[str(self.worker_path)] if frozen_worker else [sys.executable,"-u",str(self.worker_path)]
         creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
         self.proc = subprocess.Popen(

@@ -26,7 +26,8 @@ def plan_slot_state(control,handler_selector,*,observed_marker,observed_selector
     if not isinstance(control,(bytes,bytearray,memoryview)):
         raise ValueError('Require opaque32-byte control buffer')
     size=control.nbytes if isinstance(control,memoryview) else len(control)
-    if size!=32:raise ValueError('Control must remain exactly32 bytes')
+    if size not in ((32,) if observed_marker else (24,32)):
+        raise ValueError('Control must preserve the observed legacy24 or extended32 bytes')
     control=bytes(control)
     extended=observed_marker!=0
     if extended:

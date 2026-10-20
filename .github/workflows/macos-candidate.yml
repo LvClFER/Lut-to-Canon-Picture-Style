@@ -1,0 +1,71 @@
+name: macOS candidate
+
+on:
+  push:
+    branches: [codex/macos-candidate-20261020]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          architecture: ${{ matrix.arch == 'arm64' && 'arm64' || 'x64' }}
+      - name: Install build dependencies
+        run: python -m pip install -r requirements.txt pyinstaller
+      - name: Check native architecture
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          python - <<'PY'
+          import os, platform
+          assert platform.machine() == os.environ['EXPECTED_ARCH'], platform.machine()
+          PY
+      - name: Run regressions without camera access
+        run: python -m unittest discover -p 'test_*.py' -v
+      - name: Build and audit local candidate
+        run: python build_macos.py --arch '${{ matrix.arch }}' --output macos-candidate
+      - name: Check frozen worker before device discovery
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json, subprocess, tempfile
+          executable, = Path('macos-candidate').glob('*/Canon Style Studio.app/Contents/MacOS/Canon Style Studio')
+          with tempfile.TemporaryDirectory() as temporary:
+              root = Path(temporary)
+              report = root / 'report.json'
+              result = subprocess.run([str(executable.resolve()), '--session-worker',
+                  '--device-id', 'NO_DEVICE_TEST', '--allow-temporary-session',
+                  '--request-descriptor', '--request-slot', '3',
+                  '--preflight-style', str(root / 'missing.pf3'),
+                  '--output', str(report)], capture_output=True, timeout=20)
+              assert result.returncode != 0, 'Missing input must fail'
+              evidence = json.loads(report.read_text())
+              assert evidence['deviceOpenAttempted'] is False
+              assert evidence['styleRegistrationAttempted'] is False
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-candidate-${{ matrix.arch }}
+          path: macos-candidate/*.dmg
+          if-no-files-found: error
+          retention-days: 7

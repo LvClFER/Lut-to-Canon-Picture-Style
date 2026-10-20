@@ -6,6 +6,7 @@ Neutral83076 archive is validated; other bases/layouts require independent
 evidence. Production installation does not call this module.
 """
 import numpy as np
+import struct
 from .cipher_stream_reference import decode
 from .control_section_reference import build_control_plain
 from .modern_header_reference import build_modern17_prefix
@@ -16,6 +17,29 @@ from .dense17_reference import convert17
 from .compact_grid_reference import compact_flag1
 from .packed17_reference import pack17_for_style
 from .packed10_reference import pack10
+
+
+def inspect_extended17_style(normalized,keys):
+    """Validate Neutral83076 readback grammar only, not live family support."""
+    if type(normalized) is not bytes or len(normalized)!=83044:
+        raise ValueError('Require exact normalized extended17 style')
+    if (struct.unpack_from('<IIIH',normalized)!=(1,83036,83036,0x84)
+            or struct.unpack_from('<II',normalized,64)!=(0xdeadbeef,0xdeadbeef)
+            or struct.unpack_from('<HH',normalized,80)!=(0x4c,252)
+            or struct.unpack_from('<HHI',normalized,84)!=(0x2fff,0xffff,0)):
+        raise ValueError('Extended17 style header differs from the observed profile')
+    for index in range(4):
+        start=340+index*19652
+        words=struct.unpack('<4913I',decode(normalized[start:start+19652],keys,
+            0xb8ed if index%2==0 else 0x33137))
+        if any(word & 0xc0000000 for word in words):
+            raise ValueError('Extended17 packed table has reserved high bits')
+    from .packed10_reference import packed_index
+    used={packed_index(r,g,b) for r in range(10) for g in range(10) for b in range(10)}
+    words=struct.unpack('<1024I',decode(normalized[78948:],keys,0xb8ed))
+    if any(word & 0xc0000000 or (index not in used and word) for index,word in enumerate(words)):
+        raise ValueError('Extended17 auxiliary table has invalid geometry')
+    return dict(styleSelector=0x84,blockCount=4,gridNodes=17,auxiliaryGridNodes=10)
 
 
 def dense_source(data):
@@ -42,7 +66,7 @@ def build_accepted_modern17(fields, normalized_descriptor, keys, *, extended=Tru
     blocks = [None] * 4
     for mode, source in enumerate((first, second), 1):
         arguments = modern_grid_arguments(normalized_descriptor, style, mode, mode)
-        coefficients, color_mode, curves, groups = prepare(arguments)
+        coefficients, color_mode, curves, groups = prepare(arguments,experimental_geometry=True)
         descriptor_rgb = [flagged_point((r,g,b), coefficients, color_mode, curves, groups, 17, 2)
                           for r in range(17) for g in range(17) for b in range(17)]
         user = convert17(source).ravel().tolist()

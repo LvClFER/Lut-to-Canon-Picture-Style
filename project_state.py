@@ -8,11 +8,13 @@ from creative_controls import DEFAULT_CREATIVE_CONTROLS, DEFAULT_RECIPE_WB
 
 APP_DIR_NAME = "CanonStyleStudio"
 PORTABLE_FORMAT = "canon-style-studio-portable-project"
-PORTABLE_FORMAT_VERSION = 1
+PORTABLE_FORMAT_VERSION = 2
 MAX_LUT_FILES = 128
 MAX_LUT_BYTES = 256 * 1024 * 1024
 MAX_TOTAL_LUT_BYTES = 1024 * 1024 * 1024
 MAX_PROJECT_JSON_BYTES = 8 * 1024 * 1024
+MAX_PF3_FILES = 6  # Current base, three snapshots, output and cipher reference.
+MAX_PF3_BYTES = 16 * 1024 * 1024
 
 
 def app_config_dir():
@@ -113,6 +115,8 @@ class ProjectDocument:
     snapshots: dict = field(default_factory=lambda: {"A": None, "B": None, "C": None})
     referenceHints: list = field(default_factory=list)
     portableWarnings: list = field(default_factory=list)
+    renderedPf3: str = ''
+    cipherReference: str = ''
 
     def to_dict(self):
         return asdict(self)
@@ -150,7 +154,34 @@ def _iter_edit_states(data):
                 yield state
 
 
-def _portable_project_data(project):
+def _valid_pf3_envelope(header, size):
+    return (32 <= size <= MAX_PF3_BYTES and len(header) == 12
+            and header[:8] == bytes.fromhex('0000300050535000')
+            and int.from_bytes(header[8:12], 'big') == size - 12)
+
+
+def _add_project_asset(assets, source, kind):
+    source = Path(source)
+    if not source.is_file():
+        raise FileNotFoundError(f'{kind} required by the project was not found: {source}')
+    size = source.stat().st_size
+    if size > MAX_LUT_BYTES:
+        raise ValueError(f'Asset is too large to embed: {source.name}')
+    if kind == 'pf3':
+        with source.open('rb') as stream:
+            header = stream.read(12)
+        if not _valid_pf3_envelope(header, size):
+            raise ValueError('Project requires a bounded supported PF3 envelope')
+    digest = _sha256_file(source)
+    prefix = 'styles' if kind == 'pf3' else 'luts'
+    suffix = '.pf3' if kind == 'pf3' else source.suffix.lower() or '.lut'
+    if digest not in assets:
+        assets[digest] = dict(sha256=digest, size=size, name=source.name,
+            archivePath=f'{prefix}/{digest[:16]}_{_safe_asset_name(source.stem)}{suffix}', source=source)
+    return digest
+
+
+def _portable_project_data(project, pf3_path=None):
     """Return sanitized project JSON plus deduplicated LUT asset descriptions."""
     data = copy.deepcopy(project.to_dict())
     data["version"] = max(5, int(data.get("version", 1)))
@@ -172,13 +203,15 @@ def _portable_project_data(project):
 
     assets = {}
     for state in _iter_edit_states(data):
-        # Canon resources are discovered from the user's local Canon installation.
-        # Never copy a selected/generated PF3 or leak its machine-specific path.
+        base = Path(str(state.get('custom_pf3') or state.get('base_path') or ''))
+        embedded_base = base.is_file()
+        if embedded_base:
+            state['portableBase'] = _add_project_asset(assets, base, 'pf3')
         if "base_path" in state:
             state["base_path"] = ""
         if "custom_pf3" in state:
             state["custom_pf3"] = ""
-        if (state.get("basePictureStyle") or state.get("base_name")) == "Imported PF3":
+        if not embedded_base and (state.get("basePictureStyle") or state.get("base_name")) == "Imported PF3":
             state["portableWarning"] = "Imported PF3 was not embedded; select it again on this computer."
             state["portableOriginalBasePictureStyle"] = "Imported PF3"
             state["basePictureStyle"] = "Neutral"
@@ -189,26 +222,14 @@ def _portable_project_data(project):
         for item in state.get("luts") or []:
             if not isinstance(item, dict):
                 continue
-            source = Path(str(item.get("path") or ""))
-            if not source.is_file():
-                raise FileNotFoundError(f"LUT required by the project was not found: {source}")
-            size = source.stat().st_size
-            if size > MAX_LUT_BYTES:
-                raise ValueError(f"LUT is too large to embed ({size} bytes): {source.name}")
-            digest = _sha256_file(source)
-            suffix = source.suffix.lower() or ".lut"
-            archive_path = f"luts/{digest[:16]}_{_safe_asset_name(source.stem)}{suffix}"
-            if digest not in assets:
-                assets[digest] = {
-                    "sha256": digest,
-                    "size": size,
-                    "name": source.name,
-                    "archivePath": archive_path,
-                    "source": source,
-                }
+            digest = _add_project_asset(assets, item.get('path') or '', 'lut')
             item["path"] = ""
             item["portableAsset"] = digest
-    if len(assets) > MAX_LUT_FILES:
+    rendered = pf3_path or project.renderedPf3
+    data['renderedPf3'] = _add_project_asset(assets, rendered, 'pf3') if rendered else ''
+    data['cipherReference'] = _add_project_asset(assets, project.cipherReference, 'pf3') if project.cipherReference else ''
+    if (sum(asset['archivePath'].startswith('luts/') for asset in assets.values()) > MAX_LUT_FILES
+            or sum(asset['archivePath'].startswith('styles/') for asset in assets.values()) > MAX_PF3_FILES):
         raise ValueError(f"Project contains too many LUT files ({len(assets)}; maximum {MAX_LUT_FILES})")
     total = sum(asset["size"] for asset in assets.values())
     if total > MAX_TOTAL_LUT_BYTES:
@@ -216,11 +237,11 @@ def _portable_project_data(project):
     return data, assets
 
 
-def save_project(path, project: ProjectDocument):
-    """Save a portable .canonstyleproject ZIP with all current/snapshot LUT files."""
+def save_project(path, project: ProjectDocument, pf3_path=None):
+    """Save one portable ZIP containing edits, LUTs, PF3 bases and optional output."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    data, assets = _portable_project_data(project)
+    data, assets = _portable_project_data(project, pf3_path=pf3_path)
     public_assets = [{k: v for k, v in asset.items() if k != "source"} for asset in assets.values()]
     manifest = {
         "format": PORTABLE_FORMAT,
@@ -257,7 +278,7 @@ def _load_portable_project(path, extraction_root=None):
     destination = root / archive_hash[:24]
     with zipfile.ZipFile(path, "r") as archive:
         infos = archive.infolist()
-        if len(infos) > MAX_LUT_FILES + 2:
+        if len(infos) > MAX_LUT_FILES + MAX_PF3_FILES + 2:
             raise ValueError("Portable project contains too many files")
         if any(not _safe_zip_member(info.filename) for info in infos):
             raise ValueError("Portable project contains an unsafe archive path")
@@ -270,12 +291,14 @@ def _load_portable_project(path, extraction_root=None):
             raise ValueError("Portable project metadata exceeds the safety limit")
         manifest = json.loads(archive.read("manifest.json"))
         data = json.loads(archive.read("project.json"))
-        if manifest.get("format") != PORTABLE_FORMAT or manifest.get("formatVersion") != PORTABLE_FORMAT_VERSION:
+        if manifest.get("format") != PORTABLE_FORMAT or manifest.get("formatVersion") not in (1, PORTABLE_FORMAT_VERSION):
             raise ValueError("Unsupported portable project format")
         assets = manifest.get("assets")
-        if not isinstance(assets, list) or len(assets) > MAX_LUT_FILES:
+        if not isinstance(assets, list) or len(assets) > MAX_LUT_FILES + MAX_PF3_FILES:
             raise ValueError("Portable project has an invalid asset manifest")
         asset_map = {}
+        pf3_digests = set()
+        lut_digests = set()
         asset_members = set()
         total = 0
         for asset in assets:
@@ -284,11 +307,12 @@ def _load_portable_project(path, extraction_root=None):
             digest = str(asset.get("sha256") or "").lower()
             member = str(asset.get("archivePath") or "")
             size = int(asset.get("size", -1))
-            if not re.fullmatch(r"[0-9a-f]{64}", digest) or not re.fullmatch(r"luts/[^/]+", member) or not _safe_zip_member(member):
+            is_pf3 = bool(re.fullmatch(r'styles/[^/]+\.pf3', member))
+            if not re.fullmatch(r"[0-9a-f]{64}", digest) or not (re.fullmatch(r"luts/[^/]+", member) or is_pf3) or not _safe_zip_member(member):
                 raise ValueError("Portable project has an invalid LUT asset identity")
             if digest in asset_map or member in asset_members:
                 raise ValueError("Portable project contains a duplicate LUT asset identity")
-            if member not in names or size < 0 or size > MAX_LUT_BYTES or archive.getinfo(member).file_size != size:
+            if member not in names or size < 0 or size > (MAX_PF3_BYTES if is_pf3 else MAX_LUT_BYTES) or archive.getinfo(member).file_size != size:
                 raise ValueError(f"Portable LUT asset has an invalid size: {member}")
             total += size
             if total > MAX_TOTAL_LUT_BYTES:
@@ -296,24 +320,42 @@ def _load_portable_project(path, extraction_root=None):
             payload = archive.read(member)
             if hashlib.sha256(payload).hexdigest() != digest:
                 raise ValueError(f"Portable LUT asset failed SHA-256 validation: {member}")
-            target = destination / "luts" / Path(member).name
+            if is_pf3 and not _valid_pf3_envelope(payload[:12], size):
+                raise ValueError('Portable project has an unsupported PF3')
+            target = destination / member
             target.parent.mkdir(parents=True, exist_ok=True)
             if not target.exists() or target.stat().st_size != size or _sha256_file(target) != digest:
                 tmp = target.with_suffix(target.suffix + ".tmp")
                 tmp.write_bytes(payload)
                 tmp.replace(target)
             asset_map[digest] = str(target)
+            (pf3_digests if is_pf3 else lut_digests).add(digest)
+            if len(pf3_digests) > MAX_PF3_FILES or len(lut_digests) > MAX_LUT_FILES:
+                raise ValueError('Portable project contains too many assets')
             asset_members.add(member)
         if names != {"project.json", "manifest.json", *asset_members}:
             raise ValueError("Portable project contains files not declared in its manifest")
     for state in _iter_edit_states(data):
+        base = str(state.pop('portableBase', ''))
+        if base:
+            if base not in pf3_digests:
+                raise ValueError('Portable project references a missing PF3 base')
+            state['base_path'] = asset_map[base]
+            if (state.get('basePictureStyle') or state.get('base_name')) == 'Imported PF3':
+                state['custom_pf3'] = asset_map[base]
         for item in state.get("luts") or []:
             if not isinstance(item, dict):
                 continue
             digest = str(item.pop("portableAsset", ""))
-            if digest not in asset_map:
+            if digest not in lut_digests:
                 raise ValueError("Portable project references a missing LUT asset")
             item["path"] = asset_map[digest]
+    for key in ('renderedPf3', 'cipherReference'):
+        digest = str(data.get(key) or '')
+        if digest:
+            if digest not in pf3_digests:
+                raise ValueError('Portable project references a missing PF3')
+            data[key] = asset_map[digest]
     return ProjectDocument.from_dict(data)
 
 

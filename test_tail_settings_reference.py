@@ -4,6 +4,18 @@ from camera_install.tail_settings_reference import settings_from_records, modern
 
 
 class TailSettingsTests(unittest.TestCase):
+    def test_empty_axes_keep_a_nonnull_zero_count_block_in_both_modes(self):
+        records=self.records()
+        empty=struct.pack('<2I',2,0)+bytes(504)
+        records.update({0x1061:empty,0x1062:empty,0x1029:bytes(240),0x102b:struct.pack('<2I',1,0)})
+        for mode in (1,2):
+            axis=settings_from_records(records,mode)['axisBlock']
+            self.assertEqual(axis['count'],0)
+            self.assertEqual(bytes.fromhex(axis['initializedHex']),empty)
+        for bad in (empty[:-4],empty+bytes(4),empty[:-1]+b'\x01',struct.pack('<2I',1,0)+bytes(504)):
+            records[0x1061]=bad
+            with self.assertRaises(ValueError):settings_from_records(records)
+
     def test_mode2_uses_distinct_matrix_axes_and_selector(self):
         records = self.records()
         records.update({0x1029: bytes([4]) * 240, 0x1062: records[0x1061],

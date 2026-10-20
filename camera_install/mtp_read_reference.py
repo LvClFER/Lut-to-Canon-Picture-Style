@@ -41,6 +41,12 @@ def receive(adapter: Adapter, opcode: int, parameters: tuple[int, ...] = (),
         raise ValueError('Invalid receive byte bound')
     if type(max_chunks) is not int or not 0 < max_chunks <= 4096:
         raise ValueError('Invalid receive chunk bound')
+    # ImageCaptureCore completes the entire native data phase in one callback.
+    if callable(getattr(type(adapter),'receive_atomic',None)):
+        payload=adapter.receive_atomic(opcode,parameters,max_bytes=max_bytes)
+        if not isinstance(payload,bytes) or len(payload)>max_bytes:
+            raise RuntimeError('Invalid atomic receive payload')
+        return payload
     start = adapter.begin(opcode, parameters)
     if not isinstance(start, ReadStart) or not isinstance(start.context, str) or not start.context:
         raise RuntimeError('Adapter returned no receive context')

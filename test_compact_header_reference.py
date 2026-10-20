@@ -1,10 +1,28 @@
 import struct
 import unittest
-from camera_install.compact_header_reference import build_compact16752_prefix,build_older_compact_prefix
+from camera_install.compact_header_reference import build_compact16752_prefix,build_older_compact_prefix,inspect_compact16752_style
 from camera_install.control_section_reference import build_control_plain
+from camera_install.cipher_stream_reference import decode
+from camera_install.packed10_reference import pack10_integer
 
 
 class CompactHeaderTests(unittest.TestCase):
+    def test_observed_format_requires_markers_padding_and_reserved_bits(self):
+        keys=(bytes(512),bytes(513))
+        prefix=build_compact16752_prefix(self.fields(),build_control_plain({}))
+        table=pack10_integer([0]*3000)
+        carrier=prefix+b''.join(decode(table,keys,seed) for seed in (0xb8ed,0x33137)*2)
+        normalized=carrier[:8]+carrier[40:]
+        self.assertEqual(inspect_compact16752_style(normalized,keys),
+            dict(styleSelector=0x84,blockCount=4,gridNodes=10,compilerRouteEstablished=False))
+        # Header tags and packed reserved bits provide evidence beyond total length.
+        for offset in (0,4,8,10,60,64,76,78,80,336+3):
+            corrupt=bytearray(normalized);corrupt[offset]^=0x80
+            with self.subTest(offset=offset),self.assertRaises(ValueError):
+                inspect_compact16752_style(bytes(corrupt),keys)
+        for invalid in (None,16720,normalized[:-1],normalized+b'x'):
+            with self.assertRaises(ValueError):inspect_compact16752_style(invalid,keys)
+
     def fields(self):
         fields={i:(4,struct.pack('<I',3)) for i in range(0x1030,0x1036)}
         fields.update({0x1002:(2,b'name\0'),0x1009:(3,b'\x84\0'),0x100c:(3,b'\x12\0')})

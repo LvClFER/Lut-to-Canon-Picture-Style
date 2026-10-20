@@ -17,3 +17,7 @@ class LabMathTests(unittest.TestCase):
     def test_domain(self):
         for rgb,bits in (([-1,0,0],8),([256,0,0],8),([0,0,0],10),([0.,0,0],8)):
             with self.assertRaises(ValueError): rgb_to_lab(rgb,bits,1)
+
+    def test_repeated_24bit_endpoint_retains_one_unit_roundoff_without_clipping(self):
+        self.assertEqual(len(rgb_to_lab([16777217,16777215,2105892],24,2)),3)
+        with self.assertRaises(ValueError):rgb_to_lab([16777218,0,0],24,2)

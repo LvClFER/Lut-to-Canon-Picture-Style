@@ -36,7 +36,7 @@ class WpdCommandTests(unittest.TestCase):
             return next(responses)
         adapter = CommandPropertyMapAdapter(sender)
         adapter.execute(1)
-        with self.assertRaises(RuntimeError):
+        with self.assertRaisesRegex(RuntimeError, r'Command 0x0001 returned PTP 0xA106; expected 0x2001'):
             adapter.execute(1)
         self.assertEqual(adapter.last_completion,Completion(0xa106,()))
         for _ in range(2):

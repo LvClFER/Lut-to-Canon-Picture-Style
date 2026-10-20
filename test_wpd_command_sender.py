@@ -1,12 +1,64 @@
 import ctypes
 import struct
+import sys
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch, Mock
 from camera_install.wpd_command_sender import CommandSender, DataPhaseSender, CapabilitySender, _response_parameters
 from camera_install.wpd_data_phase_reference import CommandPropertyMapAdapter, COMMON, MTP
 
 
 class CommandSenderTests(unittest.TestCase):
+    def test_only_missing_optional_response_parameters_are_empty(self):
+        for status, accepted in ((0x80070490, True), (0x80070005, False),
+                                 (0x80070057, False), (0, False)):
+            with self.subTest(status=hex(status)), \
+                 patch('camera_install.wpd_command_sender.api._method',
+                       return_value=lambda *args: status), \
+                 patch('camera_install.wpd_command_sender.api._release'):
+                if accepted:
+                    self.assertEqual(_response_parameters(Mock(), ctypes.c_void_p(3)), ())
+                    with self.assertRaises(OSError):
+                        CapabilitySender(Mock(), ctypes.c_void_p(1))._decode(
+                            ctypes.c_void_p(3), {}, {})
+                else:
+                    with self.assertRaises((OSError, RuntimeError)):
+                        _response_parameters(Mock(), ctypes.c_void_p(3))
+
+    @unittest.skipUnless(sys.platform == 'win32', 'Windows system COM only')
+    def test_real_local_com_marshalling_without_device_access(self):
+        # Qt owns the main thread's COM apartment during combined UI tests.
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pool.submit(self._local_com_marshalling).result(timeout=10)
+
+    def _local_com_marshalling(self):
+        from camera_install.wpd_connection import _system_com
+        from camera_install import windows_wpd_probe as api
+        com = _system_com()
+        api._check_hr(com.CoInitializeEx(None, 0), 'Initialize local COM')
+        params = ctypes.c_void_p()
+        try:
+            params = api._new_mtp_params(com, 12, opcode=0x9114, args=(1, 0xffffffff))
+            self.assertEqual(api._get_unsigned(params, api._PropertyKey.create(COMMON, 1002)), 12)
+            self.assertEqual(api._get_unsigned(params, api._PropertyKey.create(MTP, 1001)), 0x9114)
+            self.assertEqual(api._get_unsigned(params, api._PropertyKey.create(api._API_OPTIONS_CATEGORY, 3)), 3)
+            from camera_install.wpd_command_sender import _unsigned_collection
+            self.assertEqual(_unsigned_collection(com, params, 1002, 5), (1, 0xffffffff))
+            self.assertEqual(_response_parameters(com, params), ())
+            api._set_unsigned(params, api._PropertyKey.create(MTP, 1004), 1)
+            with self.assertRaises(OSError):
+                _response_parameters(com, params)
+            for command, access in ((11, 1), (12, 3), (13, 1), (14, 3),
+                                    (15, 1), (16, 3), (17, 1)):
+                api._release(params)
+                params = ctypes.c_void_p()
+                params = api._new_mtp_params(com, command)
+                self.assertEqual(api._get_unsigned(params,
+                    api._PropertyKey.create(api._API_OPTIONS_CATEGORY, 3)), access)
+        finally:
+            api._release(params)
+            com.CoUninitialize()
+
     def test_vendor_capability_query_is_distinct_from_no_data_ptp(self):
         sender = CapabilitySender(Mock(), ctypes.c_void_p(1))
         request = {(COMMON, 1001): MTP, (COMMON, 1002): 11}
@@ -81,13 +133,11 @@ class CommandSenderTests(unittest.TestCase):
                    (MTP, 1001): 0x9192, (MTP, 1002): (1, 16720), (MTP, 1007): 16720}
         with patch('camera_install.wpd_command_sender.api._new_mtp_params',
                    return_value=ctypes.c_void_p(2)), \
-             patch('camera_install.wpd_command_sender.api._set_unsigned') as ui4, \
              patch('camera_install.wpd_command_sender.api._set_unsigned_large') as ui8:
             params = sender._make_params(request, sender._validate(request))
             self.assertEqual(params.value, 2)
             self.assertEqual(ui8.call_args.args[1].pid, 1007)
             self.assertEqual(ui8.call_args.args[2], 16720)
-            self.assertEqual(ui4.call_args.args[2], 3)
         with self.assertRaises(ValueError):
             DataPhaseSender(Mock(), ctypes.c_void_p(1))._validate(request)
 

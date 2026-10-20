@@ -13,6 +13,18 @@ def pack_full33(values):
     return struct.pack('<107811H',*[int(v) for v in values])
 
 
+def full33_planar(table: bytes) -> bytes:
+    count = 33 ** 3
+    if len(table) != count * 6:
+        raise ValueError('Invalid full33 input length')
+    values = struct.unpack(f'<{count * 3}H', table)
+    if max(values) > 4095:
+        raise ValueError('Input exceeds Canon 12-bit range')
+    return struct.pack(f'<{count * 3}H', *(
+        (values[node * 3 + channel] * 32768 + 2047) // 4095
+        for channel in range(3) for node in range(count)))
+
+
 def source_full33_table(records, mode):
     """Experimental normal11220 route from host-ordered PF3 records.
 
@@ -46,7 +58,6 @@ def encode_app_dense_full33(raw):
     words = struct.unpack('<107814H', raw)
     if words[:3] != (12, 3, 33) or max(words[3:]) > 4095:
         raise ValueError('Invalid dense PF3 geometry or sample range')
-    from .compiler_regression import full33_planar
     return full33_planar(raw[6:])
 
 

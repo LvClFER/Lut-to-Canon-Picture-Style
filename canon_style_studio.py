@@ -10,6 +10,21 @@ from datetime import datetime
 from collections import OrderedDict
 from pathlib import Path
 
+# Dispatch the isolated camera worker before importing Qt or opening the editor.
+if __name__ == '__main__' and '--mac-discovery-worker' in sys.argv:
+    from camera_install.macos_discovery import main as discovery_worker_main
+    try:discovery_worker_main()
+    except Exception:raise SystemExit(1)
+    raise SystemExit(0)
+
+if __name__ == '__main__' and '--session-worker' in sys.argv:
+    from camera_install.independent_session_diagnostic import main as camera_worker_main
+    try:
+        camera_worker_main()
+    except Exception:
+        # The worker report owns errors; a windowed bootloader popup would stall cleanup.
+        raise SystemExit(1)
+    raise SystemExit(0)
 
 # PyInstaller's one-directory layout keeps the Qt and Shiboken native DLLs in
 # sibling folders under ``sys._MEIPASS``.  Register them before the first
@@ -25,8 +40,9 @@ if os.name == "nt" and getattr(sys, "frozen", False):
 import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 
-from PySide6.QtCore import Qt, Signal, QObject, QRunnable, QThreadPool, QTimer, QSize, QPoint, QPointF, QRectF, QMimeData
-from PySide6.QtGui import QAction, QKeySequence, QColor, QPainter, QPen, QBrush, QPixmap, QImage, QIcon, QFont, QDrag
+from PySide6.QtCore import Qt, Signal, QObject, QRunnable, QThreadPool, QTimer, QSize, QPoint, QPointF, QRectF, QMimeData, QCoreApplication
+QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
+from PySide6.QtGui import QAction, QKeySequence, QColor, QPainter, QPainterPath, QPen, QBrush, QPixmap, QImage, QIcon, QFont, QDrag
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QPushButton, QToolButton, QComboBox, QSlider, QCheckBox, QFileDialog, QMessageBox,
@@ -36,22 +52,24 @@ from PySide6.QtWidgets import (
 )
 
 from canon_engine import (
-    CanonRenderEngine, parse_lut_file, inspect_pf3, export_pf3, load_reference_image,
+    CanonRenderEngine, parse_lut_file, inspect_pf3, export_pf3, export_style_project, load_reference_image,
     sample_custom_wb, normalize_rgb_gains,
-    find_dll, ensure_runtime_base_pf3, resolve_validated_base_pf3, load_lut_metadata,
+    find_dll, ensure_runtime_base_pf3, resolve_validated_base_pf3, resolve_independent_base_pf3, load_lut_metadata,
     file_fingerprint, CANON_STRONG_RAW_EXTENSIONS, NORMAL_IMAGE_EXTENSIONS,
     HALD_IMAGE_EXTENSIONS,
 )
-from project_state import SettingsStore, ProjectDocument, save_project, load_project, HistoryManager, app_config_dir
+from project_state import SettingsStore, ProjectDocument, load_project, HistoryManager, app_config_dir
 from dpp_client import DppBackendClient, DppBackendError
 from render_geometry import fit_size_within_box, oriented_native_size
 from canon_runtime import (
     PUBLIC_NAME, PUBLIC_VERSION, BUILD_ID, discover_pse, ensure_runtime_input_profile,
     runtime_environment, sanitize_path, system_summary, reports_dir, logs_dir, sha256_file,
-    exported_styles_dir,
+    exported_styles_dir, style_export_path, open_local_path,
 )
 from test_report import create_test_report_zip
-from camera_install.ui import CameraInstallDialog
+from camera_install.ui import IndependentInstallDialog as CameraInstallDialog
+from camera_install.ui import CameraInstallDialog as CanonNativeInstallDialog
+from camera_install.camera_families_reference import CAMERA_FAMILIES, FAMILY_SIZES
 from creative_controls import (
     AXIS_NAMES, DEFAULT_CREATIVE_CONTROLS, DEFAULT_RECIPE_WB, IDENTITY_TONE_CURVE,
     evaluate_tone_curve, normalize_creative_controls, normalize_recipe_wb,
@@ -73,66 +91,94 @@ HALD_TEMPLATE = HERE / "example_luts" / "Lightroom_Hald_Template_512_64cube_sRGB
 
 
 def dpp_worker_program():
-    return HERE/("canon_dpp_worker.exe" if getattr(sys,"frozen",False) else "canon_dpp_worker.py")
+    if not getattr(sys,'frozen',False):return HERE/'canon_dpp_worker.py'
+    return HERE/('canon_dpp_worker.exe' if sys.platform=='win32' else 'canon_dpp_worker')
 
 
-ACCENT = "#73A7FF"
-BG = "#181A1D"
-PANEL = "#202327"
-PANEL_2 = "#262A2F"
-VIEW_BG = "#111315"
-TEXT = "#E8EAF0"
-MUTED = "#9AA1AB"
-BORDER = "#343940"
-DANGER = "#FF6B6B"
+ACCENT = "#D91932"
+BG = "#FFFFFF"
+PANEL = "#F0EDE7"
+PANEL_2 = "#FFFFFF"
+VIEW_BG = "#F5F3EF"
+TEXT = "#20201E"
+MUTED = "#77746F"
+BORDER = "#E5E0D9"
+DANGER = "#C52336"
 
 
 def app_stylesheet():
     return f"""
-    QMainWindow, QWidget {{ background: {BG}; color: {TEXT}; font-family: 'Segoe UI'; font-size: 10pt; }}
-    QFrame#TopBar {{ background: {PANEL}; border-bottom: 1px solid {BORDER}; }}
-    QFrame#SideBar {{ background: {PANEL}; border-right: 1px solid {BORDER}; }}
-    QFrame#BottomBar {{ background: {PANEL}; border-top: 1px solid {BORDER}; }}
+    QWidget {{ background: transparent; color: {TEXT}; font-family: 'Segoe UI'; font-size: 9pt; }}
+    QMainWindow {{ background: {BG}; }}
+    QDialog, QMessageBox {{ background: {BG}; color: {TEXT}; }}
+    QMenu {{ background: {BG}; color: {TEXT}; border: 1px solid {BORDER}; padding: 5px; }}
+    QMenu::item {{ padding: 8px 18px; border-radius: 5px; }}
+    QMenu::item:selected {{ background: {PANEL}; color: {TEXT}; }}
+    QMenu::item:disabled {{ color: {MUTED}; }}
+    QFrame#TopBar {{ background: {BG}; border-bottom: 1px solid {BORDER}; }}
+    QFrame#SideBar, QFrame#BottomBar {{ background: {BG}; border: 0; }}
+    QWidget#SectionCard {{ background: {PANEL}; border-radius: 16px; }}
+    QWidget#AdjustmentCard {{ background: white; border-radius: 10px; }}
+    QLabel#AdjustmentValue {{ font-family: 'Consolas'; font-size: 18pt; font-weight: 700; }}
+    QLabel#CardLabel {{ color: {MUTED}; font-size: 8pt; }}
+    QLabel#Kicker {{ color: {ACCENT}; font-size: 8pt; font-weight: 700; }}
+    QLabel#GalleryTitle {{ font-family: 'Georgia'; font-size: 16pt; }}
+    QLineEdit#ProjectTitle {{ background: transparent; border: 0; padding: 0; font-family: 'Georgia'; font-size: 28pt; }}
+    QLineEdit#ProjectTitle:focus {{ border-bottom: 1px solid {ACCENT}; }}
     QLabel#Muted {{ color: {MUTED}; }}
     QLabel#SectionTitle {{ font-weight: 600; font-size: 10pt; }}
-    QLabel#AppTitle {{ font-weight: 700; font-size: 12pt; }}
+    QLabel#AppTitle {{ font-weight: 700; font-size: 11pt; }}
     QPushButton, QToolButton {{
-        background: {PANEL_2}; border: 1px solid {BORDER}; border-radius: 6px;
-        padding: 6px 10px; color: {TEXT};
+        background: {PANEL_2}; border: 1px solid {BORDER}; border-radius: 9px;
+        padding: 8px 11px; color: {TEXT};
     }}
-    QPushButton:hover, QToolButton:hover {{ border-color: #505762; background: #2B3036; }}
-    QPushButton:pressed, QToolButton:pressed {{ background: #303640; }}
-    QPushButton#AccentButton {{ background: {ACCENT}; border-color: {ACCENT}; color: #101318; font-weight: 700; }}
-    QPushButton#AccentButton:hover {{ background: #8AB6FF; }}
-    QPushButton#AccentButton:disabled {{ background: #3A414B; border-color: #454D58; color: #8A929E; }}
-    QPushButton[eyedropperActive="true"] {{ background: {ACCENT}; border-color: {ACCENT}; color: #101318; font-weight: 700; }}
-    QPushButton[eyedropperActive="true"]:hover {{ background: #8AB6FF; }}
+    QPushButton:hover, QToolButton:hover {{ border-color: #BEB6AB; background: #F7F5F1; }}
+    QPushButton:pressed, QToolButton:pressed {{ background: #E9E4DC; }}
+    QPushButton#NavButton {{ border: 0; background: transparent; color: {MUTED}; }}
+    QPushButton#DarkButton {{ background: #20201E; color: white; border-color: #20201E; font-weight: 600; }}
+    QPushButton#AccentButton, QToolButton#AccentButton {{ background: {ACCENT}; border-color: {ACCENT}; color: white; font-weight: 600; }}
+    QPushButton#AccentButton:hover, QToolButton#AccentButton:hover {{ background: #B9152A; }}
+    QPushButton:disabled, QToolButton:disabled {{ color: #A6A19A; background: #F0EDE7; border-color: #E5E0D9; }}
+    QPushButton[eyedropperActive="true"] {{ background: {ACCENT}; border-color: {ACCENT}; color: white; }}
     QToolButton#FlatButton {{ background: transparent; border: 0; padding: 5px 7px; }}
-    QToolButton#FlatButton:hover {{ background: #2A2E33; }}
+    QToolButton#FlatButton:hover {{ background: {PANEL}; }}
     QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
-        background: #17191C; border: 1px solid {BORDER}; border-radius: 6px; padding: 5px 7px;
+        background: white; border: 1px solid {BORDER}; border-radius: 8px; padding: 6px 8px;
         selection-background-color: {ACCENT};
     }}
     QComboBox::drop-down {{ border: 0; width: 24px; }}
-    QSlider::groove:horizontal {{ height: 4px; background: #3A3F46; border-radius: 2px; }}
+    QSlider::groove:horizontal {{ height: 3px; background: #DED8CF; border-radius: 2px; }}
     QSlider::sub-page:horizontal {{ background: {ACCENT}; border-radius: 2px; }}
-    QSlider::handle:horizontal {{ width: 13px; margin: -5px 0; background: #DDE7FF; border: 1px solid {ACCENT}; border-radius: 7px; }}
-    QScrollArea {{ border: 0; }}
+    QSlider::handle:horizontal {{ width: 14px; height: 14px; margin: -6px 0; background: {ACCENT}; border: 0; border-radius: 7px; }}
+    QSpinBox, QDoubleSpinBox {{ padding-right: 32px; min-height: 22px; }}
+    QSpinBox::up-button, QDoubleSpinBox::up-button {{ subcontrol-origin: border; subcontrol-position: top right; width: 26px; border: 0; border-left: 1px solid {BORDER}; border-top-right-radius: 8px; background: #F5F3EF; }}
+    QSpinBox::down-button, QDoubleSpinBox::down-button {{ subcontrol-origin: border; subcontrol-position: bottom right; width: 26px; border: 0; border-left: 1px solid {BORDER}; border-bottom-right-radius: 8px; background: #F5F3EF; }}
+    QSpinBox::up-button:hover, QSpinBox::down-button:hover, QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover {{ background: #E5E0D9; }}
+    QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{ image: url("{(HERE/'assets/step-up.svg').as_posix()}"); width: 10px; height: 7px; }}
+    QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{ image: url("{(HERE/'assets/step-down.svg').as_posix()}"); width: 10px; height: 7px; }}
+    QScrollArea {{ background: white; border: 0; }}
+    QScrollArea > QWidget {{ background: white; }}
+    QComboBox QAbstractItemView {{ background: white; selection-background-color: {PANEL}; color: {TEXT}; }}
     QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
-    QScrollBar::handle:vertical {{ background: #464C55; border-radius: 4px; min-height: 30px; }}
+    QScrollBar::handle:vertical {{ background: #D5CEC4; border-radius: 4px; min-height: 30px; }}
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
     QListWidget#LutList {{ background: transparent; border: 0; outline: 0; }}
     QListWidget#LutList::item {{ background: transparent; border: 0; margin: 2px 0; }}
     QListWidget#LutList::item:selected {{ background: transparent; }}
-    QFrame#LutCard {{ background: #24282D; border: 1px solid {BORDER}; border-radius: 8px; }}
-    QFrame#LutCard:hover {{ border-color: #4B535D; }}
-    QLabel#Badge {{ background: #30353C; color: #B9C0CA; border-radius: 4px; padding: 2px 5px; font-size: 8pt; }}
+    QFrame#LutCard {{ background: white; border: 1px solid {BORDER}; border-radius: 10px; }}
+    QFrame#LutCard:hover {{ border-color: #BEB6AB; }}
+    QLabel#Badge {{ background: white; color: {MUTED}; border-radius: 8px; padding: 3px 7px; font-size: 8pt; }}
     QFrame#SectionBody {{ background: transparent; }}
-    QToolButton#SectionHeader {{ background: transparent; border: 0; padding: 8px 3px; text-align: left; font-weight: 700; }}
-    QToolButton#SectionHeader:hover {{ background: #25292E; }}
-    QProgressBar {{ border: 1px solid {BORDER}; border-radius: 5px; background: #17191C; text-align:center; }}
+    QToolButton#SectionHeader {{ background: transparent; border: 0; padding: 14px 16px; text-align: left; font-weight: 600; color: {MUTED}; }}
+    QToolButton#SectionHeader:hover {{ color: {TEXT}; }}
+    QProgressBar {{ border: 1px solid {BORDER}; border-radius: 5px; background: white; text-align:center; }}
     QProgressBar::chunk {{ background: {ACCENT}; border-radius: 4px; }}
-    QTextEdit {{ background: #111315; border: 1px solid {BORDER}; border-radius: 6px; font-family: Consolas; }}
+    QTextEdit {{ background: white; border: 1px solid {BORDER}; border-radius: 8px; font-family: Consolas; }}
+    QCheckBox {{ spacing: 7px; }}
+    QCheckBox::indicator {{ width: 13px; height: 13px; border: 1px solid #BEB6AB; border-radius: 3px; background: white; }}
+    QCheckBox::indicator:checked {{ background: {ACCENT}; border-color: {ACCENT}; }}
+    QToolButton:checked {{ border-color: {ACCENT}; }}
+    QSplitter::handle {{ background: white; }}
     """
 
 
@@ -188,6 +234,7 @@ class FunctionWorker(QRunnable):
 class CollapsibleSection(QWidget):
     def __init__(self, title, parent=None, expanded=True):
         super().__init__(parent)
+        self.setObjectName('SectionCard');self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground,True)
         lay = QVBoxLayout(self); lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(0)
         self.header = QToolButton(text=title, checkable=True, checked=expanded)
         self.header.setObjectName("SectionHeader")
@@ -195,7 +242,7 @@ class CollapsibleSection(QWidget):
         self.header.setArrowType(Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow)
         lay.addWidget(self.header)
         self.body = QFrame(); self.body.setObjectName("SectionBody")
-        self.body_layout = QVBoxLayout(self.body); self.body_layout.setContentsMargins(4, 2, 4, 10); self.body_layout.setSpacing(7)
+        self.body_layout = QVBoxLayout(self.body); self.body_layout.setContentsMargins(16, 0, 16, 16); self.body_layout.setSpacing(10)
         self.body.setVisible(expanded); lay.addWidget(self.body)
         self.header.toggled.connect(self._toggle)
 
@@ -209,13 +256,18 @@ class ValueSlider(QWidget):
     committed = Signal()
     interaction = Signal()
 
-    def __init__(self, label, minimum, maximum, value, scale=1.0, suffix="", parent=None):
+    def __init__(self, label, minimum, maximum, value, scale=1.0, suffix="", parent=None, card=False):
         super().__init__(parent)
         self.scale = float(scale); self.suffix = suffix
         lay = QVBoxLayout(self); lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(3)
         top = QHBoxLayout(); top.setContentsMargins(0,0,0,0)
         self.name = QLabel(label); self.value_label = QLabel(); self.value_label.setObjectName("Muted")
-        top.addWidget(self.name); top.addStretch(); top.addWidget(self.value_label); lay.addLayout(top)
+        if card:
+            self.setObjectName('AdjustmentCard');self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground,True)
+            lay.setContentsMargins(12,9,12,9);self.value_label.setObjectName('AdjustmentValue');self.name.setObjectName('CardLabel')
+            lay.addWidget(self.value_label);lay.addWidget(self.name)
+        else:
+            top.addWidget(self.name);top.addStretch();top.addWidget(self.value_label);lay.addLayout(top)
         self.slider = QSlider(Qt.Orientation.Horizontal); self.slider.setRange(int(minimum), int(maximum)); self.slider.setValue(int(round(value / self.scale)))
         lay.addWidget(self.slider)
         self.slider.valueChanged.connect(self._changed)
@@ -364,7 +416,7 @@ class LutCard(QFrame):
         elif act == reveal:
             p = Path(self.entry["cube"]["path"])
             try:
-                os.startfile(str(p.parent))
+                open_local_path(p.parent)
             except Exception: pass
 
 
@@ -419,7 +471,7 @@ class CompareView(QWidget):
         self.mode = "Side by side"; self.zoom_mode = "Fit"; self.center = [0.5,0.5]; self.split = 0.5
         self.dragging=False; self.split_drag=False; self.last_pos=QPoint(); self.rendering=False; self.show_clipping=False; self.eyedropper=False
         self.eyedropper_sample=None
-        self.setMinimumSize(500, 400); self.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Expanding)
+        self.setMinimumSize(500, 200); self.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Expanding)
 
     def setImages(self, input_im, result_im, logical_size=None):
         self.input_pil=input_im if input_im.mode=="RGB" else input_im.convert("RGB")
@@ -491,7 +543,7 @@ class CompareView(QWidget):
         x=pane.center().x()-self.center[0]*iw; y=pane.center().y()-self.center[1]*ih
         dest=QRectF(x,y,iw,ih)
         painter.save()
-        painter.setClipRect(clip if clip is not None else pane)
+        painter.setClipRect(clip if clip is not None else pane,Qt.ClipOperation.IntersectClip)
         # Use high-quality resampling only when source and destination geometries
         # differ. At native 100% leave pixels unfiltered for real detail inspection.
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform,
@@ -500,7 +552,15 @@ class CompareView(QWidget):
         painter.restore()
 
     def paintEvent(self,event):
-        p=QPainter(self); p.fillRect(self.rect(),QColor(VIEW_BG)); left,right=self._pane_rects()
+        p=QPainter(self);p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        outline=QPainterPath();outline.addRoundedRect(QRectF(self.rect()),12,12);p.setClipPath(outline)
+        p.fillRect(self.rect(),QColor(VIEW_BG)); left,right=self._pane_rects()
+        if self.input_q is None and self.result_q is None:
+            p.save();p.setPen(QColor(TEXT));p.setFont(QFont('Georgia',24))
+            p.drawText(QRectF(24,self.height()/2-45,self.width()-48,48),Qt.AlignmentFlag.AlignCenter,'Start with a photograph')
+            p.setPen(QColor(MUTED));p.setFont(QFont('Segoe UI',10))
+            p.drawText(QRectF(24,self.height()/2+10,self.width()-48,36),Qt.AlignmentFlag.AlignCenter,'Open an image or drop your reference photos here.')
+            p.restore()
         rq=self.clipped_q if self.show_clipping else self.result_q
         if self.mode=="Side by side":
             self._draw_image(p,self.input_q,left); self._draw_image(p,rq,right)
@@ -530,7 +590,7 @@ class CompareView(QWidget):
             p.setPen(QPen(QColor(ACCENT),2));p.drawLine(QPointF(px-15,py),QPointF(px+15,py));p.drawLine(QPointF(px,py-15),QPointF(px,py+15))
         if self.rendering:
             box=QRectF(self.width()-132,14,116,30); p.setPen(Qt.PenStyle.NoPen); p.setBrush(QColor(30,33,37,220)); p.drawRoundedRect(box,7,7)
-            p.setPen(QColor(TEXT)); p.drawText(box,Qt.AlignmentFlag.AlignCenter,"Rendering…")
+            p.setPen(QColor('white')); p.drawText(box,Qt.AlignmentFlag.AlignCenter,"Rendering…")
 
     def _image_coord(self,pos):
         if not self.input_q:return None
@@ -623,20 +683,21 @@ class ReferenceStrip(QScrollArea):
     def __init__(self,parent=None):
         super().__init__(parent); self.setWidgetResizable(True); self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded); self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.host=QWidget(); self.lay=QHBoxLayout(self.host); self.lay.setContentsMargins(8,5,8,5); self.lay.setSpacing(6); self.lay.addStretch()
-        self.setWidget(self.host); self.setFixedHeight(92); self.buttons=[]
+        self.setWidget(self.host); self.setFixedHeight(44); self.buttons=[]
     def clear_refs(self):
         for b in self.buttons: b.deleteLater()
         self.buttons=[]
     def set_references(self,paths,current=0):
         self.clear_refs()
+        self.setFixedHeight(106 if paths else 44)
         for i,p in enumerate(paths):
-            b=QToolButton(); b.setText(Path(p).name); b.setCheckable(True); b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon); b.setIconSize(QSize(56,42)); b.setFixedSize(118,72); b.clicked.connect(lambda _=False,i=i:self.selected.emit(i)); self.lay.insertWidget(self.lay.count()-1,b); self.buttons.append(b)
+            b=QToolButton(); b.setText(Path(p).name);b.setToolTip(str(p)); b.setCheckable(True); b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon); b.setIconSize(QSize(104,60)); b.setFixedSize(132,90); b.clicked.connect(lambda _=False,i=i:self.selected.emit(i)); self.lay.insertWidget(self.lay.count()-1,b); self.buttons.append(b)
         self.set_current(current)
     def set_current(self,i):
         for n,b in enumerate(self.buttons): b.setChecked(n==i)
     def set_thumbnail(self,i,im):
         if 0<=i<len(self.buttons) and im:
-            thumb=ImageOps.contain(im,(80,48),Image.Resampling.LANCZOS);self.buttons[i].setIcon(QIcon(pil_to_qpixmap(thumb)))
+            thumb=ImageOps.contain(im,(104,64),Image.Resampling.LANCZOS);self.buttons[i].setIcon(QIcon(pil_to_qpixmap(thumb)))
 
 
 class SnapshotButton(QToolButton):
@@ -648,19 +709,19 @@ class SnapshotButton(QToolButton):
         m=QMenu(self); save=m.addAction(f"Save current to {self.name}"); clear=m.addAction(f"Clear {self.name}"); a=m.exec(self.mapToGlobal(pos))
         if a==save:self.saveRequested.emit(self.name)
         elif a==clear:self.clearRequested.emit(self.name)
-    def setStored(self,on): self.setStyleSheet(f"background:{ACCENT};color:#111;" if on else "")
+    def setStored(self,on): self.setStyleSheet(f"background:{ACCENT};color:white;" if on else "")
 
 
 class ExportDialog(QDialog):
     def __init__(self,main,parent=None):
-        super().__init__(parent); self.main=main; self.setWindowTitle("Export Canon PF3"); self.resize(560,430); self.worker=None
-        lay=QVBoxLayout(self); title=QLabel("Canon PF3"); title.setStyleSheet("font-size:18pt;font-weight:700;"); lay.addWidget(title)
+        super().__init__(parent); self.main=main; self.setWindowTitle("Save Editable Style"); self.resize(560,430); self.worker=None
+        lay=QVBoxLayout(self); title=QLabel("Editable style · one file"); title.setStyleSheet("font-size:18pt;font-weight:700;"); lay.addWidget(title)
         self.summary=QLabel(); self.summary.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse); self.summary.setStyleSheet("line-height:150%;"); lay.addWidget(self.summary)
         self.valid=QLabel("✓ Valid configuration"); self.valid.setStyleSheet(f"color:{ACCENT};font-weight:700;"); lay.addWidget(self.valid)
         row=QHBoxLayout(); self.path=QLineEdit(); browse=QPushButton("Choose…"); browse.clicked.connect(self.choose); row.addWidget(self.path,1); row.addWidget(browse); lay.addLayout(row)
         self.progress=QProgressBar(); self.progress.setRange(0,100); lay.addWidget(self.progress)
         self.log=QTextEdit(); self.log.setReadOnly(True); self.log.setFixedHeight(110); lay.addWidget(self.log)
-        row2=QHBoxLayout(); self.close_button=QPushButton("Close"); self.close_button.clicked.connect(self.reject); row2.addWidget(self.close_button); self.open_folder=QPushButton("Open folder"); self.open_folder.setEnabled(False); self.open_folder.clicked.connect(self.open_output_folder); row2.addWidget(self.open_folder); row2.addStretch(); self.export=QPushButton("Export PF3"); self.export.setObjectName("AccentButton"); self.export.clicked.connect(self.start_export); row2.addWidget(self.export); lay.addLayout(row2)
+        row2=QHBoxLayout(); self.close_button=QPushButton("Close"); self.close_button.clicked.connect(self.reject); row2.addWidget(self.close_button); self.open_folder=QPushButton("Open folder"); self.open_folder.setEnabled(False); self.open_folder.clicked.connect(self.open_output_folder); row2.addWidget(self.open_folder); row2.addStretch(); self.export=QPushButton("Save style"); self.export.setObjectName("AccentButton"); self.export.clicked.connect(self.start_export); row2.addWidget(self.export); lay.addLayout(row2)
         self.refresh()
 
     def closeEvent(self,event):
@@ -676,49 +737,38 @@ class ExportDialog(QDialog):
         recipe_active=any(int(creative.get(key,0) or 0) for key in ("recipe_highlight","recipe_shadow","recipe_color"))
         creative_active=recipe_active or active_axes or creative.get("color_chrome")!="Off" or creative.get("color_chrome_fx_blue")!="Off" or creative.get("tone_curve")!=IDENTITY_TONE_CURVE
         self.summary.setText(f"Base: <b>{s['base_name']}</b> · {validity}<br>Recipe WB: <b>{recipe_wb_text}</b> · LUT-baked / approximate<br>LUT stack: <b>{len(active)} layers</b> · Creative Color: <b>{'active' if creative_active else 'neutral'}</b><br>Canon table: <b>33³ / 12-bit</b><br>Contrast: <b>{s['contrast']:+d}</b> · Saturation: <b>{s['saturation']:+d}</b> · Color Tone: <b>{s['color_tone']:+d}</b>")
-        default=self.main.settings.get_folder("last_export_folder",exported_styles_dir())/(self.main.project_name.text().strip() or "CanonStyle")
-        self.path.setText(str(default.with_suffix('.pf3')))
+        self.path.setText(str(style_export_path(self.main.project_name.text().strip().rstrip('*') or 'CanonStyle')))
     def choose(self):
-        p,_=QFileDialog.getSaveFileName(self,"Export Canon PF3",self.path.text(),"Canon Picture Style (*.pf3)")
+        p,_=QFileDialog.getSaveFileName(self,"Save editable style",self.path.text(),"Editable Canon Style (*.canonstyleproject);;Canon PF3 only (*.pf3)")
         if p:self.path.setText(p);self.main.settings.remember_file("last_export_folder",p)
     def start_export(self):
         p=Path(self.path.text().strip())
         if not p.name:return
-        if p.suffix.lower()!=".pf3":
-            p=p.with_suffix(".pf3");self.path.setText(str(p))
+        if p.suffix.lower() not in ('.pf3', '.canonstyleproject'):
+            p=p.with_suffix('.canonstyleproject');self.path.setText(str(p))
         self.export.setEnabled(False);self.progress.setValue(0);self.log.clear();self.main.settings.remember_file("last_export_folder",p)
         # Capture every UI value before entering the background worker. No Qt
         # widget or mutable UI state is accessed from the engine thread.
-        dll=self.main.dll_path();base=self.main.current_base_path();luts=list(self.main.luts);controls=dict(self.main.controls_dict());title=p.stem
-        state=self.main.edit_state_dict();project=self.main.project_document().to_dict();base_info=dict(self.main.base_resolution or {})
-        manifest_luts=[{"name":Path(item["cube"]["path"]).name,"enabled":bool(item.get("enabled",True)),"opacity":float(item.get("opacity",1.0)),**(item.get("metadata") or {})} for item in luts]
-        self.export_context={"state":state,"project":project,"base":base_info,"output":p,"luts":manifest_luts}
+        dll=self.main.dll_path(optional=True);base=self.main.current_base_path();luts=list(self.main.luts);controls=dict(self.main.controls_dict());title=p.stem
+        project=self.main.project_document()
         def work():
-            return export_pf3(dll,base,p,luts,controls,title,log=lambda m:self.worker.signals.message.emit(m),progress=lambda v:self.worker.signals.progress.emit(v))
+            logger=lambda m:self.worker.signals.message.emit(m)
+            progress=lambda v:self.worker.signals.progress.emit(v)
+            if p.suffix.lower()=='.pf3':
+                return export_pf3(dll,base,p,luts,controls,title,log=logger,progress=progress)
+            return export_style_project(dll,base,p,luts,controls,title,project,log=logger,progress=progress)
         self.worker=FunctionWorker(work); self.worker.signals.message.connect(self.log.append); self.worker.signals.progress.connect(lambda v:self.progress.setValue(round(v*100))); self.worker.signals.result.connect(self.export_succeeded); self.worker.signals.error.connect(self.failed); self.main.engine_pool.start(self.worker)
     def export_succeeded(self,result):
         size,sha=result; self.progress.setValue(100); self.log.append(f"✓ Generated · {size:,} bytes · validation passed"); self.log.append(f"SHA-256: {sha}"); self.open_folder.setEnabled(True); self.export.setEnabled(True)
-        try:
-            context=self.export_context;output=Path(context["output"]);state=context["state"];base=context["base"]
-            sidecar=output.with_suffix('.canonstyle.json');sidecar.write_text(json.dumps(context["project"],indent=2,ensure_ascii=False),encoding='utf-8')
-            manifest={"format":"CanonStyleStudio.PF3Manifest","version":1,"pf3":output.name,"pf3Size":size,"pf3Sha256":sha,
-                      "basePictureStyle":state.get("basePictureStyle") or state.get("base_name"),"baseTemplateSource":base.get("source"),
-                      "baseTemplateValidated":bool(base.get("validated")),"basePf3Sha256":base.get("sha256"),
-                      "canonTable":{"size":33,"bitDepth":12,"properties":["0x40001070","0x40001071"]},
-                      "recipeWhiteBalance":{"method":"fuji-xt1-provia-rb-lut-v2","accuracy":"empirically-calibrated-approximation","order":"before-user-lut-stack",**normalize_recipe_wb(state.get("recipe_wb"))},
-                      "recipeColor":{"method":"oklab-chroma-exponential-v1","accuracy":"approximate","order":"before-user-lut-stack","value":int((state.get("creative") or {}).get("recipe_color",0))},
-                      "luts":context["luts"],"creativeControls":state.get("creative") or {}}
-            output.with_suffix('.manifest.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False),encoding='utf-8')
-        except Exception:pass
     def failed(self,msg,tb): self.log.append("ERROR: "+msg);self.log.append(tb);self.export.setEnabled(True)
     def open_output_folder(self):
-        try:os.startfile(str(Path(self.path.text()).parent))
+        try:open_local_path(Path(self.path.text()).parent)
         except Exception:pass
 
 
 class CanonStyleStudioQt(QMainWindow):
     def __init__(self):
-        super().__init__(); self.setWindowTitle(f"{PUBLIC_NAME} {APP_VERSION}"); self.resize(1680,980); self.setMinimumSize(1240,760); self.setAcceptDrops(True)
+        super().__init__(); self.setWindowTitle(f"{PUBLIC_NAME} {APP_VERSION}"); self.resize(1520,980); self.setMinimumSize(1240,760); self.setAcceptDrops(True)
         self.settings=SettingsStore(); self.render_engine=CanonRenderEngine()
         self.recent_internal_logs=[]
         self.canon_install=discover_pse(self.settings.data.get("manual_pse_path"))
@@ -738,6 +788,7 @@ class CanonStyleStudioQt(QMainWindow):
         self.engine_pool=QThreadPool(self); self.engine_pool.setMaxThreadCount(1)
         self._active_workers=set()
         self.references=[]; self.current_reference=-1; self.source_full=None; self.source_native_size=None; self.source_is_raw=False; self.source_embedded=False; self.raw_info={}; self.luts=[]; self.custom_base_path=None; self.current_source_path=None;self.base_resolution=None
+        self.project_base_path=None;self.project_base_style=None
         self.creative_controls=normalize_creative_controls(DEFAULT_CREATIVE_CONTROLS)
         self.recipe_wb_controls=normalize_recipe_wb(DEFAULT_RECIPE_WB)
         self.project_path=None; self.snapshots={"A":None,"B":None,"C":None}; self.history=HistoryManager(); self.reference_cache=OrderedDict(); self.applying_state=True; self.render_running=False; self.render_pending=None; self.preview_running=False; self.preview_pending=None; self.render_generation=0; self.load_generation=0; self.eyedropper_active=False; self.custom_wb_mult=None; self.dirty=False; self.last_canon_base=None; self.last_canon_settings=None; self.last_canon_source=None; self.last_canon_native=False; self.last_canon_resolution=None; self.dpp_failure_cache={};self.closing=False
@@ -798,27 +849,43 @@ class CanonStyleStudioQt(QMainWindow):
     # ---------- UI ----------
     def build_ui(self):
         root=QWidget(); self.setCentralWidget(root); main=QVBoxLayout(root); main.setContentsMargins(0,0,0,0); main.setSpacing(0)
-        top=QFrame(); top.setObjectName("TopBar"); top.setFixedHeight(58); tl=QHBoxLayout(top); tl.setContentsMargins(14,8,14,8); tl.setSpacing(7)
-        app=QLabel("Canon Style Studio"); app.setObjectName("AppTitle"); tl.addWidget(app); ver=QLabel(f"PUBLIC ALPHA · {APP_VERSION}");ver.setObjectName("Muted");tl.addWidget(ver);tl.addSpacing(12)
+        top=QFrame(); top.setObjectName("TopBar"); top.setFixedHeight(76); tl=QHBoxLayout(top); tl.setContentsMargins(32,12,32,12); tl.setSpacing(10)
+        self.brand_logo=QLabel();self.brand_logo.setAccessibleName('Canon');self.brand_logo.setToolTip(APP_VERSION)
+        # The supplied artwork has transparent padding; crop only its displayed source rectangle.
+        logo=QPixmap(str(HERE/'assets/canon-logo.png')).copy(38,326,1193,248)
+        self.brand_logo.setPixmap(logo.scaledToWidth(102,Qt.TransformationMode.SmoothTransformation));tl.addWidget(self.brand_logo)
+        app=QLabel("STYLE STUDIO");app.setObjectName("AppTitle");tl.addWidget(app);tl.addSpacing(16)
         self.open_btn=QPushButton("Open");self.open_btn.clicked.connect(self.open_dialog);tl.addWidget(self.open_btn)
         self.save_btn=QPushButton("Save Project");self.save_btn.clicked.connect(self.save_project_action);tl.addWidget(self.save_btn)
-        self.project_name=QLineEdit("Untitled");self.project_name.setMaximumWidth(250);self.project_name.setPlaceholderText("Project name");self.project_name.editingFinished.connect(self.mark_dirty);tl.addWidget(self.project_name);tl.addStretch()
+        self.open_btn.setObjectName('NavButton');self.save_btn.setObjectName('NavButton')
+        self.project_name=QLineEdit("Untitled");self.project_name.setObjectName('ProjectTitle');self.project_name.setPlaceholderText("Style name");self.project_name.editingFinished.connect(self.mark_dirty);tl.addStretch()
         self.undo_btn=QToolButton(text="↶");self.undo_btn.setToolTip("Undo · Ctrl+Z");self.undo_btn.clicked.connect(self.undo);tl.addWidget(self.undo_btn)
         self.redo_btn=QToolButton(text="↷");self.redo_btn.setToolTip("Redo · Ctrl+Y");self.redo_btn.clicked.connect(self.redo);tl.addWidget(self.redo_btn)
         self.report_btn=QPushButton("Create Test Report");self.report_btn.clicked.connect(self.create_test_report);tl.addWidget(self.report_btn)
-        self.about_btn=QToolButton(text="About / Alpha");self.about_btn.clicked.connect(self.show_about);tl.addWidget(self.about_btn)
-        self.camera_btn=QPushButton("SEND TO CAMERA");self.camera_btn.setObjectName("AccentButton");self.camera_btn.setToolTip("Target-scoped Canon native PF3 compiler workflow; EOS RP physically validated, other bodies experimental");self.camera_btn.clicked.connect(self.open_camera_install);tl.addWidget(self.camera_btn)
-        self.export_btn=QPushButton("EXPORT PF3");self.export_btn.setObjectName("AccentButton");self.export_btn.clicked.connect(self.open_export);tl.addWidget(self.export_btn);main.addWidget(top)
+        self.about_btn=QToolButton(text="About");self.about_btn.clicked.connect(self.show_about);tl.addWidget(self.about_btn)
+        self.camera_btn=QToolButton();self.camera_btn.setObjectName("AccentButton")
+        self.camera_btn.setToolTip("Independent USB installation · choose camera and User Def. 1–3. Menu: optional Canon fallback.")
+        camera_menu=QMenu(self.camera_btn)
+        independent=camera_menu.addAction("SEND TO CAMERA");independent.setToolTip(self.camera_btn.toolTip());independent.triggered.connect(self.open_camera_install)
+        fallback=camera_menu.addAction("Canon fallback · requires EOS Utility…");fallback.triggered.connect(self.open_native_camera_install)
+        if sys.platform!='win32':
+            fallback.setEnabled(False);fallback.setToolTip('This Canon fallback is available on Windows.')
+        self.camera_btn.setDefaultAction(independent);self.camera_btn.setMenu(camera_menu)
+        self.camera_btn.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup);tl.addWidget(self.camera_btn)
+        self.export_btn=QPushButton("Save style");self.export_btn.setObjectName("DarkButton");self.export_btn.clicked.connect(self.open_export);tl.addWidget(self.export_btn);main.addWidget(top)
 
-        content=QSplitter(Qt.Orientation.Horizontal); content.setChildrenCollapsible(False); main.addWidget(content,1);self.content_splitter=content
-        sidebar=QFrame();sidebar.setObjectName("SideBar");sidebar.setMinimumWidth(400);sidebar.setMaximumWidth(720);sidebar.setSizePolicy(QSizePolicy.Policy.Preferred,QSizePolicy.Policy.Expanding);self.sidebar=sidebar;sl=QVBoxLayout(sidebar);sl.setContentsMargins(8,8,8,8);sl.setSpacing(0)
+        content=QSplitter(Qt.Orientation.Horizontal);content.setContentsMargins(32,24,32,20);content.setHandleWidth(26); content.setChildrenCollapsible(False); main.addWidget(content,1);self.content_splitter=content
+        sidebar=QFrame();sidebar.setObjectName("SideBar");sidebar.setMinimumWidth(390);sidebar.setMaximumWidth(720);sidebar.setSizePolicy(QSizePolicy.Policy.Preferred,QSizePolicy.Policy.Expanding);self.sidebar=sidebar;sl=QVBoxLayout(sidebar);sl.setContentsMargins(0,0,0,0);sl.setSpacing(0)
         scroll=QScrollArea();scroll.setWidgetResizable(True);scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);self.sidebar_scroll=scroll
-        sw=QWidget();sw.setMinimumWidth(0);sw.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred);self.sidebar_widget=sw;self.side_layout=QVBoxLayout(sw);self.side_layout.setContentsMargins(4,2,4,4);self.side_layout.setSpacing(2);scroll.setWidget(sw);sl.addWidget(scroll);content.addWidget(sidebar)
-        self.build_raw_section();self.build_canon_section();self.build_creative_section();self.build_lut_section();self.side_layout.addStretch()
+        sw=QWidget();sw.setMinimumWidth(0);sw.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred);self.sidebar_widget=sw;self.side_layout=QVBoxLayout(sw);self.side_layout.setContentsMargins(0,2,8,4);self.side_layout.setSpacing(14);scroll.setWidget(sw);sl.addWidget(scroll);content.addWidget(sidebar)
+        kicker=QLabel('PICTURE STYLE  /  EDITOR');kicker.setObjectName('Kicker');self.side_layout.addWidget(kicker)
+        self.project_name.setMinimumHeight(62);self.side_layout.addWidget(self.project_name)
+        self.build_raw_section();self.build_canon_section();self.build_creative_section();self.build_lut_section()
+        self.side_layout.removeWidget(self.raw_section);self.side_layout.addWidget(self.raw_section);self.side_layout.addStretch()
 
-        center=QWidget();cl=QVBoxLayout(center);cl.setContentsMargins(0,0,0,0);cl.setSpacing(0);content.addWidget(center);content.setStretchFactor(0,0);content.setStretchFactor(1,1);content.setSizes([430,1250])
+        center=QWidget();cl=QVBoxLayout(center);cl.setContentsMargins(0,0,0,0);cl.setSpacing(12);content.insertWidget(0,center);content.setStretchFactor(0,1);content.setStretchFactor(1,0);content.setSizes([1000,440])
         viewbar=QFrame();vbl=QHBoxLayout(viewbar);vbl.setContentsMargins(10,7,10,7);vbl.setSpacing(6)
-        self.compare_combo=QComboBox();self.compare_combo.addItems(["Side by side","Split","Original","Preview"]);self.compare_combo.currentTextChanged.connect(self.compare_mode_changed);vbl.addWidget(self.compare_combo)
+        self.compare_combo=QComboBox();self.compare_combo.addItems(["Side by side","Split","Original","Preview"]);self.compare_combo.setCurrentText('Preview');self.compare_combo.currentTextChanged.connect(self.compare_mode_changed);vbl.addWidget(self.compare_combo)
         self.render_mode=QComboBox();self.render_mode.addItems(["Working Preview","Canon 33³ LUT Preview"]);self.render_mode.currentTextChanged.connect(lambda _x:self.commit_and_render());vbl.addWidget(self.render_mode)
         self.zoom_combo=QComboBox();self.zoom_combo.addItems(["Fit","25%","50%","100%","200%","400%"]);self.zoom_combo.currentTextChanged.connect(self.zoom_changed);vbl.addWidget(self.zoom_combo)
         vbl.addSpacing(8);self.clip_btn=QToolButton(text="△");self.clip_btn.setCheckable(True);self.clip_btn.setToolTip("Highlight / shadow clipping overlay");self.clip_btn.toggled.connect(self.viewer_clipping);vbl.addWidget(self.clip_btn)
@@ -827,13 +894,16 @@ class CanonStyleStudioQt(QMainWindow):
         for name in "ABC":
             b=SnapshotButton(name);b.saveRequested.connect(self.save_snapshot);b.loadRequested.connect(self.load_snapshot);b.clearRequested.connect(self.clear_snapshot);vbl.addWidget(b);self.snapshot_buttons[name]=b
         cl.addWidget(viewbar)
-        self.viewer=CompareView();self.viewer.pixelInfo.connect(self.pixel_info);self.viewer.pixelClicked.connect(self.pixel_clicked);self.viewer.viewChanged.connect(self.view_state_changed);cl.addWidget(self.viewer,1)
+        self.viewer=CompareView();self.viewer.setMode(self.compare_combo.currentText());self.viewer.pixelInfo.connect(self.pixel_info);self.viewer.pixelClicked.connect(self.pixel_clicked);self.viewer.viewChanged.connect(self.view_state_changed);cl.addWidget(self.viewer,1)
         self.scope_frame=QFrame();sfl=QVBoxLayout(self.scope_frame);sfl.setContentsMargins(8,4,8,6);sr=QHBoxLayout();sr.addWidget(QLabel("Scope"));self.scope_combo=QComboBox();self.scope_combo.addItems(["Histogram","RGB Parade","Vectorscope"]);self.scope_combo.currentTextChanged.connect(lambda x:self.scope.setMode(x));sr.addWidget(self.scope_combo);sr.addStretch();sfl.addLayout(sr);self.scope=ScopeWidget();sfl.addWidget(self.scope);self.scope_frame.setVisible(False);cl.addWidget(self.scope_frame)
+        reference_row=QHBoxLayout();reference_title=QLabel('Reference images');reference_title.setObjectName('GalleryTitle');reference_row.addWidget(reference_title);reference_row.addStretch()
+        self.samples_button=QPushButton('RAW samples…');self.samples_button.clicked.connect(self.open_sample_images);reference_row.addWidget(self.samples_button);cl.addLayout(reference_row)
+        self.reference_credit=QLabel();self.reference_credit.setObjectName('Muted');self.reference_credit.setTextFormat(Qt.TextFormat.PlainText);self.reference_credit.setWordWrap(True);self.reference_credit.hide();cl.addWidget(self.reference_credit)
         self.filmstrip=ReferenceStrip();self.filmstrip.selected.connect(self.select_reference);cl.addWidget(self.filmstrip)
         bottom=QFrame();bottom.setObjectName("BottomBar");bl=QHBoxLayout(bottom);bl.setContentsMargins(10,5,10,5);self.status=QLabel("Ready");self.status.setObjectName("Muted");bl.addWidget(self.status);bl.addStretch();self.rgb_label=QLabel("RGB —");self.rgb_label.setObjectName("Muted");bl.addWidget(self.rgb_label);cl.addWidget(bottom)
 
     def build_raw_section(self):
-        sec=CollapsibleSection("RAW · CANON DPP4LIB",expanded=True);self.side_layout.addWidget(sec)
+        sec=CollapsibleSection("RAW DEVELOPMENT",expanded=False);self.side_layout.addWidget(sec);self.raw_section=sec
         row=QHBoxLayout();row.addWidget(QLabel("RAW engine"));self.raw_engine_label=QLabel("Canon DPP4Lib · standalone");self.raw_engine_label.setObjectName("Badge");row.addWidget(self.raw_engine_label,1);self.raw_engine_test=QToolButton(text="Test");self.raw_engine_test.clicked.connect(self.test_dpp_backend);row.addWidget(self.raw_engine_test);self.locate_pse_btn=QToolButton(text="Locate PSE…");self.locate_pse_btn.clicked.connect(self.locate_pse_folder);row.addWidget(self.locate_pse_btn);sec.body_layout.addLayout(row)
         self.camera_label=QLabel("Camera: no file loaded");self.camera_label.setObjectName("Muted");self.camera_label.setWordWrap(True);sec.body_layout.addWidget(self.camera_label)
         self.exposure=ValueSlider("Exposure",-50,50,0,scale=0.1,suffix=" EV");sec.body_layout.addWidget(self.exposure)
@@ -844,23 +914,26 @@ class CanonStyleStudioQt(QMainWindow):
         self.ab_shift=ValueSlider("WB Shift  B ↔ A",-9,9,0);self.gm_shift=ValueSlider("WB Shift  G ↔ M",-9,9,0);sec.body_layout.addWidget(self.ab_shift);sec.body_layout.addWidget(self.gm_shift)
         for s in (self.ab_shift,self.gm_shift):s.changed.connect(self.schedule_canon_render);s.changed.connect(self._update_recipe_wb_status);s.committed.connect(self.commit_history)
         row=QHBoxLayout();self.eyedrop=QPushButton("Eyedropper WB");self.eyedrop.setCheckable(True);self.eyedrop.toggled.connect(self.toggle_eyedropper);row.addWidget(self.eyedrop);clear=QPushButton("Clear custom WB");clear.clicked.connect(self.clear_custom_wb);row.addWidget(clear);sec.body_layout.addLayout(row)
-        note=QLabel("Requires Canon Picture Style Editor to be installed; Digital Photo Professional is not required. CR3/CR2 preview uses PSE's local DPP4Lib without opening PSE. Exposure, fixed/Kelvin WB and both WB Shift axes are Canon-native. Eyedropper WB is a post-Canon experimental adjustment.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
+        note=QLabel("Canon RAW rendering uses Picture Style Editor's local DPP4Lib. PF3 generation uses the included basic styles. RAW exposure and white balance affect the preview; they are not written into the Picture Style.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
 
     def build_canon_section(self):
-        sec=CollapsibleSection("CANON STYLE",expanded=True);self.side_layout.addWidget(sec)
-        row=QHBoxLayout();self.base_combo=QComboBox();self.base_combo.addItems(list(BASES.keys()));self.base_combo.currentTextChanged.connect(self.base_changed);row.addWidget(self.base_combo,1);pf=QPushButton("Open PF3…");pf.clicked.connect(self.open_pf3_dialog);row.addWidget(pf);bases=QToolButton(text="Bases…");bases.setToolTip("Locate a local folder containing validated Canon base PF3 templates");bases.clicked.connect(self.choose_base_pf3_folder);row.addWidget(bases);sec.body_layout.addLayout(row)
+        sec=CollapsibleSection("PICTURE STYLE · ADJUSTMENTS",expanded=True);self.side_layout.addWidget(sec)
+        row=QHBoxLayout();self.base_combo=QComboBox();self.base_combo.addItems(list(BASES.keys()));self.base_combo.currentTextChanged.connect(self.base_changed);row.addWidget(self.base_combo,1);pf=QPushButton("Open style…");pf.clicked.connect(self.open_pf3_dialog);row.addWidget(pf);bases=QToolButton(text="Bases…");bases.setToolTip("Locate a local folder containing validated Canon base PF3 templates");bases.clicked.connect(self.choose_base_pf3_folder);row.addWidget(bases);sec.body_layout.addLayout(row)
         self.base_source_label=QLabel("Export base: checking…");self.base_source_label.setObjectName("Muted");self.base_source_label.setWordWrap(True);sec.body_layout.addWidget(self.base_source_label)
-        self.contrast=ValueSlider("Contrast",-4,4,0);self.saturation=ValueSlider("Saturation",-4,4,0);self.color_tone=ValueSlider("Color Tone",-4,4,0)
-        for s in (self.contrast,self.saturation,self.color_tone):sec.body_layout.addWidget(s);s.changed.connect(self.schedule_canon_render);s.committed.connect(self.commit_history)
-        native=QLabel("RAW preview: Contrast, Saturation and Color Tone are rendered by Canon DPP4Lib itself.");native.setObjectName("Muted");native.setWordWrap(True);sec.body_layout.addWidget(native)
-        self.sharp_enable=QCheckBox("Override Sharpness · PF3 native / preview approximate");self.sharp_enable.toggled.connect(lambda _x:self.commit_and_render());sec.body_layout.addWidget(self.sharp_enable)
-        self.sharp_strength=ValueSlider("Strength",0,7,0);self.fineness=ValueSlider("Fineness",1,5,2);self.threshold=ValueSlider("Threshold",1,5,4)
-        for s in (self.sharp_strength,self.fineness,self.threshold):sec.body_layout.addWidget(s);s.changed.connect(lambda _v:self.schedule_render(True));s.committed.connect(self.commit_history)
-        note=QLabel("PF3 export writes Canon-native Basic/Sharpness fields. Sharpness Preview: Approximate. Imported PF3 Preview: Approximate. These experimental previews do not block PF3 export.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
+        adjustments=QGridLayout();adjustments.setSpacing(8);sec.body_layout.addLayout(adjustments)
+        self.contrast=ValueSlider("Contrast",-4,4,0,card=True);self.saturation=ValueSlider("Saturation",-4,4,0,card=True);self.color_tone=ValueSlider("Color tone",-4,4,0,card=True)
+        for column,s in enumerate((self.contrast,self.saturation,self.color_tone)):
+            adjustments.addWidget(s,0,column);s.changed.connect(self.schedule_canon_render);s.committed.connect(self.commit_history)
+        self.sharp_enable=QCheckBox("Set sharpness values");self.sharp_enable.setToolTip('Otherwise preserve the base PF3 sharpness. Sharpness preview is approximate.');self.sharp_enable.toggled.connect(lambda _x:self.commit_and_render());sec.body_layout.addWidget(self.sharp_enable)
+        sharpness=QGridLayout();sharpness.setSpacing(8);sec.body_layout.addLayout(sharpness)
+        self.sharp_strength=ValueSlider("Strength",0,7,0,card=True);self.fineness=ValueSlider("Fineness",1,5,2,card=True);self.threshold=ValueSlider("Threshold",1,5,4,card=True)
+        for column,s in enumerate((self.sharp_strength,self.fineness,self.threshold)):
+            sharpness.addWidget(s,0,column);s.changed.connect(lambda _v:self.schedule_render(True));s.committed.connect(self.commit_history)
+        note=QLabel("Saved in your PF3. Sharpness and imported-style previews are approximate.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
 
     def build_lut_section(self):
         sec=CollapsibleSection("LUT STACK",expanded=True);self.side_layout.addWidget(sec)
-        self.lut_list=LutList();self.lut_list.setMinimumHeight(190);self.lut_list.setMaximumHeight(420);self.lut_list.orderChanged.connect(self.lut_order_changed);self.lut_list.reorderRequested.connect(self.reorder_lut);self.lut_list.filesDropped.connect(self.files_dropped);sec.body_layout.addWidget(self.lut_list)
+        self.lut_list=LutList();self.lut_list.setFixedHeight(88);self.lut_list.orderChanged.connect(self.lut_order_changed);self.lut_list.reorderRequested.connect(self.reorder_lut);self.lut_list.filesDropped.connect(self.files_dropped);sec.body_layout.addWidget(self.lut_list)
         row=QHBoxLayout();add=QPushButton("+ LUT / Hald");add.clicked.connect(self.add_lut_dialog);row.addWidget(add,1);hald=QPushButton("Lightroom Hald…");hald.clicked.connect(self.hald_menu);row.addWidget(hald);sec.body_layout.addLayout(row)
         note=QLabel("Drag LUT cards to reorder. Drop .cube/Hald files here or anywhere in the app.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
 
@@ -907,7 +980,7 @@ class CanonStyleStudioQt(QMainWindow):
         canon_active=hasattr(self,"ab_shift") and bool(self.ab_shift.value() or self.gm_shift.value())
         if active and canon_active:
             self.recipe_wb_status.setText(f"R{controls['red']:+d} / B{controls['blue']:+d} · ⚠ Canon WB Shift is also active; both effects are combined.")
-            self.recipe_wb_status.setStyleSheet("color:#FFB45C;")
+            self.recipe_wb_status.setStyleSheet("color:#8A4C08;")
         elif active:
             self.recipe_wb_status.setText(f"R{controls['red']:+d} / B{controls['blue']:+d} · LUT-baked / APPROXIMATE")
             self.recipe_wb_status.setStyleSheet("")
@@ -1008,9 +1081,10 @@ class CanonStyleStudioQt(QMainWindow):
             QMessageBox.critical(self,"Picture Style Editor",str(exc))
 
     def show_about(self):
-        QMessageBox.information(self,"Canon Style Studio Public Alpha",
+        QMessageBox.information(self,PUBLIC_NAME,
             f"{PUBLIC_NAME}\n{APP_VERSION}\nBuild {BUILD_ID}\n\n"
-            "Requires Canon Picture Style Editor to be installed.\n"
+            "Canon RAW preview requires Picture Style Editor.\n"
+            "Independent style installation does not require Canon software.\n"
             "Digital Photo Professional is not required.\n\n"
             "Experimental:\n"
             "• Generated PF3 base fallback when no validated local template is selected\n"
@@ -1056,13 +1130,14 @@ class CanonStyleStudioQt(QMainWindow):
                 "fallback_reason":self.raw_info.get("fallback_reason"),
             },
             "camera_install":{
-                "integrated":True,"method":"target-scoped Canon native PF3 compiler acceptance","physically_tested_bodies":["EOS RP","EOS R8"],
+                "integrated":True,"method":"independent PF3 compiler and isolated Windows WPD session","physically_tested_bodies":["EOS RP"],
+                "canon_runtime_required":False,"serializer_families":len(FAMILY_SIZES),"known_model_identifiers":len(CAMERA_FAMILIES),
                 "other_bodies":"experimental until physical validation","raw_compatibility_is_camera_compatibility":False,
-                "external_support_assets_required":False,"validation_mode":"live target-PF3 compiler and transport",
-                "live_inputs":["0x01000001","0x01000210","0x01000203"],
-                "compiler_patch_scope":"exact selected PF3 EdsCFParse reference",
-                "edsdk_payload_replaced":False,"edsdk_arguments_modified":False,
-                "property_0x00000115":"observation only / never patched",
+                "external_support_assets_required":False,"validation_mode":"live capabilities, descriptor, slot grammar and requested readback",
+                "slot_state":"live opaque legacy/extended controls preserved; conflicts block before writing",
+                "canon_fallback":{"available":True,"canon_runtime_required":True,"physically_tested_bodies":["EOS RP","EOS R8"],
+                    "validation":"exact target-PF3 compiler-to-EDSDK comparison","edsdk_payload_replaced":False,
+                    "edsdk_arguments_modified":False,"property_0x00000115":"observation only / never patched"},
             },
             "settings":{
                 "picture_style":self.base_combo.currentText(),"white_balance":self.wb_combo.currentText(),
@@ -1202,7 +1277,7 @@ class CanonStyleStudioQt(QMainWindow):
         p=self.canon_install.edscfparse_dll if self.canon_install else find_dll()
         if p:return Path(p)
         if optional:return None
-        raise RuntimeError("Canon Picture Style Editor is required for PF3 read/export. Digital Photo Professional is not required.")
+        raise RuntimeError("Canon Picture Style Editor is required for this Canon-native operation.")
     def choose_dll(self):
         start=self.settings.get_folder("last_dll_folder",Path(os.environ.get("ProgramFiles",r"C:\Program Files")))
         p,_=QFileDialog.getOpenFileName(self,"Select Canon EdsCFParse.dll",str(start),"Canon EdsCFParse (EdsCFParse.dll);;DLL (*.dll)")
@@ -1226,11 +1301,23 @@ class CanonStyleStudioQt(QMainWindow):
         self.update_base_source_status();self.status.setText("Validated local bases: "+", ".join(found));self.schedule_render(False)
 
     def resolve_current_base(self,optional=False):
+        dll=self.dll_path(optional=True)
         if self.base_combo.currentText()=="Imported PF3" and self.custom_base_path:
-            path=Path(self.custom_base_path);return {"path":path,"style":"Imported PF3","source":"imported PF3","validated":True,"cameraReady":True,"sha256":sha256_file(path) if path.is_file() else None}
-        dll=self.dll_path(optional=optional)
-        if dll is None:return None
+            path=Path(self.custom_base_path);return {"path":path,"style":"Imported PF3","source":"imported PF3","validated":bool(dll),"cameraReady":bool(dll),"independent":dll is None,"sha256":sha256_file(path) if path.is_file() else None}
         style=self.base_combo.currentText()
+        if style==self.project_base_style and self.project_base_path and self.project_base_path.is_file():
+            return dict(path=self.project_base_path,style=style,source='embedded project base',
+                        validated=False,cameraReady=bool(dll),independent=dll is None,
+                        sha256=sha256_file(self.project_base_path))
+        if dll is None:
+            try:
+                result=resolve_independent_base_pf3(style,
+                    cipher_reference=self.project_base_path or self.custom_base_path)
+                if result:return result
+            except Exception:
+                if not optional:raise
+            if optional:return None
+            raise RuntimeError("The included basic PF3 files are unavailable. Repair the app installation or open an owned style project/PF3.")
         search=[self.settings.data.get("base_pf3_folder"),HERE/"bases"]
         result=resolve_validated_base_pf3(dll,style,search)
         if result:
@@ -1247,7 +1334,9 @@ class CanonStyleStudioQt(QMainWindow):
         try:self.base_resolution=self.resolve_current_base(optional=True)
         except Exception:self.base_resolution=None
         if not hasattr(self,"base_source_label"):return
-        if not self.base_resolution:self.base_source_label.setText("Export base: unavailable · install/locate PSE")
+        if not self.base_resolution:self.base_source_label.setText("Export base: unavailable · open a saved style or locate PSE")
+        elif self.base_resolution.get("independent"):
+            self.base_source_label.setText(f"Export base: {self.base_resolution['style']} · independent PF3 · EXPERIMENTAL")
         elif self.base_resolution.get("validated"):
             self.base_source_label.setText(f"Export base: {self.base_resolution['style']} · validated local template")
         else:self.base_source_label.setText(f"Export base: {self.base_resolution['style']} · Canon-serialized runtime template · EXPERIMENTAL")
@@ -1257,13 +1346,13 @@ class CanonStyleStudioQt(QMainWindow):
         return Path(self.base_resolution["path"]) if self.base_resolution else None
     def controls_dict(self):
         return {"contrast":int(self.contrast.value()),"saturation":int(self.saturation.value()),"color_tone":int(self.color_tone.value()),"sharpness_override":self.sharp_enable.isChecked(),"sharp_strength":int(self.sharp_strength.value()),"fineness":int(self.fineness.value()),"threshold":int(self.threshold.value()),"recipe_wb":normalize_recipe_wb(self.recipe_wb_controls),"creative":normalize_creative_controls(self.creative_controls)}
-    def edit_state_dict(self):
-        base=self.current_base_path(optional=True)
+    def edit_state_dict(self,base_override=None):
+        base=Path(base_override) if base_override is not None else self.current_base_path(optional=True)
         base_style=self.base_combo.currentText()
         return {"base_name":base_style,"basePictureStyle":base_style,"baseTemplateSource":(self.base_resolution or {}).get("source"),"baseTemplateValidated":bool((self.base_resolution or {}).get("validated")),"baseCameraReady":bool((self.base_resolution or {}).get("cameraReady")),"base_path":str(base or ""),"custom_pf3":str(self.custom_base_path or ""),**self.controls_dict(),"raw_wb_mode":self.wb_combo.currentText(),"raw_kelvin":self.kelvin.value(),"raw_exposure":self.exposure.value(),"raw_shot_index":self.shot_index.value(),"wb_ab_shift":int(self.ab_shift.value()),"wb_gm_shift":int(self.gm_shift.value()),"custom_wb_mult":self.custom_wb_mult,"preview_quality_mode":"canon33" if self.render_mode.currentText().startswith("Canon") else "working","luts":[{"id":e["id"],"path":str(e["cube"]["path"]),"enabled":bool(e.get("enabled",True)),"opacity":float(e.get("opacity",1.0)),"metadata":e.get("metadata") or {}} for e in self.luts]}
-    def project_document(self):
+    def project_document(self,base_override=None):
         zoom=0.0 if self.viewer.zoom_mode=="Fit" else float(self.viewer.zoom_mode.rstrip("%"))/100.0
-        return ProjectDocument(name=self.project_name.text().strip().rstrip("*") or "Untitled",edit=self.edit_state_dict(),references=[str(x) for x in self.references],current_reference=max(0,self.current_reference),compare_mode=self.compare_combo.currentText(),zoom=zoom,pan_x=self.viewer.center[0],pan_y=self.viewer.center[1],split=self.viewer.split,snapshots=self.snapshots.copy())
+        return ProjectDocument(name=self.project_name.text().strip().rstrip("*") or "Untitled",edit=self.edit_state_dict(base_override),references=[str(x) for x in self.references],current_reference=max(0,self.current_reference),compare_mode=self.compare_combo.currentText(),zoom=zoom,pan_x=self.viewer.center[0],pan_y=self.viewer.center[1],split=self.viewer.split,snapshots=self.snapshots.copy())
     def reset_history(self):self.history.reset(self.edit_state_dict());self.update_undo_buttons()
     def commit_history(self,fast_first=False):
         if self.applying_state:return
@@ -1288,6 +1377,9 @@ class CanonStyleStudioQt(QMainWindow):
         self.applying_state=True
         try:
             custom=s.get("custom_pf3") or "";self.custom_base_path=Path(custom) if custom else None
+            base=s.get('base_path') or ''
+            self.project_base_path=Path(base) if base and Path(base).is_file() else None
+            self.project_base_style=s.get('basePictureStyle') or s.get('base_name')
             vals=list(BASES.keys())+(["Imported PF3"] if self.custom_base_path else [])
             self.base_combo.blockSignals(True);self.base_combo.clear();self.base_combo.addItems(vals);self.base_combo.setCurrentText(s.get("basePictureStyle") or s.get("base_name","Neutral"));self.base_combo.blockSignals(False)
             self.contrast.setValue(s.get("contrast",0));self.saturation.setValue(s.get("saturation",0));self.color_tone.setValue(s.get("color_tone",0));self.sharp_enable.setChecked(s.get("sharpness_override",False));self.sharp_strength.setValue(s.get("sharp_strength",0));self.fineness.setValue(s.get("fineness",2));self.threshold.setValue(s.get("threshold",4));self.set_recipe_wb_controls(s.get("recipe_wb"));self.set_creative_controls(s.get("creative"))
@@ -1308,13 +1400,13 @@ class CanonStyleStudioQt(QMainWindow):
 
     # ---------- File/project ----------
     def open_dialog(self):
-        start=self.settings.get_folder("last_image_folder",HERE)
-        filt="Supported (*.canonstyleproject *.pf3 *.cr3 *.cr2 *.crw *.cip *.crn *.jpg *.jpeg *.png *.tif *.tiff *.webp *.cube);;All files (*.*)"
+        start=exported_styles_dir()
+        filt="Styles (*.canonstyleproject *.pf3 *.canonstyle.json);;Supported (*.canonstyleproject *.pf3 *.cr3 *.cr2 *.crw *.cip *.crn *.jpg *.jpeg *.png *.tif *.tiff *.webp *.cube);;All files (*.*)"
         p,_=QFileDialog.getOpenFileName(self,"Open",str(start),filt)
         if p:self.open_path(Path(p))
     def open_path(self,p):
         ext=p.suffix.lower()
-        if ext==".canonstyleproject":self.open_project(p)
+        if ext==".canonstyleproject" or p.name.lower().endswith('.canonstyle.json'):self.open_project(p)
         elif ext==".pf3":self.open_pf3(p)
         elif ext==".cube":self.add_lut_paths([p])
         elif ext in HALD_IMAGE_EXTENSIONS and self._looks_like_hald(p):self.add_lut_paths([p])
@@ -1326,8 +1418,7 @@ class CanonStyleStudioQt(QMainWindow):
         if self.project_path:
             suggested=Path(self.project_path)
         else:
-            folder=self.settings.get_folder("last_project_folder",HERE)
-            suggested=folder/((self.project_name.text().rstrip('*') or "Untitled")+".canonstyleproject")
+            suggested=style_export_path(self.project_name.text().rstrip('*') or 'Untitled')
         p,_=QFileDialog.getSaveFileName(self,"Save Portable Canon Style Project",str(suggested),"Canon Style Project (*.canonstyleproject)")
         if p:
             target=Path(p)
@@ -1336,25 +1427,30 @@ class CanonStyleStudioQt(QMainWindow):
         return False
     def save_project_to(self,p):
         try:
-            save_project(p,self.project_document())
+            export_style_project(self.dll_path(optional=True),self.current_base_path(),p,list(self.luts),
+                                 self.controls_dict(),Path(p).stem,self.project_document())
         except Exception as e:
             QMessageBox.critical(self,"Project save error",str(e));return False
-        self.project_path=Path(p);self.settings.remember_file("last_project_folder",p);self.mark_clean();self.status.setText(f"Portable project saved · settings + LUTs · {Path(p).name}");return True
+        self.project_path=Path(p);self.settings.remember_file("last_project_folder",p);self.mark_clean();self.status.setText(f"Style saved · PF3 + settings + LUTs · {Path(p).name}");return True
     def open_project(self,p):
         try:
             doc=load_project(p);self.project_path=Path(p);self.settings.remember_file("last_project_folder",p)
+            references=list(self.references) or [Path(x) for x in doc.references if Path(x).exists()]
+            current_reference=self.current_reference if self.references else doc.current_reference
+            current_reference=max(0,min(current_reference,len(references)-1))
             self.full_render_timer.stop();self.canon_render_timer.stop();self.render_generation+=1;self.load_generation+=1
             self.render_pending=None;self.preview_pending=None;self.dpp_client.cancel_active_render()
             self.references=[];self.current_reference=-1;self.current_source_path=None;self.source_full=None;self.source_native_size=None;self.source_is_raw=False;self.source_embedded=False;self.raw_info={}
+            self.reference_credit.clear();self.reference_credit.hide()
             self.last_canon_base=None;self.last_canon_settings=None;self.last_canon_source=None;self.last_canon_native=False;self.last_canon_resolution=None
             self.viewer.clearImages()
-            self.project_name.setText(doc.name);self.snapshots=doc.snapshots or {"A":None,"B":None,"C":None};self.apply_edit_state(doc.edit,True);self.references=[Path(x) for x in doc.references if Path(x).exists()];self.filmstrip.set_references(self.references,min(doc.current_reference,max(0,len(self.references)-1)));self.compare_combo.setCurrentText(doc.compare_mode)
+            self.project_name.setText(doc.name);self.snapshots=doc.snapshots or {"A":None,"B":None,"C":None};self.apply_edit_state(doc.edit,True);self.references=references;self.filmstrip.set_references(self.references,current_reference);self.compare_combo.setCurrentText(doc.compare_mode)
             zoom_mode="Fit"
             if int(getattr(doc,"version",1))>=2 and float(doc.zoom)>0:
                 candidate=f"{int(round(float(doc.zoom)*100))}%"
                 if candidate in {"25%","50%","100%","200%","400%"}:zoom_mode=candidate
             self.zoom_combo.blockSignals(True);self.zoom_combo.setCurrentText(zoom_mode);self.zoom_combo.blockSignals(False);self.viewer.setViewState(doc.pan_x,doc.pan_y,doc.split,zoom_mode);self.update_snapshot_buttons();self.mark_clean();self.reset_history()
-            if self.references:self.select_reference(min(doc.current_reference,len(self.references)-1))
+            if self.references:self.select_reference(current_reference)
             elif getattr(doc,"referenceHints",None):
                 names=", ".join(str(item.get("name") or "reference") for item in doc.referenceHints[:3] if isinstance(item,dict))
                 suffix="…" if len(doc.referenceHints)>3 else ""
@@ -1364,11 +1460,11 @@ class CanonStyleStudioQt(QMainWindow):
                 QMessageBox.warning(self,"Portable project notice","\n".join(str(item) for item in doc.portableWarnings))
         except Exception as e:QMessageBox.critical(self,"Project error",str(e))
     def open_pf3_dialog(self):
-        start=self.settings.get_folder("last_pf3_folder",HERE);p,_=QFileDialog.getOpenFileName(self,"Open Canon PF3",str(start),"Canon Picture Style (*.pf3)")
-        if p:self.open_pf3(Path(p))
+        p,_=QFileDialog.getOpenFileName(self,"Open style",str(exported_styles_dir()),"Canon Styles (*.canonstyleproject *.pf3 *.canonstyle.json)")
+        if p:self.open_path(Path(p))
     def open_pf3(self,p):
         try:
-            info=inspect_pf3(self.dll_path(),p);self.settings.remember_file("last_pf3_folder",p);self.custom_base_path=Path(p);vals=list(BASES.keys())+["Imported PF3"];self.base_combo.blockSignals(True);self.base_combo.clear();self.base_combo.addItems(vals);self.base_combo.setCurrentText("Imported PF3");self.base_combo.blockSignals(False);b=info["basic"];self.contrast.setValue(max(-4,min(4,b["contrast"])));self.saturation.setValue(max(-4,min(4,b["saturation"])));self.color_tone.setValue(max(-4,min(4,b["color_tone"])));self.sharp_strength.setValue(max(0,min(7,b["sharp_strength"])));self.fineness.setValue(max(1,min(5,b["fineness"] or 1)));self.threshold.setValue(max(1,min(5,b["threshold"] or 1)));self.render_engine.clear();self.project_name.setText(info["title"]);self.commit_history(False);self.schedule_canon_render(immediate=True);self.status.setText(f"PF3 opened · {p.name}")
+            info=inspect_pf3(self.dll_path(optional=True),p);self.settings.remember_file("last_pf3_folder",p);self.custom_base_path=Path(p);vals=list(BASES.keys())+["Imported PF3"];self.base_combo.blockSignals(True);self.base_combo.clear();self.base_combo.addItems(vals);self.base_combo.setCurrentText("Imported PF3");self.base_combo.blockSignals(False);b=info["basic"];self.contrast.setValue(max(-4,min(4,b["contrast"])));self.saturation.setValue(max(-4,min(4,b["saturation"])));self.color_tone.setValue(max(-4,min(4,b["color_tone"])));self.sharp_strength.setValue(max(0,min(7,b["sharp_strength"])));self.fineness.setValue(max(1,min(5,b["fineness"] or 1)));self.threshold.setValue(max(1,min(5,b["threshold"] or 1)));self.render_engine.clear();self.project_name.setText(info["title"]);self.commit_history(False);self.schedule_canon_render(immediate=True);self.status.setText(f"PF3 opened · {p.name}")
         except Exception as e:QMessageBox.critical(self,"PF3 error",str(e))
 
     # ---------- LUTs ----------
@@ -1391,6 +1487,7 @@ class CanonStyleStudioQt(QMainWindow):
             if answer==QMessageBox.StandardButton.Yes:self.base_combo.setCurrentText(wanted)
         if errors:QMessageBox.warning(self,"LUT import","\n\n".join(errors))
     def refresh_lut_list(self):
+        self.lut_list.setFixedHeight(min(324,max(88,len(self.luts)*108)))
         self.lut_list.blockSignals(True);self.lut_list.clear()
         for e in self.luts:
             item=QListWidgetItem();card=LutCard(e);item.setSizeHint(QSize(100,100));self.lut_list.addItem(item);self.lut_list.setItemWidget(item,card);card.changed.connect(lambda:self.schedule_render(True));card.committed.connect(self.commit_history);card.removeRequested.connect(self.remove_lut_id)
@@ -1416,13 +1513,18 @@ class CanonStyleStudioQt(QMainWindow):
             if p:shutil.copy2(HALD_TEMPLATE,p);self.settings.remember_file("last_lut_folder",p)
         elif a==imp:self.add_lut_dialog()
         elif a==folder:
-            try:os.startfile(str(HALD_TEMPLATE.parent))
+            try:open_local_path(HALD_TEMPLATE.parent)
             except Exception:pass
 
     # ---------- References / RAW ----------
     def load_initial_sample(self):
         p=HERE/"samples"/"color_reference.png"
         if p.exists():self.references=[p];self.filmstrip.set_references(self.references,0);self.select_reference(0)
+    def open_sample_images(self):
+        from sample_browser import SampleImagesDialog
+        if not hasattr(self,'samples_dialog'):self.samples_dialog=SampleImagesDialog(self)
+        self.samples_dialog.exec()
+
     def add_references(self,paths,select_last=False):
         good=[]
         for p in paths:
@@ -1432,6 +1534,8 @@ class CanonStyleStudioQt(QMainWindow):
         if good:self.select_reference(len(self.references)-1 if select_last else max(0,self.current_reference))
     def select_reference(self,index):
         if not (0<=index<len(self.references)):return
+        from sample_images import reference_credit
+        credit=reference_credit(self.references[index]);self.reference_credit.setText(credit);self.reference_credit.setVisible(bool(credit))
         self.full_render_timer.stop();self.canon_render_timer.stop();self.render_generation+=1;self.render_pending=None;self.preview_pending=None
         self.dpp_client.cancel_active_render();self.viewer.clearEyedropperSample()
         self.last_canon_base=None;self.last_canon_settings=None;self.last_canon_source=None;self.last_canon_native=False;self.last_canon_resolution=None
@@ -1687,13 +1791,18 @@ class CanonStyleStudioQt(QMainWindow):
 
     # ---------- Camera installation / export / drag-drop ----------
     def open_camera_install(self):
-        try:self.dll_path();self.current_base_path()
-        except Exception as exc:
-            QMessageBox.critical(self,"Send to Camera",str(exc));return
         CameraInstallDialog(self,self).exec()
 
+    def open_native_camera_install(self):
+        try:
+            self.current_base_path()
+            self.dll_path()
+        except Exception as error:
+            QMessageBox.warning(self,"Canon fallback",str(error));return
+        CanonNativeInstallDialog(self,self).exec()
+
     def open_export(self):
-        try:self.dll_path();self.current_base_path()
+        try:self.current_base_path()
         except Exception as e:QMessageBox.critical(self,"Export",str(e));return
         ExportDialog(self,self).exec()
     def dragEnterEvent(self,event):
@@ -1772,6 +1881,9 @@ def main():
         return 1
 
     if "--startup-smoke" in sys.argv:
+        from canon_engine import rawpy
+        if rawpy is None:
+            w.dirty=False;w.close();return 2
         QTimer.singleShot(1800,app.quit)
     return int(app.exec())
 

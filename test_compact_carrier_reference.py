@@ -1,9 +1,16 @@
 import unittest
 from unittest.mock import patch
-from camera_install.compact_carrier_reference import compact_upstream_grid,build_observed_compact16752_pixel,build_observed_compact16752
+from camera_install.compact_carrier_reference import compact_upstream_grid,build_observed_compact16752_pixel,build_observed_compact16752,build_accepted_compact16752
 
 
 class CompactCarrierTests(unittest.TestCase):
+    def test_dense_pixel_policy_is_explicit_and_rejects_unobserved_combinations(self):
+        for selector in (0x80000169,0x80000382,True,-1,None):
+            with self.assertRaises(ValueError):
+                build_accepted_compact16752({},None,None,internal_selector=selector)
+        with self.assertRaises(ValueError):
+            build_observed_compact16752({},None,None,block_paths=('pixel','pixel','dense-pixel','pixel'),pixel_scale=256,internal_selector=0)
+
     def test_explicit_route_validation_precedes_processing(self):
         for paths in (None,['pixel']*4,('pixel',)*3,('pixel',)*5,('integer',)*4):
             with self.assertRaises(ValueError):

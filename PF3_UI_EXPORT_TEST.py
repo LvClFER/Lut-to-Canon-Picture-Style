@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import sys
 import tempfile
@@ -15,7 +14,7 @@ from PySide6.QtWidgets import QApplication
 from canon_engine import inspect_pf3
 from canon_style_studio import CanonStyleStudioQt, ExportDialog, app_stylesheet
 from canon_runtime import exported_styles_dir
-from project_state import SettingsStore
+from project_state import SettingsStore, load_project
 
 
 def main() -> int:
@@ -27,7 +26,7 @@ def main() -> int:
     window = CanonStyleStudioQt()
     window.settings = SettingsStore(Path(temporary.name) / "settings.json")
     window.show()
-    target = Path(temporary.name) / "UI Export R+4 B-5.pf3"
+    target = Path(temporary.name) / "UI Export R+4 B-5.canonstyleproject"
     result = {"code": 1}
 
     try:
@@ -36,7 +35,7 @@ def main() -> int:
         window.recipe_color.setValue(4)
         dialog = ExportDialog(window, window)
         if Path(dialog.path.text()).parent.resolve() != exported_styles_dir().resolve():
-            raise AssertionError(f"Default PF3 folder is not portable exported_styles: {dialog.path.text()}")
+            raise AssertionError(f"Default PF3 folder is not the shared Documents folder: {dialog.path.text()}")
         dialog.path.setText(str(target.with_suffix("")))
         dialog.start_export()
         dialog.show()
@@ -45,28 +44,17 @@ def main() -> int:
             try:
                 if not target.is_file():
                     raise AssertionError("Export dialog did not create the PF3")
-                if target.stat().st_size != 434511:
-                    raise AssertionError(f"Unexpected PF3 size: {target.stat().st_size}")
-                manifest_path = target.with_suffix(".manifest.json")
-                sidecar_path = target.with_suffix(".canonstyle.json")
-                if not manifest_path.is_file() or not sidecar_path.is_file():
-                    raise AssertionError("Export dialog did not create manifest and sidecar")
-                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                project = load_project(target)
+                if target.with_suffix('.manifest.json').exists() or target.with_suffix('.canonstyle.json').exists():
+                    raise AssertionError('Style export created external sidecars')
                 expected = {"red": 4, "blue": -5}
-                actual = {key: manifest["recipeWhiteBalance"][key] for key in expected}
+                actual = project.edit['recipe_wb']
                 if actual != expected:
                     raise AssertionError(f"Recipe WB manifest mismatch: {actual}")
-                if manifest["recipeWhiteBalance"]["method"] != "fuji-xt1-provia-rb-lut-v2":
-                    raise AssertionError("Manifest contains the obsolete Recipe WB method")
-                if manifest["recipeColor"] != {
-                    "method": "oklab-chroma-exponential-v1",
-                    "accuracy": "approximate",
-                    "order": "before-user-lut-stack",
-                    "value": 4,
-                }:
-                    raise AssertionError(f"Recipe Color manifest mismatch: {manifest['recipeColor']}")
-                basic = inspect_pf3(window.dll_path(), target)["basic"]
-                result.update(code=0, size=target.stat().st_size, basic=basic, manifest=manifest_path.name)
+                if project.edit['creative']['recipe_color'] != 4:
+                    raise AssertionError('Recipe Color was not preserved')
+                basic = inspect_pf3(window.dll_path(optional=True), Path(project.renderedPf3))["basic"]
+                result.update(code=0, size=target.stat().st_size, basic=basic, project=target.name)
             except Exception:
                 result["error"] = traceback.format_exc()
             finally:

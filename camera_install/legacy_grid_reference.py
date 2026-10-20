@@ -41,7 +41,7 @@ def prepare(a,experimental_geometry=False):
     if neutral is not None:
         if neutral['kind']!=2 or neutral['points']!=5: raise ValueError('Unverified neutral group geometry')
         raw=bytes.fromhex(neutral['initializedHex'])
-        if experimental_geometry and len(raw)==260:
+        if experimental_geometry and len(raw) in (260,596,680):
             axis_values=raw;axis_kind='geometry'
         elif len(raw)==512:
             if experimental_geometry:

@@ -18,7 +18,7 @@ Thank you for testing Canon Style Studio. Use copies of important work and compa
 12. Test Undo/Redo and snapshots A/B/C. Save a `.canonstyleproject`, copy it to another folder/computer, remove or rename the original LUT files, reopen it, and confirm every setting plus every current/snapshot LUT is restored. The photo must be requested separately and the previous viewer image must not remain visible.
 13. Open JPEG and TIFF references and confirm LUT/Creative Color editing still works.
 14. Resize the left sidebar wider and narrower. It must extend beyond 390 px and must never show a horizontal scrollbar.
-15. Without copying or importing support files, prepare a style and verify a new persistent folder appears under `exported_styles/`; a second preparation must create another folder and preserve the first.
+15. Offline, save a style and verify exactly one `.canonstyleproject` appears directly in `Documents/Canon Style Studio PF3/`. Reopen it after removing the original LUT/base paths and verify the controls and layers remain editable. Repeating the same name must choose a numbered filename. Camera preparation must keep PF3 extraction and reports in internal logs; physical installation requires separate authorization.
 16. Move the complete extracted application folder to another writable path/user. Settings and locally generated runtime data must remain available without relying on the original Windows username; no support-file import may be requested.
 
 ## Compatibility matrix
@@ -44,19 +44,18 @@ The regression matrix scans the supplied folder recursively and writes `PUBLIC_A
 
 ## Camera-install boundary
 
-This Public Alpha integrates the loader-assisted EOS RP workflow under **Send to Camera**. Successfully opening a CR2/CR3 still validates only RAW compatibility with the locally installed DPP4Lib; it does not validate a camera-registration payload for that model.
+RC5 exposes the independent USB workflow. No Canon application or DLL is required for style compilation/installation. Canon RAW development remains a separate optional dependency. See `CAMERA_COMPATIBILITY.md` for family-specific checks and physical evidence.
 
-The arbitrary-LUT installation path has been physically exercised on EOS RP and EOS R8. It requires EOS Utility 3 but no external Manual Loader fixtures. Other bodies remain experimental until a real camera confirms the result; RAW compatibility alone does not validate camera installation.
+For an explicitly authorized physical test:
 
-EOS RP physical test:
+1. Open an owned PF3 or self-contained style project and set the look in the editor.
+2. Close other camera applications, connect the camera and open **Send to Camera**.
+3. Click **Find USB cameras** and choose the camera and User Def. 1, 2 or 3 directly.
+4. Click **Install independently…**. Review the saved style and destination, then authorize that write.
+5. Confirm success names the correct camera, style and slot, with matching requested readback and completed cleanup. On failure, inspect the technical report; the app does not retry or restore automatically.
+6. Verify the look and normal camera operation. Report model, firmware, selected slot and any error. A content match is not a visual test.
 
-1. Close EOS Utility completely, connect the EOS RP and open **Send to Camera**.
-2. Do not add any support folder. Confirm the same public build reaches the ready state using only the locally installed Canon software.
-3. Click **Prepare / Capture** and wait for the target-PF3 hook to arm.
-4. In EOS Utility choose User Def. 1, 2 or 3 and select the generated PF3.
-5. In EOS Utility, perform a normal Picture Style registration using the PF3 opened by the app.
-6. Confirm the log reports semantic table validation, an exact compiler-to-EDSDK buffer match, `rc=0`, and that `0x00000115` was untouched.
-7. Close/reopen EOS Utility before another registration.
+The independent path has physical evidence on EOS RP; the retained Canon-native fallback has separate RP/R8 observations. Other models remain experimental. A RAW opening successfully does not prove installation compatibility.
 
 For serious colour calibration, keep these comparisons distinct:
 

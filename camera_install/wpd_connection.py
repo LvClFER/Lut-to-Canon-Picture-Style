@@ -30,11 +30,13 @@ def _system_com():
 
 
 class WpdConnection:
-    def __init__(self, device_id, *, allow_write=False, com_factory=_system_com):
+    def __init__(self, device_id, *, allow_write=False, allow_control=False, com_factory=_system_com):
         if (type(device_id) is not str or not device_id or len(device_id) > 32768
-                or '\0' in device_id or type(allow_write) is not bool):
+                or '\0' in device_id or type(allow_write) is not bool
+                or type(allow_control) is not bool):
             raise ValueError('Require explicit bounded device ID/write policy')
         self._id, self._write, self._factory = device_id, allow_write, com_factory
+        self._control = allow_control
         self._device = ctypes.c_void_p()
         self._client = ctypes.c_void_p()
         self._com = None
@@ -94,7 +96,7 @@ class WpdConnection:
                 raise RuntimeError('COM creation returned null interface')
             api._set_string(client, api._PropertyKey.create(api._CLIENT_CATEGORY, 2), 'Canon Style Studio')
             for pid, value in ((3, 1), (4, 0), (5, 0),
-                               (9, 0xc0000000 if self._write else 0x80000000)):
+                               (9, api._GENERIC_READ_WRITE if self._write or self._control else api._GENERIC_READ)):
                 api._set_unsigned(client, api._PropertyKey.create(api._CLIENT_CATEGORY, pid), value)
             self._open_attempted = True
             api._check_hr(api._method(self._device, 3, ctypes.c_wchar_p, ctypes.c_void_p)(
@@ -107,6 +109,7 @@ class WpdConnection:
             return self
         except BaseException as original:
             errors = self._cleanup()
+            original.connection_cleanup_completed=not errors
             if errors:
                 original.add_note(f'WPD connection cleanup also failed: {len(errors)} stage(s)')
             raise
@@ -115,6 +118,7 @@ class WpdConnection:
         if threading.get_ident() != self._thread:
             raise RuntimeError('WPD connection must close on its owning thread')
         errors = self._cleanup()
+        if error is not None:error.connection_cleanup_completed=not errors
         if errors:
             if error is not None:
                 error.add_note(f'WPD connection cleanup also failed: {len(errors)} stage(s)')

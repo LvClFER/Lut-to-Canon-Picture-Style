@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .virtual_compatibility import LOAD_COMPILER
 from .cipher_stream_reference import decode
+from .full33_packing_reference import full33_planar
 
 
 VECTORS = ("01_IDENTITY", "02_R_GAIN_075", "03_G_GAIN_075",
@@ -69,19 +70,6 @@ def merge_reference_proof(report, proof):
                              row.get("transport", {}).get("stale", {}).get("staleBlocked"))
     report["summary"] = summarize(report["rows"])
     return report
-
-
-def full33_planar(table: bytes) -> bytes:
-    count = 33 ** 3
-    if len(table) != count * 6:
-        raise ValueError("Invalid full33 input length")
-    values = struct.unpack(f"<{count * 3}H", table)
-    if max(values) > 4095:
-        raise ValueError("Input exceeds Canon 12-bit range")
-    return struct.pack(f"<{count * 3}H", *(
-        (values[node * 3 + channel] * 32768 + 2047) // 4095
-        for channel in range(3) for node in range(count)
-    ))
 
 
 def ten_node_reference_order(payload: bytes, expected_digest: str):

@@ -37,6 +37,7 @@ _API_OPTIONS_CATEGORY = "10e54a3e-052d-4777-a13c-de7614be2bc4"
 _CLSCTX_INPROC_SERVER = 1
 _RPC_E_CHANGED_MODE = 0x80010106
 _GENERIC_READ = 0x80000000
+_GENERIC_READ_WRITE = 0xc0000000
 _FILE_READ_ACCESS = 1
 _VT_UI4 = 19
 _PTP_RESPONSE_OK = 0x2001
@@ -44,10 +45,11 @@ _MAX_EVENT_BYTES = 4 * 1024 * 1024
 
 
 class _Guid(ctypes.Structure):
+    # Windows ABI widths also apply when inspecting these records on LP64 hosts.
     _fields_ = [
-        ("data1", wintypes.DWORD),
-        ("data2", wintypes.WORD),
-        ("data3", wintypes.WORD),
+        ("data1", ctypes.c_uint32),
+        ("data2", ctypes.c_uint16),
+        ("data3", ctypes.c_uint16),
         ("data4", ctypes.c_ubyte * 8),
     ]
 
@@ -57,7 +59,7 @@ class _Guid(ctypes.Structure):
 
 
 class _PropertyKey(ctypes.Structure):
-    _fields_ = [("fmtid", _Guid), ("pid", wintypes.DWORD)]
+    _fields_ = [("fmtid", _Guid), ("pid", ctypes.c_uint32)]
 
     @classmethod
     def create(cls, category: str, pid: int) -> "_PropertyKey":
@@ -242,6 +244,9 @@ def _new_mtp_params(
     ole32, command_id: int, opcode: int | None = None,
     args: tuple[int, ...] = (), context: str | None = None,
 ) -> ctypes.c_void_p:
+    # Direct slot-state requests blocked the physical RP driver; acquisition is unresolved.
+    if command_id == 12 and opcode == 0x9127 and args and args[0] in (0xd163, 0xd164, 0xd165):
+        raise ValueError('Direct slot-state requests are disabled pending protocol attribution')
     params = _create_instance(ole32, _VALUES_CLSID, _VALUES_IID)
     collection = ctypes.c_void_p()
     try:
@@ -250,7 +255,9 @@ def _new_mtp_params(
             _Guid.from_text(_MTP_CATEGORY),
         )
         _set_unsigned(params, _PropertyKey.create(_COMMON_CATEGORY, 1002), command_id)
-        _set_unsigned(params, _PropertyKey.create(_API_OPTIONS_CATEGORY, 3), _FILE_READ_ACCESS)
+        # MTP no-data/write commands require the read/write IOCTL, even for mode changes.
+        access = 3 if command_id in (12, 14, 16) else _FILE_READ_ACCESS
+        _set_unsigned(params, _PropertyKey.create(_API_OPTIONS_CATEGORY, 3), access)
         if opcode is not None:
             _set_unsigned(params, _PropertyKey.create(_MTP_CATEGORY, 1001), opcode)
             collection = _new_ui4_collection(ole32, tuple(args))
@@ -677,12 +684,12 @@ def _canon_event_session_summary(ole32, device_id: str) -> dict:
     cleanup: dict[str, str] = {}
     try:
         client = _create_instance(ole32, _VALUES_CLSID, _VALUES_IID)
-        _set_unsigned(client, _PropertyKey.create(_CLIENT_CATEGORY, 9), _GENERIC_READ)
+        _set_unsigned(client, _PropertyKey.create(_CLIENT_CATEGORY, 9), _GENERIC_READ_WRITE)
         _check_hr(
             _method(device, 3, ctypes.c_wchar_p, ctypes.c_void_p)(
                 device, device_id, client,
             ),
-            "IPortableDevice.Open(GENERIC_READ)",
+            "IPortableDevice.Open(GENERIC_READ | GENERIC_WRITE)",
         )
         opened = True
         _mtp_no_data(ole32, device, 0x9114, (1,))
@@ -713,77 +720,8 @@ def _canon_event_session_summary(ole32, device_id: str) -> dict:
 
 
 def _canon_registration_state_summary(ole32, device_id: str) -> dict:
-    """Request D163/D170 as live events and disclose only size/hash metadata."""
-    device = _create_instance(ole32, _DEVICE_CLSID, _DEVICE_IID)
-    client = ctypes.c_void_p()
-    opened = False
-    remote_enabled = False
-    events_enabled = False
-    cleanup: dict[str, str] = {}
-    summary = {
-        "requestedProperties": ["0x0000D163", "0x0000D170"],
-        "propertyValuesExposed": False,
-        "setDevicePropValueExSent": False,
-        "properties": {},
-        "cleanup": cleanup,
-    }
-    try:
-        client = _create_instance(ole32, _VALUES_CLSID, _VALUES_IID)
-        _set_unsigned(client, _PropertyKey.create(_CLIENT_CATEGORY, 9), _GENERIC_READ)
-        _check_hr(
-            _method(device, 3, ctypes.c_wchar_p, ctypes.c_void_p)(
-                device, device_id, client,
-            ),
-            "IPortableDevice.Open(GENERIC_READ)",
-        )
-        opened = True
-        _mtp_no_data(ole32, device, 0x9114, (1,))
-        remote_enabled = True
-        _mtp_no_data(ole32, device, 0x9115, (1,))
-        events_enabled = True
-
-        # Drain the initial session snapshot so each result below follows its
-        # own explicit RequestDevicePropValue command.
-        _mtp_read(ole32, device, 0x9116)
-        for property_code in (0xD163, 0xD170):
-            key = f"0x{property_code:08X}"
-            _mtp_no_data(ole32, device, 0x9127, (property_code,))
-            observed = None
-            polls = 0
-            for polls in range(1, 7):
-                _response, event_data = _mtp_read(ole32, device, 0x9116)
-                values = _extract_property_event_values(event_data, property_code)
-                if values:
-                    observed = values[-1]
-                    break
-            if observed is None:
-                summary["properties"][key] = {
-                    "observed": False,
-                    "eventPolls": polls,
-                }
-            else:
-                summary["properties"][key] = {
-                    "observed": True,
-                    "eventPolls": polls,
-                    "byteLength": len(observed),
-                    "sha256": hashlib.sha256(observed).hexdigest(),
-                }
-        return summary
-    finally:
-        if events_enabled:
-            try:
-                cleanup["eventMode"] = f"0x{_mtp_no_data(ole32, device, 0x9115, (0,)):04X}"
-            except Exception as exc:
-                cleanup["eventModeError"] = str(exc)
-        if remote_enabled:
-            try:
-                cleanup["remoteMode"] = f"0x{_mtp_no_data(ole32, device, 0x9114, (0,)):04X}"
-            except Exception as exc:
-                cleanup["remoteModeError"] = str(exc)
-        _release(client)
-        if opened:
-            _method(device, 8)(device)
-        _release(device)
+    """Disabled: direct9127(D163) blocked the physical RP driver on2026-10-16."""
+    raise RuntimeError('Direct registration-state requests are disabled; use the startup event diagnostic')
 
 
 def _device_text(manager: ctypes.c_void_p, method_index: int, device_id: str) -> str:
