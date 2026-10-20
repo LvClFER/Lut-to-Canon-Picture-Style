@@ -31,18 +31,22 @@ bridge version and check result enter the build manifest. The PTP module is an
 explicit hidden import so it is retained even while installation is disabled.
 
 The Mac USB adapter is implemented in source using ImageCaptureCore/PTP and
-the shared session controller, but has not run on native macOS. Apple's
+the shared session controller. Its real camera transactions remain unverified. Apple's
 [PTP command API](https://developer.apple.com/documentation/imagecapturecore/iccameradevice)
 is the native boundary used by the adapter. No Mac camera session has been opened.
 The retained Canon-native fallback is available only on Windows. Canon DPP
 rendering is also a separate Windows implementation; it is not a dependency
 of PF3 generation or JPEG/LUT editing.
 
-This Windows development host has tested path, packaging-plan and shared
-editor regressions only. It has not produced or launched a Mach-O executable,
-tested either Mac CPU architecture, or verified macOS USB behavior. Actual
-Mac builds, runtime checks and a specifically authorized physical test remain
-necessary before delivery.
+Native hosted validation now runs on both Mac architectures in the authorized
+test branch. On 20 October 2026, both Apple Silicon and Intel passed 782 tests
+(three Windows tests skipped per architecture), built and audited ad-hoc signed
+apps and DMGs, and passed the frozen worker's missing-input check without device
+discovery. Both downloaded artifact digests and ZIP CRCs matched. A separate
+native Cocoa startup check mounted those exact DMGs read-only, verified their
+architectures and signatures, and launched each compiled interface successfully.
+Its recorded DMG hashes match the local copies. Interactive use and specifically
+authorized physical USB validation remain outstanding; these candidates are not releases.
 
 ## Manual hosted builds
 
@@ -54,8 +58,11 @@ creates a release. A run installs dependencies, checks the host architecture,
 runs the regression suite, builds and audits the app, and checks that a missing
 PF3 fails in the frozen worker before device discovery. Successful DMGs become
 temporary workflow artifacts, retained for seven days. No camera access is
-requested. This workflow has been prepared locally; it has not been dispatched
-or validated on GitHub. It does not replace native GUI or physical USB testing.
+requested. The successful builds for both architectures are recorded in
+[run 39408692557](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/actions/runs/39408692557).
+`macos-validate-candidate.yml` reused that run's DMGs to check native Cocoa startup
+without rebuilding them in [run 39412093234](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/actions/runs/39412093234).
+Startup smoke checks do not replace interactive GUI or physical USB testing.
 
 ## Native USB implementation boundary
 
@@ -94,7 +101,7 @@ validation of the PTP session controller. Windows discovery and installation kee
 their existing path. Windows tests cover identity handling, platform
 refusal, completion, timeout cleanup, worker invocation and invalid reports
 using framework/process doubles, plus the Mac GUI routing and disabled install
-action; native execution on a Mac remains unverified.
+action; native discovery and real camera transactions remain unverified.
 
 API references: [device browser](https://developer.apple.com/documentation/imagecapturecore/icdevicebrowser),
 [USB vendor identification](https://developer.apple.com/documentation/imagecapturecore/icdevice),
@@ -134,4 +141,5 @@ IDs, retains Python site initialization for PyObjC in source workers and uses
 the same global process deadline. Discovery failures report no attempted open.
 The GUI's Mac install action remains disabled pending native validation.
 Tests use native
-framework doubles; neither this API nor the command format has run on a Mac.
+framework doubles for session and PTP calls. Framework completion metadata has
+passed on native Apple Silicon and Intel hosts; real camera round trips remain unverified.

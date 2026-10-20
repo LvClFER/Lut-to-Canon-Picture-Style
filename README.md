@@ -101,7 +101,7 @@ The integrated independent compiler reproduces 24 archived RP/R8 carriers exactl
 
 First-run PF3 creation now uses the six included basic files, authorized by the user. Cipher tables are recovered in memory from these files; no fixed cipher table arrays or Canon DLL are required. The underlying zero-encrypted-input derivation has not been solved; it is no longer required by this first-run workflow. Canon RAW preview remains dependent on DPP4Lib; Working Preview is not a claim of Canon rendering equivalence.
 
-See the [independent session results](research/RP_INDEPENDENT_SESSION_20261011.md) and [remaining cipher dependency](research/CIPHER_DEPENDENCY_20261011.md) for the evidence and current blockers. macOS and Android builds are not available.
+See the [independent session results](research/RP_INDEPENDENT_SESSION_20261011.md) and [remaining cipher dependency](research/CIPHER_DEPENDENCY_20261011.md) for the evidence and current blockers. Native Apple Silicon and Intel development candidates now pass the regression suite and compiled Cocoa startup checks; see [macOS validation status](MACOS_PORT_STATUS.md). Mac USB installation remains disabled pending native camera validation. Android builds are not available.
 
 ## Legal notice
 

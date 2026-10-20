@@ -31,5 +31,5 @@ RC7 removes the overly broad class-5/6 reference-bank block for strict PF3 3000 
 - Unknown identifiers retain the reconstructed default class-7 dispatch and must pass full live grammar/descriptor checks. Non-default compact families use established dispatch facts; unambiguous live formats can supersede an older nominal mapping. Payload size alone never authorizes a write.
 - Axis geometries outside the reconstructed mathematical domain are reported as unsupported. A catalog entry does not override this check.
 - A style backup is saved before writing; it is not a complete restoration transaction. There is no automatic retry or restore. A stalled or failed driver session can require power/USB recovery.
-- The pure compiler, PTP framing and injected-adapter sequence core are portable. The implemented device adapter is Windows WPD; native macOS/Android adapters are not shipped.
+- The pure compiler, PTP framing and injected-adapter sequence core are portable. Windows uses WPD. Mac development candidates include the ImageCaptureCore adapter, with GUI installation disabled pending native camera validation. An Android adapter is not shipped.
 - Canon RAW rendering remains a separate optional Canon-dependent feature. Clean-Windows deployment is still unverified.
