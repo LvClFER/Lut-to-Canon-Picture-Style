@@ -3,6 +3,7 @@ name: macOS candidate
 on:
   push:
     branches: [codex/macos-candidate-20261020]
+    paths-ignore: [.github/workflows/macos-validate-candidate.yml]
   workflow_dispatch:
 
 permissions:
@@ -54,14 +55,18 @@ jobs:
         run: python -m unittest discover -p 'test_*.py' -v
       - name: Build and audit local candidate
         run: python build_macos.py --arch '${{ matrix.arch }}' --output macos-candidate
-      - name: Check frozen worker before device discovery
+      - name: Check frozen GUI and worker without device access
         run: |
           python - <<'PY'
           from pathlib import Path
-          import json, subprocess, tempfile
+          import json, os, subprocess, tempfile
           executable, = Path('macos-candidate').glob('*/Canon Style Studio.app/Contents/MacOS/Canon Style Studio')
           with tempfile.TemporaryDirectory() as temporary:
               root = Path(temporary)
+              subprocess.run([str(executable.resolve()), '--startup-smoke'],
+                  check=True, timeout=30, env=dict(os.environ,
+                      QT_QPA_PLATFORM='cocoa',
+                      CANON_STYLE_STUDIO_PORTABLE_ROOT=str(root / 'gui-state')))
               report = root / 'report.json'
               result = subprocess.run([str(executable.resolve()), '--session-worker',
                   '--device-id', 'NO_DEVICE_TEST', '--allow-temporary-session',
