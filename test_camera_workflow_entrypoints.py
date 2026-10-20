@@ -38,6 +38,7 @@ class CameraWorkflowEntrypointTests(unittest.TestCase):
             independent.return_value.exec.assert_called_once_with()
             native.assert_not_called()
 
+    @patch('canon_style_studio.sys.platform','win32')
     def test_optional_fallback_menu_reaches_native_dialog_only_after_explicit_selection(self):
         with patch.object(self.studio,'CameraInstallDialog') as independent, \
              patch.object(self.studio,'CanonNativeInstallDialog') as native, \
@@ -51,6 +52,7 @@ class CameraWorkflowEntrypointTests(unittest.TestCase):
             native.return_value.exec.assert_called_once_with()
             independent.assert_not_called()
 
+    @patch('canon_style_studio.sys.platform','win32')
     def test_missing_canon_runtime_explains_fallback_failure_without_opening_a_dialog(self):
         with patch.object(self.studio,'CanonNativeInstallDialog') as native, \
              patch.object(self.window,'current_base_path',return_value=Path('owned.pf3')), \

@@ -35,6 +35,7 @@ class SessionDiagnosticTests(unittest.TestCase):
             report=json.loads(output.read_text())
             self.assertTrue(report['deviceOpenAttempted']);self.assertTrue(report['connectionCleanupCompleted'])
 
+    @patch('camera_install.independent_session_diagnostic.sys.platform','win32')
     def test_family_block_reports_reason_and_actual_cleanup_without_device_identity(self):
         from camera_install.independent_session_diagnostic import main
         from camera_install.family_registration_reference import FamilyCompatibilityError
@@ -82,6 +83,7 @@ class SessionDiagnosticTests(unittest.TestCase):
         self.assertIn('not validated',candidate['sequenceBlockedReason'])
         self.assertFalse(any(call[0]=='data' and call[1] in (14,16) for call in calls))
 
+    @patch('camera_install.independent_session_diagnostic.sys.platform','win32')
     def test_control_mismatch_report_explains_block_without_exposing_state(self):
         from camera_install.independent_session_diagnostic import main
         from camera_install.rp_preflight_reference import SlotControlMismatch
@@ -170,6 +172,7 @@ Path(sys.argv[1]).write_text(json.dumps(dict(styleRegistrationAttempted=True,
         self.assertFalse(report['automaticRetry'])
         child.kill.assert_called_once()
 
+    @patch('camera_install.independent_session_diagnostic.sys.platform','win32')
     def test_experimental_worker_dispatch_requires_scope_and_write_enabled_connection(self):
         from camera_install.independent_session_diagnostic import main
         with tempfile.TemporaryDirectory() as temporary:

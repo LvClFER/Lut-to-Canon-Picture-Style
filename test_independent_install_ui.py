@@ -23,6 +23,7 @@ class IndependentInstallUiTests(unittest.TestCase):
             self.assertFalse(report['styleRegistrationAttempted'])
             self.assertNotIn('PySide6',result.stderr)
 
+    @patch('camera_install.ui.sys.platform','win32')
     def test_ui_requires_consent_snapshots_state_and_exports_without_canon(self):
         os.environ.setdefault('QT_QPA_PLATFORM','offscreen')
         try:
@@ -125,6 +126,7 @@ class IndependentInstallUiTests(unittest.TestCase):
             dialog.return_value.exec.assert_called_once()
         main.current_base_path.assert_not_called()
 
+    @patch('camera_install.ui.sys.platform','win32')
     def test_send_uses_latest_editor_settings_without_duplicate_controls(self):
         os.environ.setdefault('QT_QPA_PLATFORM','offscreen')
         try:

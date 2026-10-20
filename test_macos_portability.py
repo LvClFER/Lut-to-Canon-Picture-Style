@@ -24,8 +24,8 @@ class MacPortabilityTests(unittest.TestCase):
             for system in ('darwin','win32'):
                 with self.subTest(platform=system),patch('canon_runtime.sys.platform',system), \
                         patch.dict(os.environ,{'CANON_STYLE_STUDIO_PORTABLE_ROOT':temporary}):
-                    self.assertEqual(runtime.app_data_dir(),Path(temporary)/'app_data')
-                    self.assertEqual(runtime.cache_dir(),Path(temporary)/'app_data/cache')
+                    self.assertEqual(runtime.app_data_dir(),Path(temporary).resolve()/'app_data')
+                    self.assertEqual(runtime.cache_dir(),Path(temporary).resolve()/'app_data/cache')
 
     def test_windows_default_storage_is_unchanged(self):
         with tempfile.TemporaryDirectory() as temporary,patch('canon_runtime.sys.platform','win32'), \

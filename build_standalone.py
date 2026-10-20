@@ -49,7 +49,8 @@ def require_raw_decoder():
 
 
 def qt_webengine_snapshot(path):
-    if path.name!='v8_context_snapshot.bin':return False
+    if path.name not in ('v8_context_snapshot.bin','v8_context_snapshot.arm64.bin',
+            'v8_context_snapshot.x86_64.bin'):return False
     from PySide6.QtCore import QLibraryInfo
     sources=(Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.DataPath))/'resources'/path.name,
         Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.LibrariesPath))/'QtWebEngineCore.framework/Resources'/path.name)

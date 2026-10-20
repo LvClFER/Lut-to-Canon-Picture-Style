@@ -59,15 +59,29 @@ class RawOrientationTests(unittest.TestCase):
 
     def test_qt_snapshot_exception_requires_the_exact_installed_resource(self):
         from PySide6.QtCore import QLibraryInfo
-        source=Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.DataPath))/'resources/v8_context_snapshot.bin'
-        if not source.exists():
-            source=Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.LibrariesPath))/'QtWebEngineCore.framework/Resources/v8_context_snapshot.bin'
-        self.assertTrue(source.is_file())
+        folders=(Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.DataPath))/'resources',
+            Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.LibrariesPath))/'QtWebEngineCore.framework/Resources')
+        sources=[path for folder in folders for path in folder.glob('v8_context_snapshot*.bin')
+            if '.debug.' not in path.name]
+        self.assertTrue(sources)
+        for source in sources:
+            with self.subTest(resource=source.name),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary);target=root/source.name;content=source.read_bytes();target.write_bytes(content)
+                self.assertEqual(build_standalone.audit(root),[])
+                target.write_bytes(content[:-1]+bytes([content[-1]^1]))
+                self.assertEqual(build_standalone.audit(root),[target.name])
+
+    def test_mac_snapshot_names_still_require_exact_installed_bytes(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root=Path(temporary);target=root/source.name;content=source.read_bytes();target.write_bytes(content)
-            self.assertEqual(build_standalone.audit(root),[])
-            target.write_bytes(content[:-1]+bytes([content[-1]^1]))
-            self.assertEqual(build_standalone.audit(root),[target.name])
+            root=Path(temporary);installed=root/'installed';resources=installed/'resources';resources.mkdir(parents=True)
+            for architecture in ('arm64','x86_64'):
+                name=f'v8_context_snapshot.{architecture}.bin'
+                (resources/name).write_bytes(architecture.encode())
+                target=root/name;target.write_bytes(architecture.encode())
+                with patch('PySide6.QtCore.QLibraryInfo.path',return_value=str(installed)):
+                    self.assertTrue(build_standalone.qt_webengine_snapshot(target))
+                    target.write_bytes(b'different')
+                    self.assertFalse(build_standalone.qt_webengine_snapshot(target))
 
 
 if __name__=='__main__':unittest.main()

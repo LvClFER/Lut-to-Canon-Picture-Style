@@ -26,7 +26,7 @@ class IndependentEditorTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.cache = self.root / 'cache'
         self.bases = self.cache / 'generated_pf3_bases'
         self.bases.mkdir(parents=True)
