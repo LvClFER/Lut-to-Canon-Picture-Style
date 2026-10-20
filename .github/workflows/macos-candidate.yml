@@ -34,6 +34,7 @@ jobs:
         with:
           python-version: '3.12'
           architecture: ${{ matrix.arch == 'arm64' && 'arm64' || 'x64' }}
+          cache: pip
       - name: Install build dependencies
         run: python -m pip install -r requirements.txt pyinstaller
       - name: Check native architecture
@@ -44,6 +45,11 @@ jobs:
           import os, platform
           assert platform.machine() == os.environ['EXPECTED_ARCH'], platform.machine()
           PY
+      - name: Run platform integration regressions
+        run: >-
+          python -m unittest test_camera_workflow_entrypoints test_independent_install_ui
+          test_independent_session_diagnostic test_macos_portability test_raw_orientation
+          test_macos_ptp test_macos_discovery -v
       - name: Run regressions without camera access
         run: python -m unittest discover -p 'test_*.py' -v
       - name: Build and audit local candidate

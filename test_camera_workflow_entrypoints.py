@@ -16,6 +16,7 @@ class CameraWorkflowEntrypointTests(unittest.TestCase):
         self.studio=studio
         self.app=QApplication.instance() or QApplication([])
         self.stack=ExitStack();self.addCleanup(self.stack.close)
+        self.stack.enter_context(patch.object(studio.sys,'platform','win32'))
         temporary=self.stack.enter_context(tempfile.TemporaryDirectory())
         self.stack.enter_context(patch.dict(os.environ,{'CANON_STYLE_STUDIO_PORTABLE_ROOT':temporary}))
         self.stack.enter_context(patch.object(studio,'discover_pse',return_value=None))
@@ -38,7 +39,6 @@ class CameraWorkflowEntrypointTests(unittest.TestCase):
             independent.return_value.exec.assert_called_once_with()
             native.assert_not_called()
 
-    @patch('canon_style_studio.sys.platform','win32')
     def test_optional_fallback_menu_reaches_native_dialog_only_after_explicit_selection(self):
         with patch.object(self.studio,'CameraInstallDialog') as independent, \
              patch.object(self.studio,'CanonNativeInstallDialog') as native, \
@@ -52,7 +52,6 @@ class CameraWorkflowEntrypointTests(unittest.TestCase):
             native.return_value.exec.assert_called_once_with()
             independent.assert_not_called()
 
-    @patch('canon_style_studio.sys.platform','win32')
     def test_missing_canon_runtime_explains_fallback_failure_without_opening_a_dialog(self):
         with patch.object(self.studio,'CanonNativeInstallDialog') as native, \
              patch.object(self.window,'current_base_path',return_value=Path('owned.pf3')), \
@@ -61,6 +60,18 @@ class CameraWorkflowEntrypointTests(unittest.TestCase):
             self.window.camera_btn.menu().actions()[1].trigger()
             native.assert_not_called()
             self.assertEqual(warning.call_args.args[2],'Canon runtime missing')
+
+    def test_mac_keeps_the_windows_canon_fallback_disabled(self):
+        with patch.object(self.studio.sys,'platform','darwin'):
+            window=self.studio.CanonStyleStudioQt()
+            try:
+                action=window.camera_btn.menu().actions()[1]
+                self.assertFalse(action.isEnabled())
+                with patch.object(self.studio,'CanonNativeInstallDialog') as native:
+                    action.trigger()
+                    native.assert_not_called()
+            finally:
+                window.dirty=False;window.close();window.deleteLater();self.app.processEvents()
 
     def test_test_report_separates_independent_and_native_physical_evidence(self):
         report=self.window.test_report_payload()['camera_install']
