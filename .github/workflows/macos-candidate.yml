@@ -3,7 +3,7 @@ name: macOS candidate
 on:
   push:
     branches: [codex/macos-candidate-20261020]
-    paths-ignore: [.github/workflows/macos-validate-candidate.yml]
+    paths-ignore: [.github/workflows/macos-validate-candidate.yml, .github/workflows/windows-candidate.yml]
   workflow_dispatch:
 
 permissions:
