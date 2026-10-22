@@ -13,6 +13,26 @@ def arguments():
 
 
 class CompactPixelTests(unittest.TestCase):
+    def test_empty_axes_preserve_mode1_round_trips_but_do_not_apply_six_axes(self):
+        from unittest.mock import patch
+        from camera_install.lab_math_reference import rgb_to_lab,lab_to_rgb
+        import math
+        a=arguments()
+        a['axisBlock']=dict(kind=2,count=0,points=5,
+            initializedHex=(struct.pack('<2I',2,0)+bytes(504)).hex())
+        rgb=[.123456789,.345678912,.789123456]
+        expected=rgb
+        for _ in range(2):
+            expected=[v/2**24 for v in lab_to_rgb(rgb_to_lab([math.trunc(v*2**24) for v in expected],24,2),24,2)]
+        with patch('camera_install.compact_pixel_reference.axes') as apply_axes:
+            self.assertEqual(point(rgb,prepare(a)),expected)
+            apply_axes.assert_not_called()
+        a['mode']=2
+        self.assertEqual(point(rgb,prepare(a)),rgb)
+        for bad in (bytes(8),struct.pack('<2I',2,0)+bytes(503)+b'\x01'):
+            a['axisBlock']['initializedHex']=bad.hex()
+            with self.assertRaises(ValueError):prepare(a)
+
     def test_axis_division_precedes_weight_multiplication_at_integer_boundary(self):
         from camera_install.default_axis_reference import transform
         rgb=[.9999998807907104,.37499988079071045,.12499994039535522]

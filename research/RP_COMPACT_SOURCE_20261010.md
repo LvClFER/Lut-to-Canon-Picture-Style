@@ -1,5 +1,88 @@
 # Normal compact source replay — 2026-10-10
 
+## Application-generated empty axes,2026-10-16
+
+The source decoder now accepts the exact owned padded axis form
+`kind2/count0 +504 zero bytes` as well as canonical six-group axes. This retains
+a nonnull axis block rather than replacing it with a null optional stage.
+The pixel evaluator skips axis adjustments for count0 but preserves both mode1
+24-bit color round trips. Mode2 takes the helper's unchanged-RGB branch.
+
+Read-only hash-gated instruction proof is retained in
+`EMPTY_AXIS_PIXEL_STATIC_PROOF_20261016.json`:11 assertions show fa40's initial
+RGB copy, count test and direct return;10 assertions show the pixel caller
+branches on pointer presence/mode, not group count. No DLL was loaded/executed.
+The verifier is `verify_empty_axis_pixel_static_20261016.py` in the private lab.
+This is static attribution, not a new native empty-axis numerical capture.
+
+Tests check actual round-trip arithmetic, preserve the distinction from null
+axes, reject nonzero padding/truncated records, and compile an owned generated
+PF3. The complete bundle test now exercises both explicit cache and dense/pixel
+routes through the real marshalling/session code with fake COM, including
+opaque state, UI lock/unlock and requestedD171 content comparison. No real
+camera operation, route auto-selection or write authorization is implied.
+
+## Independent dense10 override replay,2026-10-16
+
+`build_accepted_compact16752` now reproduces all12 whole carriers from the
+archived `RP_LEGACY_GATE_12_VECTOR_VALIDATION.json` experiment. The first pair
+uses source1070/1071 -> flag1 dense10 sampling -> existing source-derived pixel
+processing -> normal integer packing/encryption. The second pair retains the
+normal parameterless pixel construction. No table pair is swapped. Exact
+16752-byte digests match identity, gains, channel swap, gray, local changes,
+Superia and Aerochrome. This is a different route from the previous all-cache
+experimental candidate.
+
+Private reproducible verifier `verify_rp_dense_pixel_20261016.py` hashes sources
+against retained RP dense trace metadata, checks the genuine descriptor hash,
+recovers equivalent keys from an owned generated PF3, forbids EdsCFParse loading
+and compares only against the historical output digests. Its report is
+`RP_DENSE_PIXEL_SOURCE_PROOF_20261016.json`:12/12 exact. No captured output
+bytes or numerical intermediates enter compilation.
+
+The pure offline planner accepts this explicitly named
+`compact16752-dense-pixel` route only with an explicit normalized14796-byte
+descriptor and checked pixel policy. It does not negotiate routes or enable
+physical access. The physical Err70 guards and editor fallback remain intact.
+Synthetic integration confirms a1070-only change affects only the first user
+block and reaches a slot3/9110 packet plan.
+
+At that checkpoint, the existing pixel settings decoder accepted only
+canonical six-group source axes. Application-generated empty kind2 axis records
+were still rejected. The follow-up above attributes and implements their
+zero-count processing; the twelve historical vectors alone do not cover it.
+No new physical acceptance,
+fresh-state or build-release claim follows from the archived digest matches.
+
+## Actual RP registration corpus follow-up,2026-10-16
+
+`compare_rp_archived_pixel_route_20261016.py` and private report
+`RP_ARCHIVED_PIXEL_ROUTE_WIRE_VERIFIED_20261016.json` expand the source-only
+comparison to the original V25 registration corpus using its genuine RP
+descriptor, hash-checked before normalization. Keys are recovered in memory from
+an owned generated PF3; Canon discovery/loading is forbidden during evaluation.
+
+The archived Standard Emerald source uses kind2 axis counts8/7 (680/596 bytes)
+for its first pair. The existing count-driven circular math reproduces both
+complete packed blocks exactly; all four4096-byte blocks match registration3.
+The typed research evaluator now accepts these two observed counts under its
+existing experimental-geometry opt-in, retaining exact length/header/tag/bounds
+validation. Tests cover circular first/last neighbors, neutral arithmetic,
+missing opt-in, truncated/oversized blocks and mismatched counts.
+
+Original Superia also reproduces all four blocks in its attributed registration5.
+Both source-derived complete9110 data packets match the actual archived WPD
+input hashes exactly. Neutral control additionally matches registration1, whose
+source attribution was not recorded; coincident bytes do not prove attribution.
+The desktop carrier differs only in its external caption bytes8..39: native
+caller captions are zero-padded while the source record preserves trailing
+bytes. These bytes are excluded by the independently verified send serializer;
+the inner name and all actual transmitted bytes match without any patch-up.
+
+This proves normal parameter-based compilation and framing for these archived
+inputs. It does not make the normal pixel branch consume arbitrary dense1070/71
+tables, establish fresh state, or authorize a new camera session/write.
+
 Offline verifier: `../tmp/PF3_FIELD_EXPERIMENTS_20261004/verify_rp_compact_source.py`.
 Report: `RP_COMPACT_SOURCE_PROOF_20261009.json` in the same laboratory folder.
 Source, descriptor and archived output hashes are checked against the retained

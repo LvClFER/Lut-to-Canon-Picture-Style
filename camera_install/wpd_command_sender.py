@@ -12,13 +12,17 @@ from . import windows_wpd_probe as api
 from .wpd_data_phase_reference import COMMON, MTP
 
 
-def _unsigned_collection(ole32, results, pid, maximum):
+def _unsigned_collection(ole32, results, pid, maximum, *, optional=False):
     collection = ctypes.c_void_p()
     key = api._PropertyKey.create(MTP, pid)
     try:
-        api._check_hr(api._method(results, 34, ctypes.POINTER(api._PropertyKey),
+        status = api._method(results, 34, ctypes.POINTER(api._PropertyKey),
             ctypes.POINTER(ctypes.c_void_p))(results, ctypes.byref(key),
-            ctypes.byref(collection)), 'Get response parameters')
+            ctypes.byref(collection))
+        # Only the response-parameter property may be absent (ERROR_NOT_FOUND).
+        if optional and status & 0xffffffff == 0x80070490:
+            return ()
+        api._check_hr(status, 'Get response parameters')
         if not collection.value:
             raise RuntimeError('Null response parameter collection')
         count = wintypes.DWORD()
@@ -43,7 +47,7 @@ def _unsigned_collection(ole32, results, pid, maximum):
 
 
 def _response_parameters(ole32, results):
-    return _unsigned_collection(ole32, results, 1004, 5)
+    return _unsigned_collection(ole32, results, 1004, 5, optional=True)
 
 
 class CommandSender:
@@ -159,8 +163,6 @@ class DataPhaseSender(CommandSender):
         params = super()._make_params(request, validated)
         command = validated[0]
         try:
-            if command in (14, 16):
-                api._set_unsigned(params, api._PropertyKey.create(api._API_OPTIONS_CATEGORY, 3), 3)
             if command == 14:
                 api._set_unsigned_large(params, api._PropertyKey.create(MTP, 1007), request[(MTP, 1007)])
             if command in (15, 16):

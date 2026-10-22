@@ -1,10 +1,10 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title Canon Style Studio Public Alpha
+title Canon Style Studio
 
 echo ============================================================
-echo Canon Style Studio Public Alpha 1.0.0-alpha.1
+echo Canon Style Studio
 echo ============================================================
 echo.
 

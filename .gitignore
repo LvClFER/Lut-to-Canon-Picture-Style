@@ -25,6 +25,12 @@ samples/
 *.icc
 *.icm
 *.pf3
+!/basic_pf3/standard.pf3
+!/basic_pf3/portrait.pf3
+!/basic_pf3/landscape.pf3
+!/basic_pf3/neutral.pf3
+!/basic_pf3/faithful.pf3
+!/basic_pf3/fine_detail.pf3
 *.cr2
 *.cr3
 *.crw

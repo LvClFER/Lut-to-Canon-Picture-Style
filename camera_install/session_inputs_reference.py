@@ -28,8 +28,8 @@ class SessionInputs:
 def collect_inputs(completed):
     """Reject contradictions, do not silently select stale/latest state.
 
-    D163..165 share the known-revision extended decoder. Their44-byte event
-    geometry is decoded structurally, without declaring support for a model.
+    D160..162 retain their24-byte legacy control; D163..165 retain32 bytes.
+    Both event geometries are decoded structurally, without model inference.
     Missing inputs remain explicit; parsing does not manufacture defaults.
     """
     if (not isinstance(completed, CompletedEvents)
@@ -54,10 +54,20 @@ def collect_inputs(completed):
             if size != 44:
                 raise ValueError('Slot-state event length differs')
             value = SlotObservation(code-0xd142, marker, selector, event.value[12:])
+        elif code in (0xd160,0xd161,0xd162):
+            if len(event.value)!=32 or struct.unpack_from('<I',event.value)[0]!=32:
+                raise ValueError('Legacy slot-state event length differs')
+            value=SlotObservation(code-0xd13f,0,struct.unpack_from('<I',event.value,4)[0],event.value[8:])
         else:
             continue
         if code in values and values[code] != value:
             raise ValueError('Contradictory session input observations')
         values[code] = value
-    return SessionInputs(values.get(0xd116), values.get(0xd17f),
-                         tuple(values[code] for code in (0xd163, 0xd164, 0xd165) if code in values))
+    slots={}
+    for code in range(0xd160,0xd166):
+        if code not in values:continue
+        value=values[code]
+        if value.handler_selector in slots and slots[value.handler_selector]!=value:
+            raise ValueError('Contradictory legacy/extended observations for the same slot')
+        slots[value.handler_selector]=value
+    return SessionInputs(values.get(0xd116),values.get(0xd17f),tuple(slots[k] for k in sorted(slots)))

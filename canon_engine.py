@@ -12,6 +12,7 @@ import ctypes
 import colorsys
 import hashlib
 import threading
+import tempfile
 from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Optional
@@ -19,7 +20,7 @@ from typing import Callable, Optional
 import numpy as np
 from PIL import Image, ImageFilter, ImageEnhance, ImageOps, ImageCms
 
-from canon_runtime import cache_dir as runtime_cache_dir, discover_pse
+from canon_runtime import cache_dir as runtime_cache_dir, discover_pse, basic_pf3_resource
 from creative_controls import (
     creative_lut_entry, normalize_creative_controls,
     normalize_recipe_wb, recipe_wb_lut_entry,
@@ -59,6 +60,8 @@ PROPERTY_ORDER = [
     (0x40001080,   4),
 ]
 BIG_TABLES = (0x40001070, 0x40001071)
+# Opaque PSE-authored properties can grow; parsed aggregates retain strict sizes.
+EDITOR_PROPERTIES = [(prop,size if prop in (0x115,*BIG_TABLES) else None) for prop,size in PROPERTY_ORDER]
 OPEN_EXISTING = 2
 CREATE_ALWAYS = 1
 READ = 0
@@ -86,6 +89,89 @@ VALIDATED_BASE_SHA256 = {
     "Landscape": "259f67ed1b73162649f68931b2c542be380981163747f128fcd7a76c937aa3f8",
     "Fine Detail": "126611fb855066506b4752c287d51d2c62f07349679280f7378206f44fc4dd02",
 }
+
+# PF3 Basic aggregate only; this is not camera registration state0x115.
+_PF3_BASIC_OFFSETS = {0x1031: 0, 0x1030: 4, 0x1032: 8, 0x1033: 12,
+                      0x1034: 24, 0x1035: 28}
+
+
+def _independent_pf3_input(path):
+    from camera_install.identity_pf3_bootstrap_reference import recover_identity_calibration, recover_known_fields_calibration
+    from camera_install.pf3_source_reference import read_source_fields
+    path = Path(path)
+    with path.open('rb') as stream:
+        raw = stream.read(16 * 1024 * 1024 + 1)
+    def candidates():
+        yield path
+        yield from sorted(path.parent.glob('*.pf3'))
+        bundled=basic_pf3_resource('Neutral')
+        if bundled is not None:yield bundled
+        yield from sorted((runtime_cache_dir() / 'generated_pf3_bases').glob('*.pf3'))
+    seen = set()
+    for candidate in candidates():
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        try:
+            if candidate == path:
+                calibration = raw
+            else:
+                with candidate.open('rb') as stream:
+                    calibration = stream.read(16 * 1024 * 1024 + 1)
+            try:
+                keys = recover_known_fields_calibration(calibration, _generated_calibration_fields())
+            except ValueError:
+                keys = recover_identity_calibration(calibration)
+            return keys, read_source_fields(raw, keys)
+        except ValueError:
+            continue
+    raise ValueError('No supported PF3 self-bootstrap or local identity reference was found')
+
+
+def _independent_editor_properties(fields, wanted):
+    props = {}
+    for prop, expected in wanted:
+        if prop == 0x114:
+            kind, data = fields[0x1009]
+            if kind != 3 or len(data) != 2:
+                raise ValueError('Invalid PF3 base selector')
+            value = int.from_bytes(data, 'little').to_bytes(4, 'little')
+        elif prop == 0x115:
+            value = bytearray(32)
+            for identifier, offset in _PF3_BASIC_OFFSETS.items():
+                kind, data = fields[identifier]
+                if kind != 4 or len(data) != 4:
+                    raise ValueError('Invalid PF3 Basic record')
+                value[offset:offset+4] = data
+            value = bytes(value)
+        else:
+            value = fields[prop & 0xffff][1]
+        if expected is not None and len(value) != expected:
+            raise ValueError(f'Unsupported PF3 property size: 0x{prop:08X}')
+        props[prop] = value
+    return props
+
+
+def resolve_independent_base_pf3(style, *, cipher_reference=None):
+    """Generate the selected base using a local cipher reference, without Canon."""
+    if style not in PICTURE_STYLE_IDS:
+        raise ValueError('Unsupported base Picture Style')
+    path = runtime_cache_dir() / 'generated_pf3_bases' / (style.lower().replace(' ', '_') + '.pf3')
+    if not path.is_file():
+        bundled=basic_pf3_resource(style) if cipher_reference is None else None
+        if bundled is not None:
+            validate_generated_base_pf3(None,bundled,style)
+            return dict(path=bundled,style=style,source='Bundled basic PF3 · independent',
+                validated=False,cameraReady=False,independent=True,sha256=hashlib.sha256(bundled.read_bytes()).hexdigest())
+        references = sorted(path.parent.glob('*.pf3'))
+        if not references and cipher_reference is None:
+            return None
+    ensure_runtime_base_pf3(None, style, directory=path.parent, cipher_reference=cipher_reference)
+    with path.open('rb') as stream:
+        raw = stream.read(16 * 1024 * 1024 + 1)
+    return dict(path=path, style=style, source='Generated PF3 · independent writer',
+                validated=False, cameraReady=False, independent=True,
+                sha256=hashlib.sha256(raw).hexdigest())
 
 
 def clamp01(v):
@@ -592,8 +678,42 @@ def sample_custom_wb(image,x,y,radius=8):
     }
 
 
+def _cr3_primary_metadata(path):
+    """CR3 CMT1 is the original TIFF IFD; its JPEG preview can omit orientation."""
+    canon_uuid=bytes.fromhex('85c0b687820f11e08111f4ce462b6a48')
+    def find_ifd(data,start,end,depth=0):
+        if depth>3:return None
+        for _ in range(4096):
+            if start+8>end:return None
+            size,kind=struct.unpack_from('>I4s',data,start);header=8
+            if size==1:
+                if start+16>end:return None
+                size=struct.unpack_from('>Q',data,start+8)[0];header=16
+            elif size==0:size=end-start
+            if size<header or start+size>end:return None
+            payload=start+header;limit=start+size;result=None
+            if kind==b'CMT1' and limit-payload<=1024*1024:
+                exif=Image.Exif();exif.load(data[payload:limit])
+                orientation=int(exif.get(0x112) or 1)
+                return dict(camera_make=str(exif.get(0x10f) or '').strip() or None,
+                    camera_model=str(exif.get(0x110) or '').strip() or None,
+                    exif_orientation=orientation if 1<=orientation<=8 else None)
+            if kind==b'moov':result=find_ifd(data,payload,limit,depth+1)
+            elif kind==b'uuid' and payload+16<=limit and data[payload:payload+16]==canon_uuid:
+                result=find_ifd(data,payload+16,limit,depth+1)
+            if result:return result
+            start=limit
+        return None
+    try:
+        with Path(path).open('rb') as stream:
+            if stream.read(8)[4:8]!=b'ftyp':return {}
+            with mmap.mmap(stream.fileno(),0,access=mmap.ACCESS_READ) as data:
+                return find_ifd(data,0,len(data)) or {}
+    except (OSError,ValueError,TypeError,struct.error):return {}
+
+
 def extract_largest_embedded_jpeg(path, max_segment=64*1024*1024):
-    path=Path(path); best=None; best_area=0
+    path=Path(path); best=None; best_area=0;primary=_cr3_primary_metadata(path)
     with path.open("rb") as f:
         mm=mmap.mmap(f.fileno(),0,access=mmap.ACCESS_READ)
         try:
@@ -606,7 +726,9 @@ def extract_largest_embedded_jpeg(path, max_segment=64*1024*1024):
                 length=eoi+2-soi; pos=soi+3; candidates+=1
                 if length<16000 or length>max_segment: continue
                 try:
-                    im=Image.open(io.BytesIO(mm[soi:eoi+2])); im.load(); im=ImageOps.exif_transpose(im).convert("RGB")
+                    im=Image.open(io.BytesIO(mm[soi:eoi+2])); im.load()
+                    if primary.get('exif_orientation'):im.getexif()[0x112]=primary['exif_orientation']
+                    im=ImageOps.exif_transpose(im).convert("RGB")
                     area=im.width*im.height
                     if area>best_area: best,best_area=im,area
                 except Exception: pass
@@ -616,7 +738,9 @@ def extract_largest_embedded_jpeg(path, max_segment=64*1024*1024):
 
 
 def detect_embedded_raw_metadata(path,max_segment=64*1024*1024):
-    """Read non-sensitive camera metadata from the largest embedded JPEG."""
+    """Prefer the original CR3 IFD, then camera metadata in the embedded JPEG."""
+    primary=_cr3_primary_metadata(path)
+    if primary:return primary
     path=Path(path);best=None;best_area=0
     try:
         with path.open("rb") as f:
@@ -733,7 +857,7 @@ def identity_canon_table():
 def generated_pf3_properties(style="Neutral",title=None):
     """Generate a conservative PF3 property set without embedding a Canon PF3.
 
-    Canon's EdsCFParse serializes and checksums the result. The base Picture Style
+    Either serializer can checksum the result. The base Picture Style
     selector remains Canon-native; LUT tables start as an identity transform and
     are populated by the user's LUT stack during export.
     """
@@ -766,7 +890,58 @@ def generated_pf3_properties(style="Neutral",title=None):
     return props
 
 
-def create_generated_base_pf3(dll_path,output_path,style="Neutral"):
+def _write_independent_pf3(output_path, fields, keys, *, expected_size=434511):
+    from camera_install.pf3_source_reference import write_source_fields, read_source_fields
+    serialized = write_source_fields(fields, keys)
+    if len(serialized) != expected_size or read_source_fields(serialized, keys) != fields:
+        raise ValueError('Independent PF3 output failed validation; no output was replaced')
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=output_path.parent, suffix='.pf3.tmp', delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(serialized)
+        os.replace(temporary, output_path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return len(serialized), hashlib.sha256(serialized).hexdigest()
+
+
+def _generated_pf3_fields(style):
+    props = generated_pf3_properties(style, style)
+    fields = {0x1009: (3, props[0x114][:2])}
+    for identifier in sorted(_PF3_BASIC_OFFSETS):
+        offset = _PF3_BASIC_OFFSETS[identifier]
+        fields[identifier] = (4, props[0x115][offset:offset+4])
+    kinds = {0x1002: 2, 0x100a: 2, 0x1008: 0xffff, 0x1070: 3,
+             0x1071: 3, 0x100d: 2, 0x100c: 3}
+    for prop, _size in PROPERTY_ORDER:
+        if prop & 0x40000000:
+            identifier = prop & 0xffff
+            fields[identifier] = (kinds.get(identifier, 4), props[prop])
+    return fields
+
+
+def create_generated_base_pf3(dll_path,output_path,style="Neutral", *, cipher_reference=None):
+    if dll_path is None:
+        keys = None
+        candidates = ([Path(cipher_reference)] if cipher_reference is not None else
+                      sorted((runtime_cache_dir() / 'generated_pf3_bases').glob('*.pf3')))
+        if cipher_reference is None:
+            bundled=basic_pf3_resource('Neutral')
+            if bundled is not None:candidates.append(bundled)
+        for candidate in candidates:
+            try:
+                keys, _fields = _independent_pf3_input(candidate)
+                break
+            except ValueError:
+                continue
+        if keys is None:
+            raise ValueError('Independent PF3 generation needs an owned PF3 for cipher calibration')
+        _write_independent_pf3(output_path, _generated_pf3_fields(style), keys)
+        return Path(output_path)
     output_path=Path(output_path);output_path.parent.mkdir(parents=True,exist_ok=True)
     with _EDS_CFP_LOCK:
         api=EdsCFParse(dll_path);ref=None
@@ -786,7 +961,14 @@ def create_generated_base_pf3(dll_path,output_path,style="Neutral"):
     return output_path
 
 
-def ensure_runtime_base_pf3(dll_path,style="Neutral",directory=None):
+def _generated_calibration_fields():
+    fields = _generated_pf3_fields('Neutral')
+    identifiers = (0x1021, 0x1029, 0x1019, 0x1018, 0x1065,
+                   0x1061, 0x1062, 0x1023, 0x102b, 0x1008, 0x1012)
+    return {i: fields[i] for i in identifiers}
+
+
+def ensure_runtime_base_pf3(dll_path,style="Neutral",directory=None, *, cipher_reference=None):
     style=style if style in PICTURE_STYLE_IDS else "Neutral"
     directory=Path(directory or (runtime_cache_dir()/"generated_pf3_bases"))
     path=directory/(style.lower().replace(" ","_")+".pf3")
@@ -795,17 +977,22 @@ def ensure_runtime_base_pf3(dll_path,style="Neutral",directory=None):
             validate_generated_base_pf3(dll_path,path,style);return path
     except Exception:
         pass
-    create_generated_base_pf3(dll_path,path,style)
+    create_generated_base_pf3(dll_path,path,style,cipher_reference=cipher_reference)
     validate_generated_base_pf3(dll_path,path,style)
     return path
 
 
 def read_base_properties(dll_path,base_path,wanted=None):
+    if wanted is None:
+        wanted=EDITOR_PROPERTIES
+    if dll_path is None:
+        _keys, fields = _independent_pf3_input(base_path)
+        return _independent_editor_properties(fields, wanted)
     with _EDS_CFP_LOCK:
         api=EdsCFParse(dll_path); ref=None
         try:
             api.initialize(); ref=api.create_ref(base_path,OPEN_EXISTING,READ); props={}
-            for prop,expected in (PROPERTY_ORDER if wanted is None else wanted): props[prop]=api.get_property(ref,prop,expected)
+            for prop,expected in wanted: props[prop]=api.get_property(ref,prop,expected)
             return props
         finally:
             try:
@@ -868,11 +1055,16 @@ def inspect_pf3(dll_path, path):
 
 
 def export_pf3(dll_path,base_path,output_path,lut_entries,controls,title,log=lambda s:None,progress=lambda v:None):
-    validate_pf3_header(base_path)
+    base_size=validate_pf3_header(base_path)
     output_path=Path(output_path); output_path.parent.mkdir(parents=True,exist_ok=True)
     if output_path.resolve()==Path(base_path).resolve(): raise RuntimeError("Output cannot overwrite the selected Canon base.")
-    props=read_base_properties(dll_path,base_path)
-    log("Canon EdsCFParse initialized.")
+    independent = dll_path is None
+    if independent:
+        keys, fields = _independent_pf3_input(base_path)
+        props = _independent_editor_properties(fields, EDITOR_PROPERTIES)
+    else:
+        props=read_base_properties(dll_path,base_path)
+    log("Independent PF3 reader ready." if independent else "Canon EdsCFParse initialized.")
     props[0x00000115]=modify_basic_0115(props[0x00000115],controls["contrast"],controls["saturation"],controls["color_tone"],controls.get("sharpness_override",False),controls.get("sharp_strength",0),controls.get("fineness",2),controls.get("threshold",4))
     effective=[]
     recipe_wb=recipe_wb_lut_entry(controls.get("recipe_wb"),size=33)
@@ -889,6 +1081,21 @@ def export_pf3(dll_path,base_path,output_path,lut_entries,controls,title,log=lam
             log(f"Composing LUT stack into 0x{prop:08X}…")
             props[prop]=transform_canon_table_stack(props[prop],enabled,progress=lambda v,idx=idx:progress((idx+v)/2.0))
     else: progress(1.0)
+
+    if independent:
+        updated = dict(fields)
+        for prop, _size in PROPERTY_ORDER:
+            if prop & 0x40000000:
+                identifier = prop & 0xffff
+                updated[identifier] = (fields[identifier][0], props[prop])
+        encoded_title = title.encode('ascii', errors='replace')[:31]
+        if fields[0x1002][1].split(b'\0', 1)[0] != encoded_title:
+            updated[0x1002] = (fields[0x1002][0], encoded_title.ljust(32, b'\0'))
+        for identifier, offset in _PF3_BASIC_OFFSETS.items():
+            updated[identifier] = (4, props[0x115][offset:offset+4])
+        result = _write_independent_pf3(output_path, updated, keys, expected_size=base_size)
+        log('Serialized/checksummed independently; camera acceptance is not verified.')
+        return result
 
     # Do not hold a Canon parser reference while composing the potentially
     # expensive LUT stack. Re-open a fresh, serialized DLL session only for
@@ -911,8 +1118,41 @@ def export_pf3(dll_path,base_path,output_path,lut_entries,controls,title,log=lam
             try:api.terminate()
             except Exception:pass
     size=validate_pf3_header(output_path)
-    if size!=434511: raise RuntimeError(f"Output PF3 is {size:,} bytes; expected 434,511. Do not register it.")
+    if size!=base_size: raise RuntimeError(f"Output PF3 is {size:,} bytes; expected {base_size:,} bytes (source base size). Do not register it.")
     sha=hashlib.sha256(Path(output_path).read_bytes()).hexdigest(); return size,sha
+
+
+def export_style_project(dll_path, base_path, output_path, lut_entries, controls, title,
+                         project, log=lambda s: None, progress=lambda v: None):
+    with tempfile.TemporaryDirectory(prefix='canon_style_export_') as directory:
+        pf3 = Path(directory) / 'style.pf3'
+        export_pf3(dll_path, base_path, pf3, lut_entries, controls, title, log, progress)
+        save_compiled_style_project(dll_path, base_path, output_path, project, pf3)
+    output_path = Path(output_path)
+    return output_path.stat().st_size, hashlib.sha256(output_path.read_bytes()).hexdigest()
+
+
+def save_compiled_style_project(dll_path, base_path, output_path, project, pf3):
+    from dataclasses import replace
+    from project_state import save_project
+    with tempfile.TemporaryDirectory(prefix='canon_style_reference_') as directory:
+        try:
+            keys, fields = _independent_pf3_input(base_path)
+        except ValueError:
+            if dll_path is None:
+                raise
+        else:
+            identity = (3, identity_canon_table())
+            own = _generated_calibration_fields()
+            identifiers = tuple(fields)
+            start = identifiers.index(0x1021) if 0x1021 in fields else -1
+            own_defaults = (identifiers[start:start+len(own)] == tuple(own)
+                            and all(fields.get(i) == entry for i, entry in own.items()))
+            if not own_defaults and not any(fields.get(identifier) == identity for identifier in (0x1070, 0x1071)):
+                reference = Path(directory) / 'identity_reference.pf3'
+                _write_independent_pf3(reference, _generated_pf3_fields('Neutral'), keys)
+                project = replace(project, cipherReference=str(reference))
+        save_project(output_path, project, pf3_path=pf3)
 
 
 class CanonRenderEngine:
@@ -924,7 +1164,7 @@ class CanonRenderEngine:
         self.base_cache.clear(); self.pillow_cache.clear(); self.composite_cache.clear(); self.stack33_cache.clear(); self.creative_cache.clear(); self.recipe_color_cache.clear(); self.recipe_wb_cache.clear()
 
     def load_base(self,dll_path,base_path):
-        key=(file_fingerprint(Path(dll_path)),file_fingerprint(Path(base_path)))
+        key=(file_fingerprint(Path(dll_path)) if dll_path else 'independent',file_fingerprint(Path(base_path)))
         if key not in self.base_cache:
             props=read_base_properties(dll_path,base_path,wanted=[(0x40001071,215628),(0x00000115,32)])
             self.base_cache[key]={"table":props[0x40001071],"basic":props[0x00000115],"lut":canon_table_to_pillow_lut(props[0x40001071])}
@@ -1003,6 +1243,41 @@ class CanonRenderEngine:
         if len(self.stack33_cache)>24:self.stack33_cache.pop(next(iter(self.stack33_cache)))
         return lut
 
+    def export_cube(self, output_path, luts, controls, size=33, title="Custom look"):
+        """Export the colour transform, excluding RAW development and sharpening."""
+        if type(size) is not int or size not in (17, 33, 65):
+            raise ValueError("LUT size must be 17, 33 or 65")
+        output_path = Path(output_path)
+        if output_path.suffix.lower() != ".cube":
+            raise ValueError("Choose a .cube output file")
+        samplers = [(CubeSampler(entry["cube"]), float(entry.get("opacity", 1)))
+            for entry in self.effective_luts(luts, controls)
+            if entry.get("enabled", True) and float(entry.get("opacity", 0)) > 0]
+        if any(controls.get(key, 0) for key in ("contrast", "saturation", "color_tone")):
+            basic = preview_basic_lut(controls.get("contrast", 0), controls.get("saturation", 0), controls.get("color_tone", 0))
+            samplers.append((CubeSampler(dict(size=basic.size[0], values=basic.table,
+                domain_min=[0, 0, 0], domain_max=[1, 1, 1])), 1.0))
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",
+                    dir=output_path.parent, suffix=".tmp", delete=False) as handle:
+                temporary = Path(handle.name)
+                safe_title = str(title).replace('"', "'").replace("\r", " ").replace("\n", " ")
+                handle.write(f'TITLE "{safe_title}"\n# sRGB look; excludes RAW/base-style rendering and sharpening\nLUT_3D_SIZE {size}\nDOMAIN_MIN 0 0 0\nDOMAIN_MAX 1 1 1\n')
+                for b in range(size):
+                    for g in range(size):
+                        for r in range(size):
+                            value = (r / (size - 1), g / (size - 1), b / (size - 1))
+                            for sampler, opacity in samplers:
+                                transformed = sampler.sample(*value)
+                                value = tuple(clamp01(value[i] * (1 - opacity) + transformed[i] * opacity) for i in range(3))
+                            handle.write(" ".join(f"{channel:.8f}" for channel in value) + "\n")
+                handle.flush();os.fsync(handle.fileno())
+            os.replace(temporary, output_path)
+        finally:
+            if temporary is not None and temporary.exists():temporary.unlink()
+        return output_path
+
     def render_from_canon_base(self, canon_base, luts, controls, preview_mode="working", post_wb=None, max_side=1800):
         """Apply Canon Style Studio edits on top of a real Canon DPP4Lib render."""
         # DPP4Lib already returns an oriented RGB frame. Reusing it here avoids a
@@ -1068,7 +1343,7 @@ class CanonRenderEngine:
             # missing. A generated runtime base is identity, while an imported PF3
             # still supplies its explicit table approximation.
             result=input_view
-            if dll_path and base_path and Path(base_path).is_file():
+            if base_path and Path(base_path).is_file():
                 result=input_view.filter(self.load_base(dll_path,base_path)["lut"])
             for e in effective:
                 if not e.get("enabled",True) or float(e.get("opacity",0))<=0: continue
@@ -1087,12 +1362,12 @@ def load_reference_image(path, wb_mode="As Shot", shot_select=0):
         try:
             return (*decode_canon_raw(path,wb_mode=wb_mode,shot_select=shot_select),True,False)
         except Exception as e:
-            im=extract_largest_embedded_jpeg(path); return im,{"decoder":"embedded JPEG","raw_error":str(e)},True,True
+            im=extract_largest_embedded_jpeg(path); return im,{"decoder":"embedded JPEG","raw_error":str(e),**detect_embedded_raw_metadata(path)},True,True
     if ext in {".tif",".tiff"}:
         try:
             im=Image.open(path); im.load(); return ImageOps.exif_transpose(im).convert("RGB"),{},False,False
         except Exception:
             try: return (*decode_canon_raw(path,wb_mode=wb_mode,shot_select=shot_select),True,False)
             except Exception as e:
-                im=extract_largest_embedded_jpeg(path); return im,{"decoder":"embedded JPEG","raw_error":str(e)},True,True
+                im=extract_largest_embedded_jpeg(path); return im,{"decoder":"embedded JPEG","raw_error":str(e),**detect_embedded_raw_metadata(path)},True,True
     im=Image.open(path); im.load(); return ImageOps.exif_transpose(im).convert("RGB"),{},False,False

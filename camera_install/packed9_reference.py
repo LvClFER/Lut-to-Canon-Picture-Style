@@ -10,7 +10,6 @@ import os
 import random
 import struct
 from pathlib import Path
-from .compiler_regression import cipher_tables
 
 
 def quantize(red, green, blue):
@@ -64,6 +63,7 @@ def _pack9_bounded(values, maximum):
 
 
 def native_pack(dll, vectors, integer_input=False):
+    from .compiler_regression import cipher_tables
     cipher_tables(dll)
     if not 1 <= len(vectors) <= 8:
         raise ValueError('Bounded batch required')
@@ -101,6 +101,7 @@ def native_pack(dll, vectors, integer_input=False):
 
 
 def main():
+    from .compiler_regression import cipher_tables
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dll', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)

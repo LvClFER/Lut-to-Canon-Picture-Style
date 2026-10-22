@@ -1,0 +1,79 @@
+name: Windows build and tests
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          architecture: x64
+          cache: pip
+      - run: python -m pip install -r requirements.txt pyinstaller
+      - name: Confirm Canon runtimes are absent
+        run: |
+          python - <<'PY'
+          from canon_engine import discover_pse, find_dll
+          from camera_install.eos_hook import find_eos_utility
+          assert discover_pse() is None
+          assert find_dll() is None
+          assert find_eos_utility() is None
+          PY
+      - name: Run regressions without camera access
+        run: python -m unittest discover -p 'test_*.py' -v
+      - name: Build and audit the standalone candidate
+        run: python build_standalone.py --output-root windows-candidate
+      - name: Start the frozen interface and verify the preflight gate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json, os, subprocess, tempfile
+          executable, = Path('windows-candidate').glob('*/CanonStyleStudio.exe')
+          with tempfile.TemporaryDirectory() as temporary:
+              root = Path(temporary)
+              subprocess.run([str(executable.resolve()), '--startup-smoke'],
+                  check=True, timeout=30, env=dict(os.environ,
+                      QT_QPA_PLATFORM='windows',
+                      CANON_STYLE_STUDIO_PORTABLE_ROOT=str(root / 'gui-state')))
+              report = root / 'report.json'
+              result = subprocess.run([str(executable.resolve()), '--session-worker',
+                  '--device-id', 'NO_DEVICE_TEST', '--allow-temporary-session',
+                  '--request-descriptor', '--request-slot', '3',
+                  '--preflight-style', str(root / 'missing.pf3'),
+                  '--output', str(report)], capture_output=True, timeout=20)
+              assert result.returncode != 0
+              evidence = json.loads(report.read_text())
+              assert evidence['deviceOpenAttempted'] is False
+              assert evidence['styleRegistrationAttempted'] is False
+          proof = dict(sourceCommit=os.environ['GITHUB_SHA'],
+              executableSha256=hashlib.sha256(executable.read_bytes()).hexdigest(),
+              canonRuntimeDetected=False, nativeWindowsStartupPassed=True,
+              missingInputBlockedBeforeDeviceAccess=True, cameraAccess=False,
+              bareWindowsRuntimeValidated=False, releaseCreated=False)
+          Path('WINDOWS_CANDIDATE_VERIFICATION.json').write_text(json.dumps(proof, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-candidate-x64
+          path: |
+            windows-candidate/*.zip
+            WINDOWS_CANDIDATE_VERIFICATION.json
+          if-no-files-found: error
+          retention-days: 7

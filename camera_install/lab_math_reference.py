@@ -16,7 +16,8 @@ def rgb_to_lab(rgb, bits, mode):
     maximum = 2**bits-1
     # Modern full33 passes 2**bits at unit-valued endpoints, while the
     # helper still normalizes by 2**bits-1. Preserve that observed boundary.
-    upper = maximum+1 if bits == 24 else maximum
+    # A repeated 24-bit RGB/Lab roundtrip can add one integer unit at an endpoint.
+    upper = maximum+2 if bits == 24 else maximum
     if any(v < 0 or v > upper for v in rgb):
         raise ValueError('RGB outside unsigned input domain')
     x, y, z = forward_color([v/maximum for v in rgb], 1 if mode == 1 else 2)

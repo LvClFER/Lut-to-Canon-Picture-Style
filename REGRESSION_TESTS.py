@@ -21,7 +21,7 @@ from canon_engine import (
 )
 from canon_runtime import (
     app_data_dir, application_root, discover_pse,
-    ensure_runtime_input_profile, exported_styles_dir,
+    ensure_runtime_input_profile, exported_styles_dir, documents_dir,
 )
 from test_report import create_test_report_zip, validate_test_report_zip
 from dpp_client import DppBackendClient, DppBackendError
@@ -100,7 +100,7 @@ class CoreRegressionTests(unittest.TestCase):
     def test_portable_runtime_storage_is_beside_application(self):
         root=application_root().resolve()
         self.assertEqual(app_data_dir().resolve().parent,root)
-        self.assertEqual(exported_styles_dir().resolve().parent,root)
+        self.assertEqual(exported_styles_dir().resolve().parent,documents_dir().resolve())
         self.assertNotIn("AppData\\Local\\CanonStyleStudio",str(app_data_dir()))
 
     def test_eos_rp_payload_preserves_carrier_outside_validated_fields(self):

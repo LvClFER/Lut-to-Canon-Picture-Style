@@ -1,7 +1,8 @@
 """Platform-neutral USB PTP framing only; no device access or registration.
 
-USB bulk framing is not the payload format of Apple's PTP command API.
-Adapters must explicitly convert their platform's representation.
+Native adapters must explicitly distinguish command/response containers from
+data delivered separately by their platform API; never add bulk data headers
+to ImageCaptureCore's outData buffer.
 """
 from dataclasses import dataclass
 import struct

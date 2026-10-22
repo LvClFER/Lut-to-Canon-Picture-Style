@@ -1,75 +1,39 @@
-# Canon Style Studio Public Alpha
+# Canon Style Studio
 
-Version **1.0.0-alpha.29** · Build **2026-10-16-PF3-BASE-CONTROLS-FIX-ALPHA-29**
+**Create Canon Picture Styles and colour LUTs on Windows.**
 
-Alpha.29 fixes black camera output from generated PF3 bases and corrects the Contrast/Sharpness field mapping. Independent compilation and USB registration remain experimental and are not enabled in the editor. This build still requires the Canon software listed below.
+[Download v1.0.0](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/releases/tag/v1.0.0) · [Quick start](docs/QUICK_START.md) · [Camera compatibility](CAMERA_COMPATIBILITY.md) · [Release notes](RELEASE_NOTES.md) · [Technical docs](docs/README.md)
 
-Canon Style Studio is an experimental Windows editor for developing Canon RAW files through the Canon DPP4Lib runtime installed with Picture Style Editor, building sequential LUT stacks, previewing Canon's 33³/12-bit LUT result and exporting PF3 Picture Style files.
+![Canon Style Studio editor](docs/images/editor.png)
 
-## Changes in alpha.29
+## What it does
 
-- Fixed generated PF3 bases that could produce black camera output by using identity matrices and neutral post-LUT curves.
-- Corrected the PF3 Contrast and Sharpness Strength field mapping. Camera-registration state is not modified by this correction.
-- Added compiler and transport reference implementations with automated tests to the source repository. They do not replace the editor's existing Canon workflow.
+- Import `.cube` LUTs, Hald images and PF3 styles; create a look with RGB gamma, colour, tonal and six-axis adjustments.
+- Preview before/after with a draggable divider, compare two LUTs and use snapshots A/B/C.
+- Save one editable `.canonstyleproject`, reopen it, and keep your currently loaded reference photos when changing styles.
+- Export Canon `.pf3` styles and 17-, 33- or 65-point `.cube` LUTs. Six generated base styles are included; new projects use Standard.
+- Develop supported RAW files. Exact Canon base-style rendering uses an optional local Picture Style Editor installation; LibRaw fallback is not an exact Canon rendering substitute.
+- Optionally find RAW samples through a user-operated DPReview browser, retaining source and author credit.
+- Install styles through the independent Windows USB workflow with camera/slot selection, backup and readback checks. **This feature is experimental.**
 
-## Requirements
+## Download and run
 
-- Windows 10 or 11, 64-bit.
-- Canon **Picture Style Editor** installed. The app discovers standard 64-bit and 32-bit Canon install locations; use **Locate PSE…** if it is installed elsewhere.
-- Canon Digital Photo Professional is **not required**.
-- **Send to Camera** additionally requires EOS Utility 3. No Manual Loader package or external support binaries are required: the selected PF3 is validated live against Canon's own compiler and outgoing EDSDK buffer.
+Download **CanonStyleStudio_1.0.0_Windows_x64.zip** from the release, extract the whole ZIP, then run `CanonStyleStudio.exe`. Keep the `runtime` folder beside it. Python, Java and Node.js do not need to be installed. User-created styles go into **Documents / Canon Style Studio PF3**.
 
-The Windows x64 standalone build includes its own Python runtime and application dependencies. Testers do **not** need to install Python or packages.
+Version 1.0.0 is the first stable **Windows editor** release. Camera-installation compatibility is a separate validation question: independent physical testing covers the **EOS RP**; other models remain experimental. The compiler catalog is not a list of cameras physically tested with this app. See the [compatibility notes](CAMERA_COMPATIBILITY.md) before using USB installation. A failed USB session may require disconnecting or restarting the camera; there is no automatic retry or rollback.
 
-## Portable storage
+## Current limits
 
-Application-owned files stay beside `CanonStyleStudio.exe`: `app_data/` contains settings, caches and logs, and `exported_styles/` retains normal PF3 exports and every camera preparation attempt. Moving the complete application folder therefore carries this state to another writable location/computer. The former `%LOCALAPPDATA%\CanonStyleStudio` settings are read once for non-destructive migration and are never deleted.
+- `.cube` exports contain the colour look and enabled LUT stack, not RAW exposure/WB, the full camera base rendering or spatial sharpening. RAW exposure/WB are not written into a Picture Style either.
+- Existing camera-slot Basic controls must match the independent installation requirements; conflicting values are blocked.
+- Nikon `.np3` colour conversion is **not available**. Reading its records does not establish faithful rendering.
+- Android and macOS sources are under development; this release ships the Windows build only.
+- A preview is not a guarantee that every camera will produce an identical JPEG. Canon RAW development, imported PF3 preview and hardware coverage each have their documented limits.
 
-The distribution contains no Canon DLL, executable, ICC/ICM profile, PF3 base, RAW image, native carrier, descriptor or captured payload. At runtime it uses DPP4Lib and an input profile from the user's own local Picture Style Editor installation. Generated working PF3 data and caches are stored beside the application.
+## Development disclosure
 
-## Start
+**Developed by Filipe with extensive assistance from OpenAI Codex**, including implementation, reverse-engineering research, debugging, tests, packaging and documentation. AI-assisted work and automated tests are not independent certification or proof of compatibility with untested cameras. Hardware-test claims are limited to the evidence in the compatibility notes.
 
-1. Copy the complete application folder to a writable location, or extract the entire ZIP there.
-2. Run `CanonStyleStudio.exe` (or `START_CANON_STYLE_STUDIO.bat`).
-3. In the app, press **Test** beside RAW engine. If PSE was not found, press **Locate PSE…** and select the folder containing `PSEditor.exe` and `DPP4Lib`.
+Thanks to [kianimo](https://github.com/kianimo) for the export bug reports and proposed fixes in PRs [#1](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/pull/1), [#2](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/pull/2) and [#3](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/pull/3).
 
-Without PSE, JPEG/PNG/TIFF and LUT work remains available. Canon RAW rendering and PF3 export clearly report that Picture Style Editor is required; LibRaw remains only a fallback.
-
-## Main workflow
-
-- Open CR3/CR2, JPEG, PNG or TIFF references.
-- Adjust Canon-native Exposure, fixed/Kelvin White Balance, WB Shift, Picture Style, Contrast, Saturation and Color Tone for RAW files. Fuji-style Recipe WB is a separate LUT-baked approximation calibrated from a controlled X-T1/Provia/5000 K reference sequence.
-- Add `.cube` or Hald LUTs, reorder layers and set opacity. LUT-only changes reuse the cached Canon development.
-- Use recipe-style Highlight and Shadow controls from -2 to +4 and Color from -4 to +4; shape a five-point monotonic Tone Curve; tune Red, Yellow, Green, Cyan, Blue and Magenta Hue/Saturation/Luminance axes; and add experimental Color Chrome-style or Blue Chrome-style density. Recipe Color is baked before the user LUT stack so each film-simulation LUT responds to the adjusted source colour; the remaining creative controls are baked after it. All reuse the cached Canon development.
-- Save a portable `.canonstyleproject` archive containing every editor setting and all CUBE/Hald LUTs used by the current edit or snapshots. Reference photographs are deliberately not embedded; only their filenames are retained as reconnect hints.
-- Switch to **Canon 33³ Preview** to simulate only the final sequential LUT stack quantized to Canon's 33³/12-bit table.
-- Export PF3 through Canon's locally installed EdsCFParse serializer. The default destination is the portable `exported_styles/` folder, and `.pf3` is added automatically. No Picture Style is applied a second time by Canon 33³ Preview.
-- Use **Send to Camera** for the Canon-native EOS Utility workflow. The app exports the current state, arms validation for that exact PF3 and waits while you perform a normal EOS Utility registration. Canon selects the connected camera representation; the app validates both converted tables and requires an exact compiler-to-EDSDK buffer match.
-
-The editor records `basePictureStyle` in projects and PF3 manifests. Public releases do not contain extracted Canon base PF3 files. By default the app creates an identity-table base locally through the installed Canon EdsCFParse serializer; this zero-setup base remains clearly labelled experimental.
-
-Highlight, Shadow, Color, Tone Curve, Six Color-Axes and both Chrome-style controls are LUT-baked creative transforms, not claimed Canon-native PF3 controls. Working Preview places Recipe Color before the user LUT stack and the remaining creative stage after it. Canon 33³ Preview recomposes the same ordered pipeline into the final 33³/12-bit transform, matching PF3 table export.
-
-Portable projects validate embedded LUT sizes and SHA-256 hashes before extraction, reject unsafe archive paths, and remain backward-compatible with the earlier plain-JSON project format. Local Canon PF3/DLL/ICC resources and RAW/JPEG/TIFF references are never embedded. An Imported PF3 must be selected again on the destination computer.
-
-**Send to Camera has been physically exercised on EOS RP and EOS R8 and remains experimental on other bodies.** Canon's installed compiler selects the live camera representation; no model-specific carrier is bundled or selected by Canon Style Studio. Opening a RAW from a body still does not validate camera installation.
-
-Fit, zoom and pan share stable view state. Zooming a RAW requests validated higher-detail Canon output where safe; portrait RAW is developed using the validated landscape-stage pipeline and returned in portrait orientation.
-
-## Privacy-safe reports
-
-Use **Create Test Report** in the top bar when reporting a problem. It includes app/runtime versions, camera model, dimensions, settings, LUT metadata and sanitized logs. Usernames and personal paths are replaced. The original RAW is **off by default** and is included only after two explicit confirmations.
-
-See [TESTING_GUIDE.md](TESTING_GUIDE.md) for the tester matrix and bug-report format, and [PUBLIC_ALPHA_RELEASE_NOTES.md](PUBLIC_ALPHA_RELEASE_NOTES.md) for validated and experimental boundaries.
-
-## Validation and independent-mode research
-
-Alpha.29 passed 601 automated tests, including a run from a clean source copy without private research fixtures. The packaged Windows executable also passed its startup smoke test without an external Python installation. These checks do not replace physical camera testing; no new camera registration was performed for this build.
-
-Compilation and registration without Canon software remain unfinished. An authorized EOS RP diagnostic opened an independent Windows Portable Devices session and queried capabilities, but the first remote-mode command failed. No style was sent. This path is not enabled in the editor.
-
-See the [independent session results](research/RP_INDEPENDENT_SESSION_20261011.md) and [remaining cipher dependency](research/CIPHER_DEPENDENCY_20261011.md) for the evidence and current blockers. macOS and Android builds are not available.
-
-## Legal notice
-
-Canon Style Studio is independent experimental software and is not affiliated with or endorsed by Canon. Canon, DPP, Picture Style Editor and related names are trademarks of their respective owners. Users must install and license Canon software separately.
+This is an independent community project, not an official Canon product. Canon and Nikon names/logos belong to their respective owners. [Demo image credits](docs/images/CREDITS.md).

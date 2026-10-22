@@ -25,6 +25,34 @@ from camera_install.windows_wpd_probe import (
 
 
 class WindowsPtpResearchTests(unittest.TestCase):
+    def test_windows_record_layout_has_fixed_width_on_every_host(self):
+        identifier='00112233-4455-6677-8899-aabbccddeeff'
+        guid=bytes.fromhex('33221100554477668899aabbccddeeff')
+        self.assertEqual(ctypes.sizeof(_Guid),16)
+        self.assertEqual(ctypes.sizeof(_PropertyKey),20)
+        self.assertEqual(bytes(_Guid.from_text(identifier)),guid)
+        self.assertEqual(bytes(_PropertyKey.create(identifier,0x12345678)),
+            guid+bytes.fromhex('78563412'))
+
+    def test_record_layout_survives_lp64_wintypes(self):
+        import runpy
+        with patch.object(wpd.wintypes,'DWORD',ctypes.c_uint64):
+            namespace=runpy.run_path(wpd.__file__,run_name='wpd_layout_test')
+            self.assertEqual(ctypes.sizeof(namespace['_Guid']),16)
+            self.assertEqual(ctypes.sizeof(namespace['_PropertyKey']),20)
+            self.assertEqual(bytes(namespace['_PropertyKey'].create(
+                '00112233-4455-6677-8899-aabbccddeeff',0x12345678)),
+                bytes.fromhex('33221100554477668899aabbccddeeff78563412'))
+
+    def test_direct_registration_state_requests_abort_before_com_or_open(self):
+        with patch.object(wpd, '_create_instance') as create:
+            for code in (0xd163, 0xd164, 0xd165):
+                with self.assertRaisesRegex(ValueError, 'disabled'):
+                    wpd._new_mtp_params(None, 12, opcode=0x9127, args=(code,))
+            with self.assertRaisesRegex(RuntimeError, 'disabled'):
+                wpd._canon_registration_state_summary(None, 'fake-device')
+            create.assert_not_called()
+
     def mock_session(self):
         stack = self.enterContext(ExitStack())
         stack.enter_context(patch.object(wpd, "_create_instance", return_value=ctypes.c_void_p(1)))
@@ -174,6 +202,12 @@ class WindowsPtpResearchTests(unittest.TestCase):
 
     @unittest.skipUnless(sys.platform == "win32", "Windows COM only")
     def test_wpd_values_com_roundtrip_without_camera(self):
+        from concurrent.futures import ThreadPoolExecutor
+        # Keep the MTA test independent of Qt's main-thread COM apartment.
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pool.submit(self._wpd_values_com_roundtrip).result(timeout=10)
+
+    def _wpd_values_com_roundtrip(self):
         ole32 = ctypes.WinDLL("ole32")
         ole32.CoInitializeEx.argtypes = (ctypes.c_void_p, ctypes.c_ulong)
         ole32.CoInitializeEx.restype = ctypes.c_long

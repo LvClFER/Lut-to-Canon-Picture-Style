@@ -5,6 +5,33 @@ from camera_install.legacy_six_axis_reference import transform as canonical
 
 
 class GeometryTests(unittest.TestCase):
+    def test_standard_rp_group_counts_preserve_ring_and_strict_size(self):
+        from camera_install.legacy_grid_reference import prepare
+        from unittest.mock import patch
+        for count in (7,8):
+            groups=[]
+            for index in range(count):
+                low,high=index*360//count,(index+1)*360//count
+                groups.extend([5,0,(low+high)//2,50,50,1,low,0,0,
+                               2,high,100,100,3,0,0,0,5,10,0,0])
+            raw=struct.pack('<'+'i'*(2+21*count),2,count,*groups)
+            for rgb in ([.2,.1,.1],[.1,.2,.1],[.1,.1,.2],[.5,.5,.5]):
+                for actual,expected in zip(transform(rgb,raw),rgb):
+                    self.assertAlmostEqual(actual,expected,places=14)
+            with patch('camera_install.legacy_axis_geometry_reference.helper',return_value=[0.,0.,0.,0.]) as visit:
+                transform([.5,.5,.5],raw)
+                decoded=[decode(raw[8+i*84:92+i*84]) for i in range(count)]
+                for index,call in enumerate(visit.call_args_list):
+                    self.assertEqual(call.args[1:],(decoded[index],decoded[(index-1)%count],decoded[(index+1)%count]))
+            arguments=dict(oldParameterBlock=None, additionalParameterBlock=None,
+                axisParameterBlock=dict(kind=2,points=5,initializedHex=raw.hex()),
+                matrix240Hex=bytes(240).hex(), numericArguments=[1,1],
+                preCurvesHex=None,postCurvesHex=None,thirdCurvesHex=None)
+            self.assertEqual(prepare(arguments,experimental_geometry=True)[2]['axisValues'],raw)
+            with self.assertRaises(ValueError):prepare(arguments)
+            for bad in (raw[:-4],raw+bytes(4),struct.pack('<2i',2,count-2)+raw[8:]):
+                with self.assertRaises(ValueError):transform([.2,.1,.1],bad)
+
     def test_three_groups_use_circular_neighbors_and_exact_geometry(self):
         groups=[]
         for low,high in ((0,60),(60,120),(120,360)):

@@ -123,6 +123,12 @@ class ReadPropertyMapAdapter(PropertyMapAdapter):
         return ReadChunk(bytes(value), actual)
 
 
+class PtpCommandError(RuntimeError):
+    def __init__(self, opcode, response_code):
+        self.opcode, self.response_code = opcode, response_code
+        super().__init__(f'Command 0x{opcode:04X} returned PTP 0x{response_code:04X}; expected 0x2001')
+
+
 class CommandPropertyMapAdapter(PropertyMapAdapter):
     """Injected WPD command12, with no data phase or real device sender.
 
@@ -140,5 +146,5 @@ class CommandPropertyMapAdapter(PropertyMapAdapter):
         completion = decode_completion(result)
         self.last_completion = completion
         if completion.response_code != 0x2001:
-            raise RuntimeError('Command completion did not return PTP OK')
+            raise PtpCommandError(opcode, completion.response_code)
         return completion

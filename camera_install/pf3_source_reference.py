@@ -4,6 +4,7 @@ No DLL loading/discovery, key constants, model selection or camera access.
 Unsupported envelopes are rejected rather than interpreted as this version.
 """
 import struct
+from collections.abc import Mapping
 from types import MappingProxyType
 from .cipher_stream_reference import decode
 
@@ -44,7 +45,7 @@ def read_source_fields(raw, keys):
                 raise ValueError('Invalid PF3 additive checksum')
             checked = True
             continue
-        if not 0x1000 <= identifier <= 0x10ff or identifier in fields:
+        if not (0x1000 <= identifier <= 0x10ff or 0x9000 <= identifier <= 0x90ff) or identifier in fields:
             raise ValueError('Unsupported or duplicate PF3 record')
         if kind not in (2, 3, 4, 0xffff):
             raise ValueError('Unsupported PF3 record type')
@@ -54,3 +55,33 @@ def read_source_fields(raw, keys):
         host = b''.join(value[i:i+width][::-1] for i in range(0, size, width))
         fields[identifier] = (kind, host)
     raise ValueError('Missing PF3 terminator')
+
+
+def write_source_fields(fields, keys):
+    """Serialize ordered host-endian fields in the strict3000 domain.
+
+    Recompute the checksum; never copy a stale checksum or terminal record.
+    No native parser, file I/O or camera acceptance is implied.
+    """
+    if not isinstance(fields, Mapping) or not 1 <= len(fields) <= 256:
+        raise ValueError('Require bounded ordered PF3 fields')
+    records = []
+    total = 32
+    for identifier, entry in fields.items():
+        if type(identifier) is not int or not (0x1000 <= identifier <= 0x10ff or 0x9000 <= identifier <= 0x90ff):
+            raise ValueError('Unsupported PF3 record identifier')
+        if type(entry) is not tuple or len(entry) != 2:
+            raise ValueError('Require kind/immutable-data pairs')
+        kind, data = entry
+        if type(kind) is not int or kind not in (2, 3, 4, 0xffff) or type(data) is not bytes:
+            raise ValueError('Unsupported PF3 typed field')
+        width = {3: 2, 4: 4}.get(kind, 1)
+        total += 8 + len(data)
+        if len(data) % width or total > 16 * 1024 * 1024:
+            raise ValueError('Misaligned or oversized PF3 field')
+        network = b''.join(data[i:i+width][::-1] for i in range(0, len(data), width))
+        records.append(struct.pack('>HHI', identifier, kind, len(data)) + network)
+    body = b''.join(records)
+    body += struct.pack('>HHII', 0xfffe, 4, 4, sum(body) & 0xffffffff)
+    body += struct.pack('>HHI', 0xffff, 0xffff, 0)
+    return bytes.fromhex('0000300050535000') + struct.pack('>I', len(body)) + decode(body, keys, 12)

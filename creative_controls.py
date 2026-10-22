@@ -24,6 +24,11 @@ def _default_axes():
     return {name: {"hue": 0, "saturation": 0, "luminance": 0} for name in AXIS_NAMES}
 
 
+DEFAULT_GRADING = dict.fromkeys(("brightness", "contrast", "saturation", "hue",
+    "temperature", "tint", "red_gamma", "green_gamma", "blue_gamma",
+    "toe", "mid_contrast", "shoulder", "lightness", "density"), 0)
+
+
 DEFAULT_CREATIVE_CONTROLS = {
     "recipe_highlight": 0,
     "recipe_shadow": 0,
@@ -32,6 +37,7 @@ DEFAULT_CREATIVE_CONTROLS = {
     "color_axes": _default_axes(),
     "color_chrome": "Off",
     "color_chrome_fx_blue": "Off",
+    "grading": dict(DEFAULT_GRADING),
 }
 
 DEFAULT_RECIPE_WB = {
@@ -98,6 +104,9 @@ def normalize_creative_controls(settings=None):
         "color_axes": axes,
         "color_chrome": _level(source.get("color_chrome")),
         "color_chrome_fx_blue": _level(source.get("color_chrome_fx_blue")),
+        "grading": {key: _clampi((source.get("grading") or {}).get(key, 0),
+            -180 if key == "hue" else -100, 180 if key == "hue" else 100)
+            for key in DEFAULT_GRADING},
     }
 
 
@@ -116,6 +125,8 @@ def recipe_wb_is_neutral(settings=None):
 
 def creative_is_neutral(settings=None):
     normalized = normalize_creative_controls(settings)
+    if any(normalized["grading"].values()):
+        return False
     if any(normalized[key] for key in ("recipe_highlight", "recipe_shadow", "recipe_color")):
         return False
     if any(abs(a - b) > 1e-9 for a, b in zip(normalized["tone_curve"], IDENTITY_TONE_CURVE)):
@@ -285,8 +296,22 @@ def apply_creative_rgb(rgb, settings=None):
     if creative_is_neutral(controls):
         return rgb.copy()
 
+    grading = controls["grading"]
+    if any(grading.values()):
+        # Look controls are baked into the LUT; RAW development stays separate.
+        warm, tint = grading["temperature"] / 100.0, grading["tint"] / 100.0
+        gains = np.exp2([warm * 0.5 + tint * 0.2, -tint * 0.4, -warm * 0.5 + tint * 0.2])
+        rgb = np.clip(rgb * gains * 2.0 ** (grading["brightness"] / 50.0), 0, 1)
+        gamma = np.exp2(-np.array([grading[key] for key in ("red_gamma", "green_gamma", "blue_gamma")]) / 100.0)
+        rgb = rgb ** gamma
+        rgb = np.clip((rgb - 0.5) * 2.0 ** (grading["contrast"] / 100.0) + 0.5, 0, 1)
     lab = linear_srgb_to_oklab(srgb_to_linear(rgb))
     light = _monotone_curve(lab[..., 0], controls["tone_curve"])
+    if any(grading.values()):
+        light = np.clip((light - 0.5) * 2.0 ** (grading["mid_contrast"] / 100.0) + 0.5, 0, 1)
+        light += grading["toe"] / 100.0 * light * (1 - light) ** 2
+        light -= grading["shoulder"] / 100.0 * light ** 2 * (1 - light)
+        light = np.clip(light + grading["lightness"] / 400.0, 0, 1)
 
     # Familiar recipe-style tone controls, expressed in perceptual lightness.
     # They deliberately preserve black, white and the middle-grey join. Negative
@@ -307,6 +332,9 @@ def apply_creative_rgb(rgb, settings=None):
     chroma = np.sqrt(aa * aa + bb * bb)
     hue = (np.degrees(np.arctan2(bb, aa)) + 360.0) % 360.0
     chroma *= 2.0 ** (float(controls["recipe_color"]) * 0.12)
+    hue = (hue + grading["hue"]) % 360.0
+    chroma *= max(0.0, 1.0 + grading["saturation"] / 100.0)
+    light -= grading["density"] / 500.0 * smoothstep(0.015, 0.15, chroma) * 4 * light * (1 - light)
 
     weights = {name: _hue_gaussian(hue, center, 28.0) for name, center in AXIS_CENTERS.items()}
     weight_total = np.maximum(1.0, np.sum(np.stack(list(weights.values()), axis=0), axis=0))

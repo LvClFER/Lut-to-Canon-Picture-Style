@@ -1,0 +1,28 @@
+plugins { id 'com.android.application'; id 'com.chaquo.python' }
+android {
+    namespace 'org.canonstylestudio.mobile'
+    compileSdk 35
+    ndkVersion '28.2.13676358'
+    defaultConfig {
+        applicationId 'org.canonstylestudio.mobile'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0-android-dev'
+        testInstrumentationRunner 'org.canonstylestudio.mobile.CandidateChecks'
+        ndk { abiFilters 'arm64-v8a', 'x86_64' }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    externalNativeBuild { cmake {
+        path file('src/main/cpp/CMakeLists.txt'); version '3.22.1'
+        // Ninja on Windows still needs short paths for dependency stamp files.
+        buildStagingDirectory file("${System.getProperty('user.home')}/.cache/canon-style-studio/android-native")
+    } }
+}
+chaquopy {
+    defaultConfig {
+        version = '3.12'
+        if (System.getenv('CANON_ANDROID_BUILD_PYTHON')) { buildPython System.getenv('CANON_ANDROID_BUILD_PYTHON') }
+        pip { install 'numpy'; install 'Pillow' }
+    }
+}

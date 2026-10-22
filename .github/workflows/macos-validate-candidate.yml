@@ -1,0 +1,77 @@
+name: Validate existing macOS candidates
+
+on:
+  push:
+    branches: [codex/macos-candidate-20261020]
+    paths: [.github/workflows/macos-validate-candidate.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  startup:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-candidate-${{ matrix.arch }}
+          run-id: 39408692557
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: candidate
+      - name: Verify the DMG and start the native Cocoa interface
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, os, platform, subprocess, tempfile
+          architecture = os.environ['EXPECTED_ARCH']
+          assert platform.machine() == architecture
+          image, = Path('candidate').glob('*.dmg')
+          digest = hashlib.sha256()
+          with image.open('rb') as stream:
+              for block in iter(lambda: stream.read(1024 * 1024), b''):
+                  digest.update(block)
+          with tempfile.TemporaryDirectory() as temporary:
+              root = Path(temporary)
+              mount = root / 'mounted'
+              mount.mkdir()
+              subprocess.run(['hdiutil', 'attach', '-readonly', '-nobrowse',
+                  '-mountpoint', str(mount), str(image.resolve())], check=True, timeout=60)
+              try:
+                  app = mount / 'Canon Style Studio.app'
+                  executable = app / 'Contents/MacOS/Canon Style Studio'
+                  manifest = json.loads((mount / 'BUILD_MANIFEST.json').read_text())
+                  assert manifest['architecture'] == architecture
+                  assert len(manifest['basicPf3Sha256']) == 6
+                  assert subprocess.check_output(['lipo', '-archs', str(executable)],
+                      text=True, timeout=15).strip() == architecture
+                  subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)],
+                      check=True, timeout=60)
+                  subprocess.run([str(executable), '--startup-smoke'], check=True,
+                      timeout=30, env=dict(os.environ, QT_QPA_PLATFORM='cocoa',
+                          CANON_STYLE_STUDIO_PORTABLE_ROOT=str(root / 'gui-state')))
+              finally:
+                  subprocess.run(['hdiutil', 'detach', str(mount)], check=True, timeout=30)
+          proof = dict(architecture=architecture, sourceRunId=39408692557,
+              dmgSha256=digest.hexdigest(), nativeCocoaStartupPassed=True,
+              signatureVerified=True, cameraAccess=False, releaseCreated=False)
+          Path('GUI_STARTUP_' + architecture + '.json').write_text(json.dumps(proof, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-gui-proof-${{ matrix.arch }}
+          path: GUI_STARTUP_${{ matrix.arch }}.json
+          if-no-files-found: error
+          retention-days: 7

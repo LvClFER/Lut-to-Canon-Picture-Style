@@ -13,9 +13,30 @@ from pathlib import Path
 
 
 APP_NAME = "CanonStyleStudio"
-PUBLIC_NAME = "Canon Style Studio Public Alpha"
-PUBLIC_VERSION = "1.0.0-alpha.29"
-BUILD_ID = "2026-10-16-PF3-BASE-CONTROLS-FIX-ALPHA-29"
+PUBLIC_NAME = "Canon Style Studio"
+PUBLIC_VERSION = "1.0.0"
+BUILD_ID = "2026-10-22-WINDOWS-1.0.0"
+
+BASIC_PF3_SHA256 = {
+    'standard.pf3':'2457fa70a36719b7e70bfc1e0ab06819877254d29c634e414bf1587172e3adc3',
+    'portrait.pf3':'205487b04960f8b9f78b6435486581318fe4320cf0b5404fa15c21d2c1377074',
+    'landscape.pf3':'1310185dc4f2bbb5d1284c1a88a4e07a777c16231219f919c4ecf2db80c44433',
+    'neutral.pf3':'b8c6c060cdc44ad8c05a9a62732c34087de80f984a5408ed0f69a1ff1784373a',
+    'faithful.pf3':'6da1153a0cbb26d2a34d050af2d84b2ec9f2cd2002c8a5ef2a4d3a7cbf0089ca',
+    'fine_detail.pf3':'c176af73f75206c0b97540ff35baf16f3868d9bc51d949facf45098d06592e1e',
+}
+
+
+def basic_pf3_resource(style):
+    """Read-only app-owned bases; never resolve them through writable caches."""
+    name=style.lower().replace(' ','_')+'.pf3'
+    if name not in BASIC_PF3_SHA256:raise ValueError('Unsupported basic Picture Style')
+    path=Path(__file__).resolve().parent/'basic_pf3'/name
+    if not path.is_file():return None
+    with path.open('rb') as stream:raw=stream.read(434512)
+    if len(raw)!=434511 or hashlib.sha256(raw).hexdigest()!=BASIC_PF3_SHA256[name]:
+        raise ValueError('Bundled basic PF3 is damaged: '+name)
+    return path
 
 
 def application_root() -> Path:
@@ -35,21 +56,57 @@ def legacy_app_data_dir() -> Path:
 
 
 def app_data_dir() -> Path:
-    path = application_root() / "app_data"
+    path = (Path.home()/'Library'/'Application Support'/APP_NAME
+            if sys.platform=='darwin' and not os.environ.get('CANON_STYLE_STUDIO_PORTABLE_ROOT')
+            else application_root()/'app_data')
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
+def documents_dir() -> Path:
+    if os.name == 'nt':
+        buffer = ctypes.create_unicode_buffer(32768)
+        result = ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buffer)
+        if result != 0 or not buffer.value:
+            raise OSError('Windows Documents folder is unavailable')
+        return Path(buffer.value)
+    return Path.home() / 'Documents'
+
+
 def exported_styles_dir() -> Path:
-    path = application_root() / "exported_styles"
+    path = documents_dir() / 'Canon Style Studio PF3'
     path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def style_export_path(name, suffix='.canonstyleproject') -> Path:
+    if suffix not in ('.pf3', '.canonstyleproject', '.cube'):
+        raise ValueError('Unsupported style export format')
+    stem = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', str(name)).strip(' .') or 'CanonStyle'
+    if re.fullmatch(r'(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?', stem, re.I):
+        stem = '_' + stem
+    directory = exported_styles_dir()
+    path = directory / (stem + suffix)
+    number = 2
+    while path.exists():
+        path = directory / f'{stem} ({number}){suffix}'
+        number += 1
     return path
 
 
 def cache_dir() -> Path:
-    path = app_data_dir() / "cache"
+    path = (Path.home()/'Library'/'Caches'/APP_NAME
+            if sys.platform=='darwin' and not os.environ.get('CANON_STYLE_STUDIO_PORTABLE_ROOT')
+            else app_data_dir()/'cache')
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def open_local_path(path):
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QDesktopServices
+    if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(path).resolve()))):
+        raise OSError('The system could not open this path')
 
 
 def logs_dir() -> Path:

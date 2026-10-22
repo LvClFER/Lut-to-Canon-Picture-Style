@@ -38,7 +38,7 @@ def main():
         if not RAW.exists():
             try:
                 assert window.camera_btn.objectName()=="AccentButton"
-                window.content_splitter.setSizes([620,1060]);app.processEvents()
+                window.content_splitter.setSizes([1060,620]);app.processEvents()
                 assert window.sidebar.width()>=520,window.sidebar.width()
                 assert window.sidebar_scroll.horizontalScrollBarPolicy()==Qt.ScrollBarPolicy.ScrollBarAlwaysOff
                 viewer=window.viewer
@@ -70,11 +70,11 @@ def main():
             # The control sidebar used to be capped at 390 px, making several
             # rows overflow and creating a horizontal scrollbar. It must remain
             # user-resizable while the viewer receives the remaining width.
-            window.content_splitter.setSizes([620,1060]);app.processEvents()
+            window.content_splitter.setSizes([1060,620]);app.processEvents()
             assert window.sidebar.width()>=520,window.sidebar.width()
             assert window.sidebar_scroll.horizontalScrollBarPolicy()==Qt.ScrollBarPolicy.ScrollBarAlwaysOff
             state["sidebar_expanded_width"]=window.sidebar.width()
-            window.content_splitter.setSizes([430,1250]);app.processEvents()
+            window.content_splitter.setSizes([1250,430]);app.processEvents()
             assert window.last_canon_base is not None,"Canon portrait render did not finish"
             assert window.last_canon_base.height>window.last_canon_base.width,window.last_canon_base.size
             assert "DPP4Lib" in str(window.raw_info.get("decoder","")),window.raw_info

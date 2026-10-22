@@ -5,3 +5,4 @@ rawpy
 tifffile
 imageio
 frida
+pyobjc-framework-ImageCaptureCore; sys_platform == 'darwin'

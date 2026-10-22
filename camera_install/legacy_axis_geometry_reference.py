@@ -70,8 +70,8 @@ def transform(rgb,raw,*,allow_fixed_point_overshoot=False):
     if len(raw)<8:
         raise ValueError('Require bounded axis block header')
     kind,count=struct.unpack_from('<2i',raw)
-    if kind!=2 or count not in (3,6) or len(raw)!=8+84*count:
-        raise ValueError('Require observed three/six-group bounded axis block')
+    if kind!=2 or count not in (3,6,7,8) or len(raw)!=8+84*count:
+        raise ValueError('Require observed three/six/seven/eight-group bounded axis block')
     groups=[decode(raw[8+i*84:8+(i+1)*84]) for i in range(count)]
     hue=cone_hue(rgb);h=ds=dl=0.
     for i,group in enumerate(groups):

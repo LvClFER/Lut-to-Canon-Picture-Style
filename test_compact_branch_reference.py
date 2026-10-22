@@ -92,7 +92,7 @@ class CompactBranchTests(unittest.TestCase):
             self.assertTrue(rejects_fine_detail_branch(camera_id,0x88))
             for selector in (0,0x81,0x82,0x83,0x84,0x85,0xffff):
                 self.assertFalse(rejects_fine_detail_branch(camera_id,selector))
-        for camera_id in (0,0xffffffff,0x80000433,0x80000487):
+        for camera_id in (0,0xffffffff,0x80000433,0x80000487,0x80000382,0x80000401):
             self.assertFalse(rejects_fine_detail_branch(camera_id,0x88))
         for args in ((True,0x88),(0,True),(0,-1),(0,0x10000)):
             with self.assertRaises(ValueError): rejects_fine_detail_branch(*args)

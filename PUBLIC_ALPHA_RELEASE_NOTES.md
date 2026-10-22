@@ -1,3 +1,62 @@
+# Historical alpha and release-candidate notes
+
+For the current release, see [version 1.0.0](RELEASE_NOTES.md). The dated sections below describe their own historical scope.
+
+# Local development candidate · 2026-10-18 · not published
+
+- Includes six user-authorized application-generated basic PF3 files. First use no longer requires a user reference, pre-existing cache or Canon software for PF3 generation.
+- Included resources are hash-checked and remain read-only; styles are still saved as one editable document in Documents.
+- Adds a light editorial Windows layout with a large left photo preview, right adjustment cards and reference thumbnails. Known Basic-control updates remain disabled in the editor; the matching-control camera path is retained.
+- Canon RAW development remains optional and requires DPP4Lib. The historical releases below describe their own validation scope.
+
+# Canon Style Studio 1.0.0-rc.7 · candidate · 2026-10-18
+
+- Corrects Fine Detail selection to follow the reconstructed identifier policy: the 5DS/5DS R class-6 path is accepted, while the coefficient-policy 7D-II path remains rejected. Three private offline native cases confirmed this distinction.
+- Removes the blanket reference-bank rejection for compact families 5/6 in the strict PF3 3000 path. Original reference records remain in the style/project; compilation uses active records.
+- Static constructor/vtable evidence and twelve private offline native-oracle cases establish no-op callbacks and reference-only edit invariance. The independent compiler reproduces nine complete native carriers for compact coefficient selectors and the headers/second pair for all twelve. The 5DS first pair retains the application's previously established dense-table policy.
+- A synthetic regression checks all catalogued family-5/6 identifiers, preserving the high bank and rejecting other envelopes. Borrowed descriptors and compiler-selector tests do not establish physical support for those bodies. No new camera access was performed.
+
+# Canon Style Studio 1.0.0-rc.6 · candidate · 2026-10-18
+
+- Restores an explicit optional EOS Utility fallback in the Send to Camera menu. The main action remains independent USB and never resolves native prerequisites when opened.
+- Corrects test reports to distinguish independent RP validation from the native fallback's separate RP/R8 evidence. Updates the main toolbar version/About labels.
+- Ten focused entrypoint/UI tests passed. All 54 generated-base/family combinations inside the reconstructed domain compiled and passed complete carrier inspection; six older-family Fine Detail combinations were correctly rejected. These are offline checks, not physical tests of additional bodies.
+- The independent compiler and transport implementation are unchanged from RC5, which was physically tested on RP User Def. 2. No new camera session is authorized or performed for these UI changes. Candidate packaging/equivalence validation is separate from direct physical validation of a new executable.
+
+# Canon Style Studio 1.0.0-rc.5 · 2026-10-18
+
+- Replaces RP-only installation dispatch with integrated compilation/session planning for the ten reconstructed Canon serializer families and 77 known compiler identifiers. Unique modern formats can also be negotiated for unknown identifiers after complete live grammar, descriptor and operation checks.
+- Connects legacy dense9 metadata, compact integer/cache/pixel combinations, modern17 and full33 dense tables to the existing backup, lock, write, unlock and requested-slot confirmation flow. Source/PF3 processing does not load Canon code.
+- Preserves legacy 24-byte and extended 32-byte slot controls without fabricating missing bytes. Selects the style operation from capabilities advertised by both WPD and DeviceInfo. Does not retry a different command after failure.
+- This RC5 executable registered Aerochrome in EOS RP User Def. 2 with matching requested readback and completed cleanup; the user confirmed Aerochrome visible and no camera error. Earlier evidence covers User Def. 3 and the user's RC4 User Def. 1 report. Independent physical evidence remains RP only. Other bodies are experimental; the catalog describes reconstructed compiler families, not 77 physically tested cameras. See CAMERA_COMPATIBILITY.md for constraints.
+
+# Canon Style Studio 1.0.0-rc.4 · 2026-10-17
+
+- Removes duplicate base, sharpness and colour controls from the independent send dialog. Installation uses the existing editor settings and saves those same settings in the style project.
+- Adds a visible success message naming the style, camera and User Def. slot. Success requires matching readback from the requested slot, completed temporary-mode/connection cleanup and no worker failure or recovery requirement.
+- Six UI tests cover editor snapshots, confirmation/cancellation and false-success cases. This revision was tested locally without accessing the camera; physical and clean-Windows validation scope is unchanged.
+
+# Canon Style Studio 1.0.0-rc.3 · 2026-10-17
+
+- Send to Camera opens the independent USB workflow directly, without resolving a Canon DLL or launching EOS Utility.
+- Adds camera selection, User Def. 1–3, Picture Style name/base, Sharpness Strength/Fineness/Threshold, Contrast, Saturation and Color tone in the same window. Exported projects retain the selected settings; the editor stays unchanged.
+- Shows preparation, installation, readback and session status. Technical logs expand on failure. New bases use only the independent generator and the owned PF3 reference.
+- Physical validation remains limited to the previously tested RP profile and User Def. 3. Slot Basic controls must already match. No camera access was performed for this UI revision; clean-Windows deployment remains unverified. Canon RAW rendering remains a separate optional Canon-dependent feature.
+
+# Canon Style Studio 1.0.0-rc.2 · 2026-10-17
+
+- A reopened project or owned PF3 can initialize new generated bases with an empty cache, without loading Canon code. The selected base is built from application-owned fields; the imported LUT is not copied into it.
+- Independent base resolution now validates the complete generated base and regenerates stale cache entries, including old zero-matrix bases.
+- Clean-Windows deployment remains untested; the user has no second Windows machine and Windows Sandbox is unavailable on this host. The independent RP path remains experimental.
+
+# Canon Style Studio 1.0.0-rc.1 · 2026-10-17
+
+- Adds independent compilation and isolated Windows WPD registration through **Send to Camera → Independent · experimental**. The exact RP profile was physically exercised with NC and Aerochrome, including requested readback and user-reported appearance.
+- Saves one editable `.canonstyleproject` directly in `Documents/Canon Style Studio PF3`. Temporary PF3s, camera reports and baseline backups stay in `app_data/logs/camera_install`.
+- Prepares the style before requesting permission for the camera write. Unknown profiles and conflicting Basic controls are blocked; writes are not retried automatically.
+- Canon RAW preview still requires DPP4Lib. Fresh generation without an owned encrypted input, clean-machine deployment, other physical camera profiles and macOS/Android adapters remain unverified.
+- This local release candidate does not replace the published alpha.29 release. Clean-machine deployment must be verified before declaring 1.0.0 stable.
+
 # Canon Style Studio 1.0.0-alpha.29
 
 Build: `2026-10-16-PF3-BASE-CONTROLS-FIX-ALPHA-29`

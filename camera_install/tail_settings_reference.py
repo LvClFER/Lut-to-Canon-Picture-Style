@@ -16,9 +16,10 @@ def settings_from_records(records, mode=1):
         return value
 
     axis = exact(0x1061 if mode == 1 else 0x1062, 512)
-    if struct.unpack_from('<II', axis) != (2, 6):
-        raise ValueError('Only six-axis mode1 geometry attributed here')
-    if any(struct.unpack_from('<I', axis, 8 + n * 84)[0] != 5 for n in range(6)):
+    axis_kind, axis_count = struct.unpack_from('<II', axis)
+    if axis_kind != 2 or axis_count not in (0,6) or (axis_count == 0 and any(axis[8:])):
+        raise ValueError('Require canonical empty or six-axis source geometry')
+    if any(struct.unpack_from('<I', axis, 8 + n * 84)[0] != 5 for n in range(axis_count)):
         raise ValueError('Require five-point axes')
     selector = records.get(0x1023 if mode == 1 else 0x102b)
     if type(selector) is not bytes or not 8 <= len(selector) <= 2400:
@@ -38,7 +39,7 @@ def settings_from_records(records, mode=1):
             'postCurvesHex': exact(0x1065, 300).hex(),
             'thirdCurvesHex': exact(0x1019, 300).hex(),
             'matrix240Hex': exact(0x1021 if mode == 1 else 0x1029, 240).hex(), 'mode': mode, 'splitCount': 0,
-            'axisBlock': {'kind': 2, 'count': 6, 'points': 5,
+            'axisBlock': {'kind': 2, 'count': axis_count, 'points': 5,
                           'bytes': 512, 'initializedHex': axis.hex()},
             'selectorBlock': block}
 

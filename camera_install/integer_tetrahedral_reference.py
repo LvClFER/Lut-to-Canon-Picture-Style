@@ -29,6 +29,18 @@ def interpolate(values,coordinates):
     return result
 
 
+def profile_rgb16(values, coordinates):
+    """Observed DppCore profile lattice; reuses the compiler's integer kernel."""
+    if len(coordinates)!=3 or any(type(v) is not int or not 0<=v<=65535 for v in coordinates):
+        raise ValueError('Require three unsigned RGB16 coordinates')
+    if len(values)!=3000 or any(type(v) is not int or not -(2**31)<=v<2**31 for v in values):
+        raise ValueError('Require 3000 signed 32-bit profile lattice values')
+    totals=interpolate(values,[v>>3 for v in coordinates])
+    # The profile wrapper restores RGB order and wraps its final 32-bit shift.
+    shifted=[((totals[c]*4+2**31)%2**32)-2**31 for c in (0,2,1)]
+    return [max(0,min(65535,v)) for v in shifted]
+
+
 def table(pattern):
     result=[]
     for channel in range(3):

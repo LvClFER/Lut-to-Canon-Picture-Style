@@ -35,9 +35,15 @@ def prepare(arguments):
                            for key in ('preCurvesHex','postCurvesHex','thirdCurvesHex')})
     axis=arguments['axisBlock']
     if axis is not None:
-        if axis['kind']!=2 or axis['count']!=6 or axis['points']!=5:
+        if axis['kind']!=2 or axis['count'] not in (0,6) or axis['points']!=5:
             raise ValueError('Unverified pixel axis geometry')
-        axis_values,softness=axis_settings({'sixAxes512Hex':axis['initializedHex']})
+        if axis['count']==0:
+            if bytes.fromhex(axis['initializedHex'])!=struct.pack('<2I',2,0)+bytes(504):
+                raise ValueError('Require canonical padded empty axis record')
+            # Nonnull/count0 still takes both mode1 fixed-point round trips.
+            axis_values,softness=(),None
+        else:
+            axis_values,softness=axis_settings({'sixAxes512Hex':axis['initializedHex']})
     else:axis_values,softness=None,None
     return coefficients,mode,curves,groups[:split],groups[split:],axis_values,softness,arguments['thirdCurvesHex'] is not None,margin
 
@@ -57,7 +63,8 @@ def point(rgb,settings):
     if axis_values is not None:
         if mode==1:
             rgb=[v/scale for v in lab_to_rgb(rgb_to_lab([math.trunc(v*scale) for v in rgb],24,2),24,2)]
-        rgb=axes(rgb,axis_values,softness,allow_fixed_point_overshoot=mode==1)
+        if axis_values:
+            rgb=axes(rgb,axis_values,softness,allow_fixed_point_overshoot=mode==1)
         if mode==1:
             rgb=[v/scale for v in lab_to_rgb(rgb_to_lab([math.trunc(v*scale) for v in rgb],24,2),24,2)]
     rgb=apply_selectors(rgb,post_groups,33,inplace_margin=margin)

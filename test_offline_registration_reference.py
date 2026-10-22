@@ -2,6 +2,7 @@ import struct
 import unittest
 import subprocess
 import sys
+from unittest.mock import patch
 from camera_install.cipher_stream_reference import decode
 from camera_install.offline_registration_reference import prepare
 
@@ -42,6 +43,32 @@ class OfflineRegistrationTests(unittest.TestCase):
                 prepare(self.source(), self.keys, route=route,
                         handler_selector=0x21, supported_operations=(),
                         internal_selector=selector)
+
+    def test_dense17_is_explicit_offline_and_preserves_its_transport_plan(self):
+        carrier=struct.pack('<II',1,83036)+bytes(32)+bytes(83036)
+        with patch('camera_install.offline_registration_reference.build_accepted_modern17',return_value=carrier) as compile:
+            job=prepare(self.source(),self.keys,route='modern83076-dense',
+                normalized_descriptor=bytes(14796),handler_selector=0x23,supported_operations=(0x9192,))
+        self.assertEqual(len(job.carrier),83076)
+        self.assertEqual(job.send.slot,3)
+        self.assertEqual(job.send.opcode,0x9192)
+        self.assertTrue(job.verify_content(job.send.data))
+        self.assertTrue(compile.call_args.kwargs['extended'])
+        for options in (dict(normalized_descriptor=None),dict(internal_selector=0x80000421)):
+            args=dict(route='modern83076-dense',normalized_descriptor=bytes(14796),
+                handler_selector=0x23,supported_operations=())
+            args.update(options)
+            with self.subTest(options=options),patch('camera_install.offline_registration_reference.build_accepted_modern17') as compile:
+                with self.assertRaises(ValueError):prepare(self.source(),self.keys,**args)
+                compile.assert_not_called()
+        from camera_install.pf3_source_reference import read_source_fields,write_source_fields
+        fields=dict(read_source_fields(self.source(),self.keys))
+        fields[0x1009]=(3,b'\x81\x00')
+        with patch('camera_install.offline_registration_reference.build_accepted_modern17') as compile:
+            with self.assertRaisesRegex(ValueError,'requires Neutral'):
+                prepare(write_source_fields(fields,self.keys),self.keys,route='modern83076-dense',
+                    normalized_descriptor=bytes(14796),handler_selector=0x23,supported_operations=())
+            compile.assert_not_called()
 
     def test_dense_lut_changes_compiled_blocks_not_just_metadata(self):
         jobs = [prepare(self.source(value), self.keys,

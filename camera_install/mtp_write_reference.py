@@ -32,6 +32,11 @@ def transfer(adapter: Adapter, opcode: int, parameters: tuple[int, ...], payload
     if not 0 < size <= max_bytes:
         raise ValueError('Invalid data phase bounds')
     payload = bytes(payload)
+    if callable(getattr(type(adapter),'transfer_atomic',None)):
+        response=adapter.transfer_atomic(opcode,parameters,payload)
+        if type(response) is not int or response!=0x2001:
+            raise RuntimeError('Atomic data phase did not return PTP OK')
+        return response
     context = adapter.begin(opcode, parameters, len(payload))
     if not isinstance(context, str) or not context:
         raise RuntimeError('Adapter returned no transfer context')
