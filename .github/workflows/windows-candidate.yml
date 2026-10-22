@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -37,7 +41,7 @@ jobs:
           assert find_eos_utility() is None
           PY
       - name: Run regressions without camera access
-        run: python -m unittest discover -p 'test_*.py' -v
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Build and audit the standalone candidate
         run: python build_standalone.py --output-root windows-candidate
       - name: Start the frozen interface and verify the preflight gate

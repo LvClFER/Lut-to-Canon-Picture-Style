@@ -4,7 +4,7 @@ from camera_install.pf3_field_experiments import validate_icc_curve_control, com
 
 
 class ICCControlGateTests(unittest.TestCase):
-    agent=Path(__file__).resolve().parent.parent/'tmp/PF3_FIELD_EXPERIMENTS_20261004/ALTERNATE_FF0001_20261007/private_icc_curve_agent.js'
+    agent=Path(__file__).resolve().parents[2]/'tmp/PF3_FIELD_EXPERIMENTS_20261004/ALTERNATE_FF0001_20261007/private_icc_curve_agent.js'
 
     def test_bounded_controls(self):
         for prop in (0x1018,0x1019,0x1065):

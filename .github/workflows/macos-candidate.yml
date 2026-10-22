@@ -52,7 +52,7 @@ jobs:
           test_independent_session_diagnostic test_macos_portability test_raw_orientation
           test_macos_ptp test_macos_discovery -v
       - name: Run regressions without camera access
-        run: python -m unittest discover -p 'test_*.py' -v
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Build and audit local candidate
         run: python build_macos.py --arch '${{ matrix.arch }}' --output macos-candidate
       - name: Check frozen GUI and worker without device access

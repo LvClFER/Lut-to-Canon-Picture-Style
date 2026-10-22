@@ -11,7 +11,7 @@ from camera_install.session_inputs_reference import SessionInputs, SlotObservati
 from camera_install.canon_event_receive_reference import CompletedEvents
 from camera_install.canon_events import PropertyEvent
 from camera_install.wpd_data_phase_reference import COMMON, MTP
-import test_rp_preflight_reference as fixtures
+import tests.test_rp_preflight_reference as fixtures
 
 
 class IndependentRegistrationTests(unittest.TestCase):

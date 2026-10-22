@@ -12,7 +12,7 @@ from camera_install.event_mode_plan_reference import plan_event_modes
 from camera_install.canon_event_receive_reference import CompletedEvents
 from camera_install.canon_events import PropertyEvent
 from camera_install.rp_preflight_reference import SlotControlMismatch
-import test_family_registration_integration as fixtures
+import tests.test_family_registration_integration as fixtures
 
 
 class KnownBasicControlPlanTests(unittest.TestCase):

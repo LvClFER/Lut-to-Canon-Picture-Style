@@ -105,7 +105,7 @@ def guarded(name, globals=None, locals=None, fromlist=(), level=0):
         raise RuntimeError('Forbidden dependency: ' + resolved)
     return original(name, globals, locals, fromlist, level)
 builtins.__import__ = guarded
-from test_identity_pf3_bootstrap_reference import IdentityBootstrapTests
+from tests.test_identity_pf3_bootstrap_reference import IdentityBootstrapTests
 IdentityBootstrapTests().test_two_identity_candidates_resolve_to_same_equivalent_tables()
 IdentityBootstrapTests().test_caller_owned_records_recover_without_an_identity_table_or_fixed_offset()
 '''

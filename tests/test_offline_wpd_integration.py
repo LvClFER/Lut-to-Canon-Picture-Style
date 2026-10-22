@@ -15,8 +15,8 @@ from camera_install.mtp_write_reference import transfer
 from camera_install.mtp_read_reference import receive
 from camera_install.registration_sequence_reference import plan_registration, execute_and_compare
 from camera_install.identity_pf3_bootstrap_reference import recover_identity_calibration, recover_known_fields_calibration
-import test_offline_registration_reference as source_fixture
-import test_identity_pf3_bootstrap_reference as identity_fixture
+import tests.test_offline_registration_reference as source_fixture
+import tests.test_identity_pf3_bootstrap_reference as identity_fixture
 
 
 class OfflineWpdIntegrationTests(unittest.TestCase):

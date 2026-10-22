@@ -95,7 +95,7 @@ def guarded(name, globals=None, locals=None, fromlist=(), level=0):
         raise RuntimeError('Native lab dependency: ' + resolved)
     return original(name, globals, locals, fromlist, level)
 builtins.__import__ = guarded
-from test_offline_registration_reference import OfflineRegistrationTests
+from tests.test_offline_registration_reference import OfflineRegistrationTests
 OfflineRegistrationTests().test_real_constructors_link_source_to_send_and_readback()
 '''
         result = subprocess.run([sys.executable, '-c', script], capture_output=True,

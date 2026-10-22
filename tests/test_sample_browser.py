@@ -16,7 +16,7 @@ from PySide6.QtWidgets import QApplication,QWidget
 from PySide6.QtWebEngineCore import QWebEngineDownloadRequest,QWebEngineScript
 import sample_images as samples
 from sample_browser import SampleImagesDialog,displayed_sample,SELECTED_SAMPLE_JS,GalleryPage
-from test_sample_images import gallery,image,RAW,PAGE
+from tests.test_sample_images import gallery,image,RAW,PAGE
 
 
 class Download(QObject):

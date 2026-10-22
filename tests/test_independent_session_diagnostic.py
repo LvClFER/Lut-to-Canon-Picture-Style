@@ -412,7 +412,7 @@ Path(sys.argv[1]).write_text(json.dumps(dict(styleRegistrationAttempted=False,
             self.assertEqual(output.read_text(), 'original')
 
     def test_requested_slot_report_uses_device_info_and_excludes_payload(self):
-        from test_ptp_device_info_reference import dataset
+        from tests.test_ptp_device_info_reference import dataset
         connection, _ = self.connection(codes=(0x9114, 0x9115, 0x9116, 0x9127))
         style = struct.pack('<II', 1, 3) + b'abc'
         with patch('camera_install.independent_session_diagnostic.receive', return_value=dataset()) as read, \
@@ -455,7 +455,7 @@ Path(sys.argv[1]).write_text(json.dumps(dict(styleRegistrationAttempted=False,
             discovery.assert_not_called()
 
     def test_standalone_entry_help_without_site_packages_or_device_access(self):
-        root = Path(__file__).resolve().parent
+        root = Path(__file__).resolve().parents[1]
         result = subprocess.run(
             [sys.executable, '-S', str(root / 'independent_camera_diagnostic.py'), '--help'],
             cwd=root, capture_output=True, text=True, timeout=20)
@@ -464,7 +464,7 @@ Path(sys.argv[1]).write_text(json.dumps(dict(styleRegistrationAttempted=False,
         self.assertIn('--device-id', result.stdout)
 
     def test_import_does_not_load_editor_or_native_compiler_dependencies(self):
-        root = Path(__file__).resolve().parent
+        root = Path(__file__).resolve().parents[1]
         script = """
 import sys
 import independent_camera_diagnostic

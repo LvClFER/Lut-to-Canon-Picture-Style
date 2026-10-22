@@ -5,7 +5,7 @@ from camera_install import macos_ptp as ptp
 
 class NativePtpTests(unittest.TestCase):
     def test_native_profile_uses_live_deviceinfo_and_retains_shared_adapters(self):
-        from test_ptp_device_info_reference import dataset
+        from tests.test_ptp_device_info_reference import dataset
         from camera_install.connection_profile import load
         owner=ptp.Transactions(object())
         with patch.object(ptp,'exchange',return_value=(ptp.Completion(0x2001,()),dataset())) as send:

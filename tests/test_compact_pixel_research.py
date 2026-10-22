@@ -1,7 +1,7 @@
 import unittest
 from camera_install.compact_pixel_research import vectors,preflight
 from unittest.mock import patch
-from test_compact_pixel_reference import arguments
+from tests.test_compact_pixel_reference import arguments
 
 
 class CompactPixelResearchTests(unittest.TestCase):
