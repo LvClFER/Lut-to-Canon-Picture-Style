@@ -15,6 +15,8 @@ First stable Windows editor release — 22 October 2026.
 
 ## Scope and limits
 
+**Camera safety:** This is unofficial software. Experimental direct USB/PTP communication carries a risk of camera malfunction or damage. EOS RP testing and readback checks do not make untested cameras safe. Use camera installation at your own risk; there is no automatic rollback.
+
 This stable label applies to the Windows editor. Independent USB physical validation covers EOS RP; other bodies remain experimental even when their compiler identifiers are catalogued. Existing slot Basic controls must match; unknown or conflicting formats are rejected. A failed driver session can need USB/power recovery. There is no automatic retry or rollback.
 
 Exact Canon RAW base-style rendering still requires local Canon PSE/DPP4Lib; the bundled LibRaw fallback does not reproduce that renderer exactly. `.cube` exports exclude RAW development, camera base rendering and sharpening. Nikon NP3 colour conversion is unresolved. Android/macOS builds are not part of this release.

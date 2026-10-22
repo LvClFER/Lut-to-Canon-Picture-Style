@@ -18,6 +18,8 @@
 
 ## Download and run
 
+**Camera safety:** This is unofficial software. Experimental direct USB/PTP communication carries a risk of camera malfunction or damage. EOS RP testing and readback checks do not make untested cameras safe. Use camera installation at your own risk; there is no automatic rollback.
+
 Download **CanonStyleStudio_1.0.0_Windows_x64.zip** from the release, extract the whole ZIP, then run `CanonStyleStudio.exe`. Keep the `runtime` folder beside it. Python, Java and Node.js do not need to be installed. User-created styles go into **Documents / Canon Style Studio PF3**.
 
 Version 1.0.0 is the first stable **Windows editor** release. Camera-installation compatibility is a separate validation question: independent physical testing covers the **EOS RP**; other models remain experimental. The compiler catalog is not a list of cameras physically tested with this app. See the [compatibility notes](CAMERA_COMPATIBILITY.md) before using USB installation. A failed USB session may require disconnecting or restarting the camera; there is no automatic retry or rollback.

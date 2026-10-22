@@ -12,6 +12,8 @@ It lets you import LUTs, build a colour look with RGB gamma, curves and colour c
 
 Full disclosure: I developed this with extensive help from **OpenAI Codex**, including coding, reverse-engineering research, debugging, tests and documentation.
 
+This is unofficial software. The experimental direct USB/PTP feature carries a risk of camera malfunction or damage, so use it at your own risk.
+
 A few limits worth being clear about: direct USB installation is still experimental and has only been physically tested on the EOS RP. Other Canon models are not guaranteed. Exact Canon RAW rendering needs a local Canon Picture Style Editor installation; the bundled LibRaw fallback is different. Nikon NP3 conversion isn't ready, and Android/macOS aren't part of this release.
 
 The attached screenshot and before/after images show the app's desktop colour processing, not photos taken with a style installed in a camera.

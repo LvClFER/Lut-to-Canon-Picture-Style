@@ -54,7 +54,8 @@ class IndependentInstallDialog(QDialog):
         subtitle=QLabel('Independent PF3 compiler · direct USB · no Canon application or DLL required')
         subtitle.setWordWrap(True)
         layout.addWidget(subtitle)
-        warning=QLabel('Experimental · reconstructed Canon serializer families; physical USB validation on EOS RP only. '
+        warning=QLabel('Unofficial software · experimental USB/PTP communication can cause camera malfunction or damage. '
+            'Reconstructed Canon serializer families; physical USB validation on EOS RP only. '
             'Close other camera applications before connecting. A failed write may require '
             'power/USB recovery. Camera capabilities, descriptor and slot format are checked before writing.')
         warning.setWordWrap(True)
@@ -210,6 +211,7 @@ class IndependentInstallDialog(QDialog):
             f"Replace User Def. {args.request_slot} on {prepared['device_name']} with this saved style?\n"
             f"{prepared['bundle']}\n\n"
             'The slot Basic controls must match the style values. Other slot data is preserved.\n\n'
+            'This is unofficial software. Experimental USB/PTP writes carry a risk of camera malfunction or damage. '
             'A baseline style backup will be saved. This experimental write can require camera '
             'power/USB recovery. No automatic retry or restore will be performed.',
             QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No,QMessageBox.StandardButton.No)

@@ -13,6 +13,8 @@ The app includes LibRaw. Exact Canon base-style RAW rendering additionally uses 
 
 ## Camera installation
 
+**Camera safety:** This is unofficial software. Experimental direct USB/PTP communication carries a risk of camera malfunction or damage. EOS RP testing and readback checks do not make untested cameras safe. Use camera installation at your own risk; there is no automatic rollback.
+
 Read [camera compatibility](../CAMERA_COMPATIBILITY.md) first. Connect a supported Canon camera by USB, close other camera applications, choose **Send to Camera**, find the camera and select User Def. 1, 2 or 3. Review the name and destination before installing. The app saves the existing style before writing and only reports success after its required verification/cleanup checks. The independent workflow has physical evidence on EOS RP only; other models are experimental. Conflicting Basic settings are blocked. A backup is not an automatic restoration transaction.
 
 ## Reporting a problem

@@ -1,5 +1,8 @@
 # Independent Canon camera compatibility
 
+**Camera safety:** This is unofficial software. Experimental direct USB/PTP communication carries a risk of camera malfunction or damage. EOS RP testing and readback checks do not make untested cameras safe. Use camera installation at your own risk; there is no automatic rollback.
+
+
 RC5 integrates the ten reconstructed serializer families into the existing editor. The 77 catalog entries identify known compiler dispatches; they are not 77 physically validated USB installations. Real operation capabilities, the live descriptor and the complete existing slot format are checked before writing.
 
 Independent physical evidence: EOS RP, NC/Aerochrome in User Def. 3; the user also reported a successful RC4 User Def. 1 test. RC5 installed Aerochrome in User Def. 2 with an exact requested readback, saved baseline backup and completed session cleanup; the user confirmed the look and normal camera operation. Other bodies still need physical confirmation.
