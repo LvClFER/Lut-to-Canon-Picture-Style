@@ -1,16 +1,25 @@
 # macOS port — local work, not a release
 
-The 24 October source candidate shares the experimental Nikon NP3 colour-look
-converter now validated on Windows. It requires a separately supplied, validated
-coefficient file; no Nikon profile data or DLL is bundled. RAW development and
-sharpening are excluded. Both updated native architectures ran 840 tests with
-three skips and no failures, plus 92 platform integration tests, then built,
+The 24 October smooth-v5 source candidate includes the reorganized editor menus
+and the corrected relative Nikon NP3 converter. Inversion retains extended RGB
+before clipping, starts from known forward samples and regularizes colour-table
+changes to limit numerical contours. It requires a separately supplied, validated
+coefficient file; no Nikon profile data or DLL is bundled. Nikon RAW development
+and sharpening are excluded. Both updated native architectures ran 851 tests with
+three skips and no failures, plus 102 platform integration tests, then built,
 passed the bundle audit and started their frozen Cocoa interfaces in
-[run 40097677886](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/actions/runs/40097677886).
+[run 40130750021](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/actions/runs/40130750021).
+The first Intel packaging attempt failed with `hdiutil: Resource busy`; one
+controlled rerun succeeded without changing the source.
 Both exact downloaded DMGs were subsequently mounted read-only on their native
 architectures, their signatures verified and their Cocoa interfaces started in
-[run 40099432178](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/actions/runs/40099432178).
-The proof hashes match the local DMGs. The 20 October results below are historical.
+[run 40134516386](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/actions/runs/40134516386).
+The proof hashes match the local DMGs in `LOCAL_MACOS_SMOOTH_CANDIDATES_20261024`:
+
+- Apple Silicon: `39c560a8048b9671c175895cb47c0bace0e5af1eb9230d3fd5405f32adea0cc7`.
+- Intel: `54902b2538647b9223c6d30c48b218fc349cbdd1ffbd3381adf5396535cbf5d3`.
+
+The earlier results below are historical.
 These checks did not access a camera; physical Mac USB validation, interactive
 user acceptance and notarization remain outstanding. Mac installation stays disabled.
 
