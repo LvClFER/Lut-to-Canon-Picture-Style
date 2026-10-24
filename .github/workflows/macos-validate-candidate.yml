@@ -26,7 +26,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: macos-candidate-${{ matrix.arch }}
-          run-id: 39408692557
+          run-id: 40097677886
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: candidate
       - name: Verify the DMG and start the native Cocoa interface
@@ -64,7 +64,7 @@ jobs:
                           CANON_STYLE_STUDIO_PORTABLE_ROOT=str(root / 'gui-state')))
               finally:
                   subprocess.run(['hdiutil', 'detach', str(mount)], check=True, timeout=30)
-          proof = dict(architecture=architecture, sourceRunId=39408692557,
+          proof = dict(architecture=architecture, sourceRunId=40097677886,
               dmgSha256=digest.hexdigest(), nativeCocoaStartupPassed=True,
               signatureVerified=True, cameraAccess=False, releaseCreated=False)
           Path('GUI_STARTUP_' + architecture + '.json').write_text(json.dumps(proof, indent=2))
