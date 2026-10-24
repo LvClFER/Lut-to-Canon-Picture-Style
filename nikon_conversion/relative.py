@@ -23,7 +23,14 @@ def relative_coordinates(neutral,neutral_size,size,cancel=None,progress=None):
         raise ValueError('Non-finite NP3 colour grid')
     blue,green,red=np.meshgrid(*([np.linspace(0,1,size)]*3),indexing='ij')
     target=np.stack((red,green,blue),axis=-1)
-    current=target.copy();best=current.copy()
+    # Starting near a forward sample avoids unrelated local inverse branches.
+    flat=target.reshape(-1,3);forward=base.reshape(-1,3);nearest=[]
+    for offset in range(0,len(flat),128):
+        if cancel is not None and cancel():raise CancelledError('NP3 conversion cancelled')
+        distances=np.sum((flat[offset:offset+128,None,:]-forward[None,:,:])**2,axis=-1)
+        nearest.extend(np.argmin(distances,axis=1).tolist())
+    indices=np.asarray(np.unravel_index(nearest,(neutral_size,)*3)).T[:,::-1]
+    current=(indices/(neutral_size-1)).reshape(target.shape);best=current.copy()
     best_error=np.full(target.shape[:-1],np.inf)
     for iteration in range(20):
         if cancel is not None and cancel():raise CancelledError('NP3 conversion cancelled')
@@ -40,3 +47,19 @@ def relative_coordinates(neutral,neutral_size,size,cancel=None,progress=None):
         current=np.clip(current-np.clip(delta,-.1,.1)*.8,0,1)
         if progress is not None:progress(iteration+1)
     return np.rint(best*4095).astype(int)
+
+
+def regularize_values(values,size):
+    grid=np.asarray(values,dtype=float).reshape(size,size,size,3)
+    if not np.isfinite(grid).all():raise ValueError('Non-finite NP3 colour grid')
+    blue,green,red=np.meshgrid(*([np.linspace(0,1,size)]*3),indexing='ij')
+    identity=np.stack((red,green,blue),axis=-1)
+    delta=grid-identity
+    # Regularize colour changes; linear extrapolation preserves affine looks at the boundaries.
+    for axis in range(3):
+        first=2*np.take(delta,[0],axis=axis)-np.take(delta,[1],axis=axis)
+        last=2*np.take(delta,[-1],axis=axis)-np.take(delta,[-2],axis=axis)
+        padded=np.concatenate((first,delta,last),axis=axis)
+        delta=(np.take(padded,np.arange(size),axis=axis)+2*delta+
+            np.take(padded,np.arange(2,size+2),axis=axis))/4
+    return np.clip(identity+delta,0,1).ravel().tolist()

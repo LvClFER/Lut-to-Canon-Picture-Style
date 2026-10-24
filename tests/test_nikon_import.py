@@ -19,8 +19,8 @@ class NikonImportTests(unittest.TestCase):
             with patch('nikon_import.compile_cube',return_value=cube):
                 entry=convert_asset(source,'local-profile',cache)
             path=entry['cube']['path'];self.assertTrue(path.is_file())
-            self.assertIn('relative-flexible-v3',path.name)
-            self.assertEqual(entry['metadata']['conversionVersion'],'relative-flexible-v3')
+            self.assertIn('relative-flexible-v5',path.name)
+            self.assertEqual(entry['metadata']['conversionVersion'],'relative-flexible-v5')
             project=folder/'style.canonstyleproject'
             save_project(project,ProjectDocument(edit={'luts':[{'path':str(path),'metadata':entry['metadata']}]}))
             loaded=load_project(project)

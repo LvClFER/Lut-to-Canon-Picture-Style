@@ -38,7 +38,7 @@ Version 1.0.0 is the first stable **Windows editor** release. Camera-installatio
 
 Thanks to [kianimo](https://github.com/kianimo) for the export bug reports and proposed fixes in PRs [#1](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/pull/1), [#2](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/pull/2) and [#3](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/pull/3).
 
-NP3 conversion in this candidate expresses the look relative to the neutral Flexible Color transform, rather than applying Nikon's device-input profile directly to developed RGB. Reimport original NP3 files to use the correction; previously saved project LUTs remain unchanged. Nikon-to-Canon colour matching remains approximate, particularly for clipped colours and different RAW development.
+NP3 conversion in this candidate expresses the look relative to the neutral Flexible Color transform, rather than applying Nikon's device-input profile directly to developed RGB. The inverse retains extended RGB values and starts from known forward samples; mild colour-table regularization limits numerical contours. Reimport original NP3 files to use the correction; previously saved project LUTs remain unchanged. Nikon-to-Canon colour matching remains approximate, particularly for clipped colours and different RAW development.
 
 This is an independent community project, not an official Canon product. Canon and Nikon names/logos belong to their respective owners. [Demo image credits](docs/images/CREDITS.md).
 

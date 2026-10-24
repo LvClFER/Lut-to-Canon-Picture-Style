@@ -224,17 +224,22 @@ def grid_gamut(range_values,colour,controls,high_curve,low_curve):
     return [clip(luma+delta,0,4095)]+[clip(s32(scale*v)>>11,-2048,2047) for v in colour[1:]]
 
 
-def grid_encode(values,flags,mode,matrix):
+def grid_rgb(values):
     if len(values)!=3 or not isinstance(values[0],int) or not 0<=values[0]<=4095 or any(not isinstance(v,int) or not -2048<=v<=2047 for v in values[1:]):
         raise ValueError('Invalid final grid colour')
+    luma,first,second=(v*16 for v in values)
+    y=luma*(1/65535)
+    return [y+second*(1.4021/65535),
+            y-first*(0.3455/65535)-second*(0.7146/65535),
+            y+first*(1.7712/65535)]
+
+
+def grid_encode(values,flags,mode,matrix):
+    rgb=grid_rgb(values)
     if not isinstance(flags,int) or mode not in (0,1,3) or len(matrix)!=9 or any(not isinstance(v,(int,float)) or not isfinite(v) for v in matrix):
         raise ValueError('Unsupported encoding mode or invalid XYZ matrix')
     def clip(v,low,high):return min(high,max(low,v))
-    luma,first,second=(v*16 for v in values)
-    y=luma*(1/65535)
-    rgb=[clip(y+second*(1.4021/65535),0,1),
-         clip(y-first*(0.3455/65535)-second*(0.7146/65535),0,1),
-         clip(y+first*(1.7712/65535),0,1)]
+    rgb=[clip(v,0,1) for v in rgb]
     if flags&1:return [floor(v*65280+0.5) for v in rgb]
     if mode in (0,3):
         linear=[(v*0.9478672985781991+0.05213270142180095)**2.4 if v>0.04045

@@ -10,9 +10,9 @@ from nikon_np3 import decode
 from nikon_profile_data import load_conversion_profile
 from .prepare import prepare_grid,neutral_style
 from .pipeline import grid_point
-from .relative import relative_coordinates
+from .relative import relative_coordinates,regularize_values
 
-CONVERSION_VERSION='relative-flexible-v3'
+CONVERSION_VERSION='relative-flexible-v5'
 
 
 def compile_cube(data,profile_path,size=33,progress=None,cancel=None):
@@ -30,7 +30,7 @@ def compile_cube(data,profile_path,size=33,progress=None,cancel=None):
         for green in range(neutral_size):
             if cancel is not None and cancel():raise CancelledError('NP3 conversion cancelled')
             for red in range(neutral_size):
-                neutral_values.extend(value/65280 for value in grid_point([red,green,blue],neutral_size,1,0,neutral))
+                neutral_values.extend(value/65280 for value in grid_point([red,green,blue],neutral_size,1,0,neutral,unclipped_rgb=True))
         if progress is not None:progress(round((blue+1)*20/neutral_size))
     coordinates=relative_coordinates(neutral_values,neutral_size,size,cancel,
         (lambda step:progress(20+step)) if progress is not None else None)
@@ -40,12 +40,13 @@ def compile_cube(data,profile_path,size=33,progress=None,cancel=None):
             if cancel is not None and cancel():raise CancelledError('NP3 conversion cancelled')
             for red in range(size):
                 point=coordinates[blue,green,red].tolist()
-                look=grid_point(point,4096,1,0,parameters)
-                base=grid_point(point,4096,1,0,neutral)
+                look=grid_point(point,4096,1,0,parameters,unclipped_rgb=True)
+                base=grid_point(point,4096,1,0,neutral,unclipped_rgb=True)
                 # A clipped device colour has no exact inverse; retain the unmatched RGB residual.
                 values.extend(min(1,max(0,target/(size-1)+(a-b)/65280))
                     for target,a,b in zip((red,green,blue),look,base))
         if progress is not None:progress(40+round((blue+1)*60/size))
+    values=regularize_values(values,size)
     return dict(title=style.name,size=size,domain_min=[0.0]*3,domain_max=[1.0]*3,
         values=values,source='np3',color_space='RGB',bit_depth=16,lossy=True,
         conversion_version=CONVERSION_VERSION,

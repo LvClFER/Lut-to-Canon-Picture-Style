@@ -15,7 +15,7 @@ class NikonConversionTests(unittest.TestCase):
         progress=[]
         with patch('nikon_conversion.load_conversion_profile',return_value=b'profile') as load, \
                 patch('nikon_conversion.prepare_grid',return_value={}), \
-                patch('nikon_conversion.grid_point',side_effect=lambda p,n,f,m,k:[v*65280/(n-1) for v in p]):
+                patch('nikon_conversion.grid_point',side_effect=lambda p,n,f,m,k,**kwargs:[v*65280/(n-1) for v in p]):
             cube=compile_cube(document(),'local-prm.bin',17,progress.append)
         load.assert_called_once_with('local-prm.bin')
         self.assertEqual(cube['title'],'Synthetic')
@@ -34,7 +34,7 @@ class NikonConversionTests(unittest.TestCase):
         load.assert_not_called()
 
     def test_nonlinear_device_base_is_not_applied_a_second_time(self):
-        def point(coordinates,size,flags,mode,configuration):
+        def point(coordinates,size,flags,mode,configuration,**kwargs):
             gain=.5 if configuration['look'] else 1
             return [(v/(size-1))**2*gain*65280 for v in coordinates]
         with patch('nikon_conversion.load_conversion_profile',return_value=b'profile'), \
@@ -53,6 +53,19 @@ class NikonConversionTests(unittest.TestCase):
             with self.assertRaises(CancelledError):
                 compile_cube(document(),'local',17,cancel=unittest.mock.Mock(side_effect=[False,False,True]))
             self.assertEqual(point.call_count,17)
+
+    def test_compiled_colour_table_does_not_retain_an_isolated_spike(self):
+        def point(coordinates,size,flags,mode,configuration,**kwargs):
+            values=[v/(size-1) for v in coordinates]
+            if configuration['look'] and all(abs(v-.5)<.001 for v in values):values[0]+=.3
+            return [v*65280 for v in values]
+        with patch('nikon_conversion.load_conversion_profile',return_value=b'profile'), \
+                patch('nikon_conversion.prepare_grid',side_effect=[{'look':True},{'look':False}]), \
+                patch('nikon_conversion.grid_point',side_effect=point):
+            cube=compile_cube(document(),'local',17)
+        offset=((8*17+8)*17+8)*3
+        self.assertGreater(cube['values'][offset],.5)
+        self.assertLess(cube['values'][offset],.54)
 
 
 if __name__=='__main__':unittest.main()

@@ -6,7 +6,7 @@ from build_standalone import audit_modules,RESEARCH_ONLY_MODULES
 
 class StandaloneModuleTests(unittest.TestCase):
     def test_required_compilers_and_research_exclusion(self):
-        required={'sample_images','sample_browser','rawpy','nikon_conversion','nikon_import','nikon_profile_data',
+        required={'sample_images','sample_browser','rawpy','nikon_conversion','nikon_conversion.relative','nikon_import','nikon_profile_data',
                   'camera_install.family_registration_reference','camera_install.camera_families_reference',
                   'camera_install.independent_registration_reference','camera_install.legacy_dense9_carrier_reference'}
         reader=ModuleType('PyInstaller.archive.readers')

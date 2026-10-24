@@ -1,10 +1,11 @@
 """Verified colour-grid point arithmetic."""
 from .grid import (grid_input,grid_matrix,grid_hue_position,grid_colour_coefficients,
     grid_base_coefficients,grid_intensity_indices,grid_response_gains,grid_remaining_response,
-    grid_apply_colour,grid_rotation_matrix,grid_post_colour,grid_contrast,grid_tone_matrix,grid_gamut,grid_encode)
+    grid_apply_colour,grid_rotation_matrix,grid_post_colour,grid_contrast,grid_tone_matrix,grid_gamut,grid_encode,grid_rgb)
 
 
-def grid_point(coordinates,size,flags,mode,p):
+def grid_point(coordinates,size,flags,mode,p,unclipped_rgb=False):
+    """Return native encoded values, or extended RGB for relative-look construction."""
     values=grid_input(coordinates,size,p['inputCurves'])
     values=grid_matrix(values,p['inputMatrix'],p['margin'])
     luma,x,y=values
@@ -22,4 +23,5 @@ def grid_point(coordinates,size,flags,mode,p):
     contrast=grid_contrast([luma]+indexed[1:],[curve[indexed[0]] for curve in p['contrastCurves']])
     ranges=grid_tone_matrix(contrast,p['tone'],p['toneMatrix'],p['toneOffsets'])
     values=grid_gamut(ranges,[p['tone'][contrast[0]]]+contrast[1:],p['gamutControls'],p['gamutHigh'],p['gamutLow'])
+    if unclipped_rgb:return [value*65280 for value in grid_rgb(values)]
     return grid_encode(values,flags,mode,p['xyzMatrix'])
