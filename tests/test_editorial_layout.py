@@ -83,6 +83,26 @@ class EditorialLayoutTests(unittest.TestCase):
             dialog.assert_called_once_with(self.window)
             dialog.return_value.exec.assert_called_once()
 
+    def test_related_color_controls_share_one_section_and_presets_have_their_own_entry(self):
+        window=self.window
+        sections=[window.side_layout.itemAt(i).widget() for i in range(window.side_layout.count())
+            if isinstance(window.side_layout.itemAt(i).widget(),studio.CollapsibleSection)]
+        self.assertEqual([section.header.text() for section in sections],
+            ['RAW DEVELOPMENT','STYLES / PRESETS','CANON PICTURE STYLE','COLOR / TONE','LUT STACK'])
+        self.assertEqual([window.color_tabs.tabText(i) for i in range(window.color_tabs.count())],
+            ['Recipe','Tone curve','Color mixer','Grading'])
+        for index,control in ((0,window.recipe_wb_red),(0,window.recipe_color),(1,window.tone_curve),
+                (2,window.axis_hue),(3,window.grading_sliders['red_gamma'])):
+            self.assertTrue(window.color_tabs.widget(index).isAncestorOf(control))
+        self.assertTrue(window.lut_section.isAncestorOf(window.cube_export))
+        self.assertTrue(window.presets_section.isAncestorOf(window.open_style_button))
+        self.assertTrue(window.presets_section.isAncestorOf(window.import_np3_button))
+        with patch.object(studio.QFileDialog,'getOpenFileNames',return_value=(['preset.np3'],'')) as picker, \
+                patch.object(window,'import_np3_paths') as importer:
+            window.import_np3_button.click()
+            self.assertEqual(picker.call_args.args[1],'Import Nikon presets')
+            importer.assert_called_once_with([Path('preset.np3')])
+
     def test_generator_controls_are_saved_and_restored_without_changing_raw_development(self):
         window=self.window;raw_before=window.raw_preview_dict()
         window.grading_sliders['red_gamma'].setValue(35)

@@ -50,7 +50,7 @@ from PySide6.QtWidgets import (
     QPushButton, QToolButton, QComboBox, QSlider, QCheckBox, QFileDialog, QMessageBox,
     QFrame, QScrollArea, QSizePolicy, QSplitter, QLineEdit, QMenu, QDialog,
     QDialogButtonBox, QFormLayout, QProgressBar, QProgressDialog, QTextEdit, QSpinBox, QDoubleSpinBox,
-    QListWidget, QListWidgetItem, QAbstractItemView, QStackedLayout, QButtonGroup
+    QListWidget, QListWidgetItem, QAbstractItemView, QStackedLayout, QButtonGroup, QTabWidget
 )
 
 from canon_engine import (
@@ -128,6 +128,9 @@ def app_stylesheet():
     QLineEdit#ProjectTitle {{ background: transparent; border: 0; padding: 0; font-family: 'Georgia'; font-size: 28pt; }}
     QLineEdit#ProjectTitle:focus {{ border-bottom: 1px solid {ACCENT}; }}
     QLabel#Muted {{ color: {MUTED}; }}
+    QTabWidget::pane {{ border: 0; }}
+    QTabBar::tab {{ background: transparent; color: {MUTED}; padding: 8px 7px; border-bottom: 2px solid transparent; }}
+    QTabBar::tab:selected {{ color: {TEXT}; border-bottom-color: {ACCENT}; }}
     QLabel#SectionTitle {{ font-weight: 600; font-size: 10pt; }}
     QLabel#AppTitle {{ font-weight: 700; font-size: 11pt; }}
     QPushButton, QToolButton {{
@@ -390,6 +393,7 @@ class LutCard(QFrame):
         else:
             badge = f"CUBE {meta['size']}³"
         lut_metadata=entry.get("metadata") or {}
+        if lut_metadata.get("sourceFormat")=="Nikon NP3":badge=f"NIKON PRESET · {meta['size']}³"
         preferred=lut_metadata.get("preferredBaseStyle")
         if preferred:badge+=f" · {preferred} base"
         self.badge = QLabel(badge); self.badge.setObjectName("Badge")
@@ -883,7 +887,7 @@ class CanonStyleStudioQt(QMainWindow):
         sw=QWidget();sw.setMinimumWidth(0);sw.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred);self.sidebar_widget=sw;self.side_layout=QVBoxLayout(sw);self.side_layout.setContentsMargins(0,2,8,4);self.side_layout.setSpacing(14);scroll.setWidget(sw);sl.addWidget(scroll);content.addWidget(sidebar)
         kicker=QLabel('PICTURE STYLE  /  EDITOR');kicker.setObjectName('Kicker');self.side_layout.addWidget(kicker)
         self.project_name.setMinimumHeight(62);self.side_layout.addWidget(self.project_name)
-        self.build_raw_section();self.build_canon_section();self.build_creative_section();self.build_grading_section();self.build_lut_section()
+        self.build_raw_section();self.build_presets_section();self.build_canon_section();self.build_creative_section();self.build_lut_section()
         self.side_layout.addStretch()
 
         center=QWidget();cl=QVBoxLayout(center);cl.setContentsMargins(0,0,0,0);cl.setSpacing(12);content.insertWidget(0,center);content.setStretchFactor(0,1);content.setStretchFactor(1,0);content.setSizes([1000,440])
@@ -919,9 +923,23 @@ class CanonStyleStudioQt(QMainWindow):
         row=QHBoxLayout();self.eyedrop=QPushButton("Eyedropper WB");self.eyedrop.setCheckable(True);self.eyedrop.toggled.connect(self.toggle_eyedropper);row.addWidget(self.eyedrop);clear=QPushButton("Clear custom WB");clear.clicked.connect(self.clear_custom_wb);row.addWidget(clear);sec.body_layout.addLayout(row)
         note=QLabel("Canon RAW rendering uses Picture Style Editor's local DPP4Lib. PF3 generation uses the included basic styles. RAW exposure and white balance affect the preview; they are not written into the Picture Style.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
 
+    def build_presets_section(self):
+        sec=CollapsibleSection("STYLES / PRESETS",expanded=True);self.side_layout.addWidget(sec);self.presets_section=sec
+        row=QHBoxLayout()
+        self.open_style_button=QPushButton("Open Canon style…");self.open_style_button.clicked.connect(self.open_pf3_dialog);row.addWidget(self.open_style_button,1)
+        self.import_np3_button=QPushButton("Import Nikon .np3…");self.import_np3_button.clicked.connect(self.import_np3_dialog);row.addWidget(self.import_np3_button,1);sec.body_layout.addLayout(row)
+        note=QLabel("Keep your loaded photos. Nikon presets are imported as experimental colour looks.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
+
+    def import_np3_dialog(self):
+        start=self.settings.get_folder("last_lut_folder",exported_styles_dir())
+        paths,_=QFileDialog.getOpenFileNames(self,"Import Nikon presets",str(start),"Nikon Picture Control (*.np3)")
+        if paths:
+            self.settings.remember_file("last_lut_folder",paths[0])
+            self.import_np3_paths([Path(path) for path in paths])
+
     def build_canon_section(self):
-        sec=CollapsibleSection("PICTURE STYLE · ADJUSTMENTS",expanded=True);self.side_layout.addWidget(sec)
-        row=QHBoxLayout();self.base_combo=QComboBox();self.base_combo.addItems(list(BASES.keys()));self.base_combo.currentTextChanged.connect(self.base_changed);row.addWidget(self.base_combo,1);pf=QPushButton("Open style…");pf.clicked.connect(self.open_pf3_dialog);row.addWidget(pf);bases=QToolButton(text="Bases…");bases.setToolTip("Locate a local folder containing validated Canon base PF3 templates");bases.clicked.connect(self.choose_base_pf3_folder);row.addWidget(bases);sec.body_layout.addLayout(row)
+        sec=CollapsibleSection("CANON PICTURE STYLE",expanded=True);self.side_layout.addWidget(sec)
+        row=QHBoxLayout();self.base_combo=QComboBox();self.base_combo.addItems(list(BASES.keys()));self.base_combo.currentTextChanged.connect(self.base_changed);row.addWidget(self.base_combo,1);bases=QToolButton(text="Bases…");bases.setToolTip("Locate a local folder containing validated Canon base PF3 templates");bases.clicked.connect(self.choose_base_pf3_folder);row.addWidget(bases);sec.body_layout.addLayout(row)
         self.base_source_label=QLabel("Export base: checking…");self.base_source_label.setObjectName("Muted");self.base_source_label.setWordWrap(True);sec.body_layout.addWidget(self.base_source_label)
         adjustments=QGridLayout();adjustments.setSpacing(8);sec.body_layout.addLayout(adjustments)
         self.contrast=ValueSlider("Contrast",-4,4,0,card=True);self.saturation=ValueSlider("Saturation",-4,4,0,card=True);self.color_tone=ValueSlider("Color tone",-4,4,0,card=True)
@@ -935,14 +953,17 @@ class CanonStyleStudioQt(QMainWindow):
         note=QLabel("Saved in your PF3. Sharpness and imported-style previews are approximate.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
 
     def build_lut_section(self):
-        sec=CollapsibleSection("LUT STACK",expanded=True);self.side_layout.addWidget(sec)
+        sec=CollapsibleSection("LUT STACK",expanded=True);self.side_layout.addWidget(sec);self.lut_section=sec
         self.lut_list=LutList();self.lut_list.setFixedHeight(88);self.lut_list.orderChanged.connect(self.lut_order_changed);self.lut_list.reorderRequested.connect(self.reorder_lut);self.lut_list.filesDropped.connect(self.files_dropped);sec.body_layout.addWidget(self.lut_list)
         row=QHBoxLayout();add=QPushButton("+ LUT / Hald");add.clicked.connect(self.add_lut_dialog);row.addWidget(add,1);hald=QPushButton("Lightroom Hald…");hald.clicked.connect(self.hald_menu);row.addWidget(hald);sec.body_layout.addLayout(row)
         compare=QPushButton("Compare LUTs…");compare.clicked.connect(self.compare_luts);sec.body_layout.addWidget(compare)
-        note=QLabel("Drag LUT cards to reorder. Drop .cube/Hald/NP3 files here or anywhere in the app.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
+        note=QLabel("Drag LUT cards to reorder. Drop .cube/Hald files here. Nikon presets are available in Styles & Presets.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
+        row=QHBoxLayout();self.cube_size=QComboBox();self.cube_size.addItems(["17", "33", "65"]);self.cube_size.setCurrentText("33");row.addWidget(QLabel("LUT points"));row.addWidget(self.cube_size)
+        self.cube_export=QPushButton("Export .cube…");self.cube_export.clicked.connect(self.export_cube_dialog);row.addWidget(self.cube_export,1);sec.body_layout.addLayout(row)
+        note=QLabel("Exports the colour look and LUT stack in sRGB. The camera base style, RAW exposure/WB and spatial sharpening are excluded.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
 
-    def build_grading_section(self):
-        section=CollapsibleSection("LUT GENERATOR · COLOR GRADING",expanded=True);self.side_layout.addWidget(section)
+
+    def build_grading_section(self,section):
         self.grading_section=section;self.grading_sliders={}
         note=QLabel("Create a colour look from scratch. These adjustments are saved in your project and baked into PF3 and LUT exports; RAW development stays separate.");note.setWordWrap(True);note.setObjectName("Muted");section.body_layout.addWidget(note)
         category=QComboBox();section.body_layout.addWidget(category)
@@ -960,10 +981,7 @@ class CanonStyleStudioQt(QMainWindow):
                 layout.addWidget(slider);self.grading_sliders[key]=slider
             layout.addStretch();pages.addWidget(page)
         category.currentIndexChanged.connect(pages.setCurrentIndex)
-        reset=QPushButton("Reset LUT generator");reset.clicked.connect(self.reset_grading);section.body_layout.addWidget(reset)
-        row=QHBoxLayout();self.cube_size=QComboBox();self.cube_size.addItems(["17", "33", "65"]);self.cube_size.setCurrentText("33");row.addWidget(QLabel("LUT points"));row.addWidget(self.cube_size)
-        self.cube_export=QPushButton("Export .cube…");self.cube_export.clicked.connect(self.export_cube_dialog);row.addWidget(self.cube_export,1);section.body_layout.addLayout(row)
-        note=QLabel("Exports the colour look and LUT stack in sRGB. The camera base style, RAW exposure/WB and spatial sharpening are excluded.");note.setObjectName("Muted");note.setWordWrap(True);section.body_layout.addWidget(note)
+        reset=QPushButton("Reset color grading");reset.clicked.connect(self.reset_grading);section.body_layout.addWidget(reset)
 
     def grading_changed(self,key,value):
         if self.applying_state:return
@@ -986,32 +1004,39 @@ class CanonStyleStudioQt(QMainWindow):
         self.start_worker(worker,self.engine_pool,done,failed)
 
     def build_creative_section(self):
-        sec=CollapsibleSection("RECIPE · TONE CURVE · COLOR AXES",expanded=False);self.side_layout.addWidget(sec);self.creative_section=sec
-        recipe=QLabel("Recipe-style · LUT-baked");recipe.setObjectName("Muted");sec.body_layout.addWidget(recipe)
-        recipe_wb=QLabel("Fuji-style Recipe WB · baked before LUT stack");recipe_wb.setObjectName("Muted");sec.body_layout.addWidget(recipe_wb)
+        sec=CollapsibleSection("COLOR / TONE",expanded=False);self.side_layout.addWidget(sec);self.creative_section=sec
+        self.color_tabs=QTabWidget();sec.body_layout.addWidget(self.color_tabs)
+        def page(title):
+            widget=QWidget();widget.body_layout=QVBoxLayout(widget);widget.body_layout.setContentsMargins(0,10,0,0);widget.body_layout.setSpacing(10)
+            self.color_tabs.addTab(widget,title);return widget
+        recipe_page=page("Recipe");tone_page=page("Tone curve");mixer_page=page("Color mixer");grading_page=page("Grading")
+        recipe=QLabel("Recipe-style · LUT-baked");recipe.setObjectName("Muted");recipe_page.body_layout.addWidget(recipe)
+        recipe_wb=QLabel("Fuji-style Recipe WB · baked before LUT stack");recipe_wb.setObjectName("Muted");recipe_page.body_layout.addWidget(recipe_wb)
         self.recipe_wb_red=ValueSlider("WB Shift Red (R)",-9,9,self.recipe_wb_controls["red"])
         self.recipe_wb_blue=ValueSlider("WB Shift Blue (B)",-9,9,self.recipe_wb_controls["blue"])
         for slider in (self.recipe_wb_red,self.recipe_wb_blue):
-            sec.body_layout.addWidget(slider);slider.changed.connect(self._recipe_wb_changed);slider.committed.connect(self.commit_history)
-        self.recipe_wb_status=QLabel();self.recipe_wb_status.setObjectName("Muted");self.recipe_wb_status.setWordWrap(True);sec.body_layout.addWidget(self.recipe_wb_status)
-        reset_wb=QPushButton("Reset Recipe WB");reset_wb.clicked.connect(self.reset_recipe_wb);sec.body_layout.addWidget(reset_wb)
+            recipe_page.body_layout.addWidget(slider);slider.changed.connect(self._recipe_wb_changed);slider.committed.connect(self.commit_history)
+        self.recipe_wb_status=QLabel();self.recipe_wb_status.setObjectName("Muted");self.recipe_wb_status.setWordWrap(True);recipe_page.body_layout.addWidget(self.recipe_wb_status)
+        reset_wb=QPushButton("Reset Recipe WB");reset_wb.clicked.connect(self.reset_recipe_wb);recipe_page.body_layout.addWidget(reset_wb)
         self.recipe_highlight=ValueSlider("Highlight",-2,4,self.creative_controls["recipe_highlight"])
         self.recipe_shadow=ValueSlider("Shadow",-2,4,self.creative_controls["recipe_shadow"])
         self.recipe_color=ValueSlider("Color",-4,4,self.creative_controls["recipe_color"])
-        for slider in (self.recipe_highlight,self.recipe_shadow,self.recipe_color):
-            sec.body_layout.addWidget(slider);slider.changed.connect(self._recipe_control_changed);slider.committed.connect(self.commit_history)
-        self.tone_curve=ToneCurveWidget();self.tone_curve.setPoints(self.creative_controls["tone_curve"]);self.tone_curve.pointsChanged.connect(self._tone_curve_changed);self.tone_curve.committed.connect(self.commit_history);sec.body_layout.addWidget(self.tone_curve)
-        row=QHBoxLayout();reset_curve=QPushButton("Reset Curve");reset_curve.clicked.connect(self.reset_tone_curve);row.addStretch();row.addWidget(reset_curve);sec.body_layout.addLayout(row)
-        row=QHBoxLayout();row.addWidget(QLabel("Six Color-Axes"));self.axis_combo=QComboBox();self.axis_combo.addItems(list(AXIS_NAMES));row.addWidget(self.axis_combo,1);sec.body_layout.addLayout(row)
+        for slider in (self.recipe_highlight,self.recipe_shadow):
+            tone_page.body_layout.addWidget(slider);slider.changed.connect(self._recipe_control_changed);slider.committed.connect(self.commit_history)
+        self.tone_curve=ToneCurveWidget();self.tone_curve.setPoints(self.creative_controls["tone_curve"]);self.tone_curve.pointsChanged.connect(self._tone_curve_changed);self.tone_curve.committed.connect(self.commit_history);tone_page.body_layout.addWidget(self.tone_curve)
+        row=QHBoxLayout();reset_curve=QPushButton("Reset Curve");reset_curve.clicked.connect(self.reset_tone_curve);row.addStretch();row.addWidget(reset_curve);tone_page.body_layout.addLayout(row)
+        row=QHBoxLayout();row.addWidget(QLabel("Six Color-Axes"));self.axis_combo=QComboBox();self.axis_combo.addItems(list(AXIS_NAMES));row.addWidget(self.axis_combo,1);mixer_page.body_layout.addLayout(row)
         self.axis_hue=ValueSlider("Hue",-30,30,0,suffix="°");self.axis_saturation=ValueSlider("Saturation",-50,50,0,suffix="%");self.axis_luminance=ValueSlider("Luminance",-50,50,0,suffix="%")
         for slider in (self.axis_hue,self.axis_saturation,self.axis_luminance):
-            sec.body_layout.addWidget(slider);slider.changed.connect(self._axis_control_changed);slider.committed.connect(self.commit_history)
+            mixer_page.body_layout.addWidget(slider);slider.changed.connect(self._axis_control_changed);slider.committed.connect(self.commit_history)
         self.axis_combo.currentTextChanged.connect(self._axis_selected)
-        row=QHBoxLayout();row.addWidget(QLabel("Color Chrome-style"));self.color_chrome=QComboBox();self.color_chrome.addItems(["Off","Weak","Strong"]);row.addWidget(self.color_chrome,1);sec.body_layout.addLayout(row)
-        row=QHBoxLayout();row.addWidget(QLabel("Blue Chrome-style"));self.color_chrome_blue=QComboBox();self.color_chrome_blue.addItems(["Off","Weak","Strong"]);row.addWidget(self.color_chrome_blue,1);sec.body_layout.addLayout(row)
+        row=QHBoxLayout();row.addWidget(QLabel("Color Chrome-style"));self.color_chrome=QComboBox();self.color_chrome.addItems(["Off","Weak","Strong"]);row.addWidget(self.color_chrome,1);mixer_page.body_layout.addLayout(row)
+        row=QHBoxLayout();row.addWidget(QLabel("Blue Chrome-style"));self.color_chrome_blue=QComboBox();self.color_chrome_blue.addItems(["Off","Weak","Strong"]);row.addWidget(self.color_chrome_blue,1);mixer_page.body_layout.addLayout(row)
         self.color_chrome.currentTextChanged.connect(self._chrome_changed);self.color_chrome_blue.currentTextChanged.connect(self._chrome_changed)
-        reset_all=QPushButton("Reset Creative Color");reset_all.clicked.connect(self.reset_creative_controls);sec.body_layout.addWidget(reset_all)
-        note=QLabel("Fuji-style Recipe WB and Color are APPROXIMATE and LUT-baked before user LUTs, matching the internal-before-output-gamut behavior needed by simulated Fuji styles. They are included in PF3 export. Highlight/Shadow, Tone Curve, Color Axes and Chrome-style controls remain after the LUT stack. Canon 33³ Preview shows the final combined 33³/12-bit transform.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
+        recipe_page.body_layout.addWidget(self.recipe_color);self.recipe_color.changed.connect(self._recipe_control_changed);self.recipe_color.committed.connect(self.commit_history)
+        self.build_grading_section(grading_page)
+        reset_all=QPushButton("Reset color adjustments");reset_all.clicked.connect(self.reset_creative_controls);sec.body_layout.addWidget(reset_all)
+        note=QLabel("Recipe controls approximate a film-style look. All colour adjustments are saved in your project and style.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
         self._axis_selected(self.axis_combo.currentText())
         self._update_recipe_wb_status()
 
@@ -1562,7 +1587,7 @@ class CanonStyleStudioQt(QMainWindow):
         dialog.show();update();dialog.exec()
 
     def add_lut_dialog(self):
-        start=self.settings.get_folder("last_lut_folder",HERE/"example_luts");paths,_=QFileDialog.getOpenFileNames(self,"Add LUT / Hald",str(start),"LUT / Hald / Nikon NP3 (*.cube *.np3 *.png *.jpg *.jpeg *.tif *.tiff *.webp);;All files (*.*)")
+        start=self.settings.get_folder("last_lut_folder",HERE/"example_luts");paths,_=QFileDialog.getOpenFileNames(self,"Add LUT / Hald",str(start),"LUT / Hald (*.cube *.png *.jpg *.jpeg *.tif *.tiff *.webp);;All files (*.*)")
         if paths:self.add_lut_paths([Path(p) for p in paths])
     def add_lut_paths(self,paths):
         np3=[Path(p) for p in paths if Path(p).suffix.lower()=='.np3']

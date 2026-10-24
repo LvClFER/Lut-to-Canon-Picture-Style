@@ -51,7 +51,7 @@ jobs:
           python -m unittest tests.test_camera_workflow_entrypoints tests.test_independent_install_ui
           tests.test_independent_session_diagnostic tests.test_macos_portability tests.test_raw_orientation
           tests.test_macos_ptp tests.test_macos_discovery tests.test_nikon_np3
-          tests.test_nikon_profile_data tests.test_nikon_conversion tests.test_nikon_import
+          tests.test_nikon_profile_data tests.test_nikon_conversion tests.test_nikon_relative tests.test_nikon_import
           tests.test_nikon_import_ui -v
       - name: Run regressions without camera access
         run: python -m unittest discover -s tests -p 'test_*.py' -v

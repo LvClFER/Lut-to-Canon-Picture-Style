@@ -5,6 +5,15 @@ from .profile_parameters import (flexible_colour_bases,profile_gamut_parameters,
     flexible_intensity_curves,flexible_special_intensity_curve,profile_luma_curve,
     profile_target_parameters,flexible_neutral_rotation,SRGB_D50_XYZ)
 from .grid import grid_rotation_tables
+from nikon_np3 import NP3Style
+
+
+def neutral_style(style):
+    records={tag:b'\x80\x01' for tag in range(0x1900,0x1f00,0x100)}
+    records.update({0x300:style.block(0x300),0xb00:b'\xff\x04',
+        0x1f00:bytes([128]*24+[1,1,1,0]),
+        0x2000:bytes.fromhex('80008080'*3+'01010100b2018001')})
+    return NP3Style('Neutral flexible colour',tuple(records.items()))
 
 
 def prepare_grid(style,profile):

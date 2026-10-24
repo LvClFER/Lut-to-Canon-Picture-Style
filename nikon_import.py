@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 from concurrent.futures import CancelledError
 from nikon_np3 import MAX_BYTES
-from nikon_conversion import compile_cube
+from nikon_conversion import compile_cube,CONVERSION_VERSION
 from canon_engine import parse_cube
 
 
@@ -14,13 +14,13 @@ def convert_asset(source,profile_path,cache_dir,progress=None,cancel=None):
     cube=compile_cube(data,profile_path,33,progress,cancel)
     if cancel is not None and cancel():raise CancelledError('NP3 conversion cancelled')
     cache=Path(cache_dir);cache.mkdir(parents=True,exist_ok=True)
-    path=cache/(hashlib.sha256(data).hexdigest()+'.cube')
+    path=cache/(hashlib.sha256(data).hexdigest()+'-'+CONVERSION_VERSION+'.cube')
     title=cube['title'].replace('"',"'").replace('\n',' ').replace('\r',' ')
     temporary=None
     try:
         with tempfile.NamedTemporaryFile(mode='w',encoding='utf-8',newline='\n',dir=cache,suffix='.tmp',delete=False) as stream:
             temporary=Path(stream.name)
-            stream.write(f'TITLE "{title}"\n# Experimental NP3 colour look; excludes Nikon RAW development and sharpening\nLUT_3D_SIZE 33\nDOMAIN_MIN 0 0 0\nDOMAIN_MAX 1 1 1\n')
+            stream.write(f'TITLE "{title}"\n# Experimental relative NP3 colour look ({CONVERSION_VERSION}); excludes Nikon RAW development and sharpening\nLUT_3D_SIZE 33\nDOMAIN_MIN 0 0 0\nDOMAIN_MAX 1 1 1\n')
             for i in range(0,len(cube['values']),3):
                 stream.write(' '.join(f'{v:.10f}' for v in cube['values'][i:i+3])+'\n')
         parsed=parse_cube(temporary)
@@ -30,5 +30,6 @@ def convert_asset(source,profile_path,cache_dir,progress=None,cancel=None):
     finally:
         if temporary is not None:temporary.unlink(missing_ok=True)
     parsed=parse_cube(path)
-    metadata={'sourceFormat':'Nikon NP3','conversion':'Experimental sRGB colour look; excludes Nikon RAW development and sharpening'}
+    metadata={'sourceFormat':'Nikon NP3','conversionVersion':CONVERSION_VERSION,
+        'conversion':'Experimental relative colour look; excludes Nikon RAW development and sharpening'}
     return dict(cube=parsed,metadata=metadata,enabled=True,opacity=1.0)

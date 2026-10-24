@@ -33,6 +33,19 @@ class NikonConversionTests(unittest.TestCase):
             with self.assertRaises(CancelledError):compile_cube(document(),'missing',cancel=lambda:True)
         load.assert_not_called()
 
+    def test_nonlinear_device_base_is_not_applied_a_second_time(self):
+        def point(coordinates,size,flags,mode,configuration):
+            gain=.5 if configuration['look'] else 1
+            return [(v/(size-1))**2*gain*65280 for v in coordinates]
+        with patch('nikon_conversion.load_conversion_profile',return_value=b'profile'), \
+                patch('nikon_conversion.prepare_grid',side_effect=[{'look':True},{'look':False}]), \
+                patch('nikon_conversion.grid_point',side_effect=point):
+            cube=compile_cube(document(),'local',17)
+        for r,g,b in ((0,0,0),(7,9,11),(16,16,16)):
+            offset=((b*17+g)*17+r)*3
+            for actual,expected in zip(cube['values'][offset:offset+3],(r/32,g/32,b/32)):
+                self.assertAlmostEqual(actual,expected,delta=.002)
+
     def test_cancel_during_conversion_returns_no_partial_cube(self):
         with patch('nikon_conversion.load_conversion_profile',return_value=b'profile'), \
                 patch('nikon_conversion.prepare_grid',return_value={}), \

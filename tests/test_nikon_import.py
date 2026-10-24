@@ -1,4 +1,5 @@
 import tempfile
+import hashlib
 import unittest
 from concurrent.futures import CancelledError
 from pathlib import Path
@@ -12,15 +13,21 @@ class NikonImportTests(unittest.TestCase):
         cube=dict(title='Synthetic',size=33,values=[0.25,0.5,0.75]*(33**3))
         with tempfile.TemporaryDirectory() as folder:
             folder=Path(folder);source=folder/'style.np3';source.write_bytes(b'synthetic')
+            cache=folder/'cache';cache.mkdir()
+            legacy=cache/(hashlib.sha256(source.read_bytes()).hexdigest()+'.cube')
+            legacy.write_bytes(b'previous project asset')
             with patch('nikon_import.compile_cube',return_value=cube):
-                entry=convert_asset(source,'local-profile',folder/'cache')
+                entry=convert_asset(source,'local-profile',cache)
             path=entry['cube']['path'];self.assertTrue(path.is_file())
+            self.assertIn('relative-flexible-v3',path.name)
+            self.assertEqual(entry['metadata']['conversionVersion'],'relative-flexible-v3')
             project=folder/'style.canonstyleproject'
             save_project(project,ProjectDocument(edit={'luts':[{'path':str(path),'metadata':entry['metadata']}]}))
             loaded=load_project(project)
             self.assertEqual(loaded.edit['luts'][0]['metadata']['sourceFormat'],'Nikon NP3')
             self.assertTrue(Path(loaded.edit['luts'][0]['path']).is_file())
             self.assertEqual(source.read_bytes(),b'synthetic')
+            self.assertEqual(legacy.read_bytes(),b'previous project asset')
 
     def test_failed_or_cancelled_conversion_preserves_existing_cache(self):
         cube=dict(title='Synthetic',values=[0.0]*(33**3*3))
