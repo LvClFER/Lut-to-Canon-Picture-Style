@@ -3,8 +3,16 @@
 The 24 October source candidate shares the experimental Nikon NP3 colour-look
 converter now validated on Windows. It requires a separately supplied, validated
 coefficient file; no Nikon profile data or DLL is bundled. RAW development and
-sharpening are excluded. Native Mac validation of this updated candidate is
-pending; the successful 20 October builds below predate NP3 conversion.
+sharpening are excluded. Both updated native architectures ran 840 tests with
+three skips and no failures, plus 92 platform integration tests, then built,
+passed the bundle audit and started their frozen Cocoa interfaces in
+[run 40097677886](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/actions/runs/40097677886).
+Both exact downloaded DMGs were subsequently mounted read-only on their native
+architectures, their signatures verified and their Cocoa interfaces started in
+[run 40099432178](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/actions/runs/40099432178).
+The proof hashes match the local DMGs. The 20 October results below are historical.
+These checks did not access a camera; physical Mac USB validation, interactive
+user acceptance and notarization remain outstanding. Mac installation stays disabled.
 
 The hosted build now uses the reorganized `tests.*` module names and explicitly
 runs the NP3 reader, profile validation, conversion and import tests. The frozen
