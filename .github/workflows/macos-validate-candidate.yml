@@ -26,7 +26,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: macos-candidate-${{ matrix.arch }}
-          run-id: 40097677886
+          run-id: 40130750021
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: candidate
       - name: Verify the DMG and start the native Cocoa interface
@@ -54,6 +54,7 @@ jobs:
                   executable = app / 'Contents/MacOS/Canon Style Studio'
                   manifest = json.loads((mount / 'BUILD_MANIFEST.json').read_text())
                   assert manifest['architecture'] == architecture
+                  assert manifest['buildId'] == '2026-10-24-WINDOWS-NP3-SMOOTH-CANDIDATE'
                   assert len(manifest['basicPf3Sha256']) == 6
                   assert subprocess.check_output(['lipo', '-archs', str(executable)],
                       text=True, timeout=15).strip() == architecture
@@ -64,7 +65,7 @@ jobs:
                           CANON_STYLE_STUDIO_PORTABLE_ROOT=str(root / 'gui-state')))
               finally:
                   subprocess.run(['hdiutil', 'detach', str(mount)], check=True, timeout=30)
-          proof = dict(architecture=architecture, sourceRunId=40097677886,
+          proof = dict(architecture=architecture, sourceRunId=40130750021,
               dmgSha256=digest.hexdigest(), nativeCocoaStartupPassed=True,
               signatureVerified=True, cameraAccess=False, releaseCreated=False)
           Path('GUI_STARTUP_' + architecture + '.json').write_text(json.dumps(proof, indent=2))
