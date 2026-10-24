@@ -6,6 +6,8 @@ import json
 import uuid
 import shutil
 import traceback
+import threading
+from concurrent.futures import CancelledError
 from datetime import datetime
 from collections import OrderedDict
 from pathlib import Path
@@ -47,7 +49,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QPushButton, QToolButton, QComboBox, QSlider, QCheckBox, QFileDialog, QMessageBox,
     QFrame, QScrollArea, QSizePolicy, QSplitter, QLineEdit, QMenu, QDialog,
-    QDialogButtonBox, QFormLayout, QProgressBar, QTextEdit, QSpinBox, QDoubleSpinBox,
+    QDialogButtonBox, QFormLayout, QProgressBar, QProgressDialog, QTextEdit, QSpinBox, QDoubleSpinBox,
     QListWidget, QListWidgetItem, QAbstractItemView, QStackedLayout, QButtonGroup
 )
 
@@ -937,7 +939,7 @@ class CanonStyleStudioQt(QMainWindow):
         self.lut_list=LutList();self.lut_list.setFixedHeight(88);self.lut_list.orderChanged.connect(self.lut_order_changed);self.lut_list.reorderRequested.connect(self.reorder_lut);self.lut_list.filesDropped.connect(self.files_dropped);sec.body_layout.addWidget(self.lut_list)
         row=QHBoxLayout();add=QPushButton("+ LUT / Hald");add.clicked.connect(self.add_lut_dialog);row.addWidget(add,1);hald=QPushButton("Lightroom Hald…");hald.clicked.connect(self.hald_menu);row.addWidget(hald);sec.body_layout.addLayout(row)
         compare=QPushButton("Compare LUTs…");compare.clicked.connect(self.compare_luts);sec.body_layout.addWidget(compare)
-        note=QLabel("Drag LUT cards to reorder. Drop .cube/Hald files here or anywhere in the app.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
+        note=QLabel("Drag LUT cards to reorder. Drop .cube/Hald/NP3 files here or anywhere in the app.");note.setObjectName("Muted");note.setWordWrap(True);sec.body_layout.addWidget(note)
 
     def build_grading_section(self):
         section=CollapsibleSection("LUT GENERATOR · COLOR GRADING",expanded=True);self.side_layout.addWidget(section)
@@ -1449,14 +1451,14 @@ class CanonStyleStudioQt(QMainWindow):
     # ---------- File/project ----------
     def open_dialog(self):
         start=exported_styles_dir()
-        filt="Styles (*.canonstyleproject *.pf3 *.canonstyle.json);;Supported (*.canonstyleproject *.pf3 *.cr3 *.cr2 *.crw *.cip *.crn *.jpg *.jpeg *.png *.tif *.tiff *.webp *.cube);;All files (*.*)"
+        filt="Styles (*.canonstyleproject *.pf3 *.canonstyle.json);;Supported (*.canonstyleproject *.pf3 *.cr3 *.cr2 *.crw *.cip *.crn *.jpg *.jpeg *.png *.tif *.tiff *.webp *.cube *.np3);;All files (*.*)"
         p,_=QFileDialog.getOpenFileName(self,"Open",str(start),filt)
         if p:self.open_path(Path(p))
     def open_path(self,p):
         ext=p.suffix.lower()
         if ext==".canonstyleproject" or p.name.lower().endswith('.canonstyle.json'):self.open_project(p)
         elif ext==".pf3":self.open_pf3(p)
-        elif ext==".cube":self.add_lut_paths([p])
+        elif ext in (".cube",".np3"):self.add_lut_paths([p])
         elif ext in HALD_IMAGE_EXTENSIONS and self._looks_like_hald(p):self.add_lut_paths([p])
         else:self.add_references([p],select_last=True)
     def _looks_like_hald(self,p):
@@ -1560,9 +1562,11 @@ class CanonStyleStudioQt(QMainWindow):
         dialog.show();update();dialog.exec()
 
     def add_lut_dialog(self):
-        start=self.settings.get_folder("last_lut_folder",HERE/"example_luts");paths,_=QFileDialog.getOpenFileNames(self,"Add LUT / Hald",str(start),"LUT / Hald (*.cube *.png *.jpg *.jpeg *.tif *.tiff *.webp);;All files (*.*)")
+        start=self.settings.get_folder("last_lut_folder",HERE/"example_luts");paths,_=QFileDialog.getOpenFileNames(self,"Add LUT / Hald",str(start),"LUT / Hald / Nikon NP3 (*.cube *.np3 *.png *.jpg *.jpeg *.tif *.tiff *.webp);;All files (*.*)")
         if paths:self.add_lut_paths([Path(p) for p in paths])
     def add_lut_paths(self,paths):
+        np3=[Path(p) for p in paths if Path(p).suffix.lower()=='.np3']
+        paths=[p for p in paths if Path(p).suffix.lower()!='.np3']
         added=0;errors=[];preferred=[]
         for p in paths:
             try:
@@ -1577,6 +1581,48 @@ class CanonStyleStudioQt(QMainWindow):
             answer=QMessageBox.question(self,"Preferred Canon base",f"{name} was calibrated for Canon {wanted}.\n\nCurrent base: {current}.\n\nSwitch to {wanted}?",QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No,QMessageBox.StandardButton.Yes)
             if answer==QMessageBox.StandardButton.Yes:self.base_combo.setCurrentText(wanted)
         if errors:QMessageBox.warning(self,"LUT import","\n\n".join(errors))
+        if np3:self.import_np3_paths(np3)
+
+    def import_np3_paths(self,paths):
+        if getattr(self,'_np3_import_dialog',None) is not None:return
+        from canon_runtime import app_data_dir
+        from nikon_import import convert_asset
+        default=Path(os.environ.get('ProgramFiles','C:/Program Files'))/'Nikon/NXStudio/prm.bin'
+        profile=Path(self.settings.data.get('nikon_profile_path') or default)
+        if not profile.is_file():
+            QMessageBox.information(self,'Nikon NP3 import','Experimental NP3 colour conversion needs a validated local Nikon NX Studio prm.bin file. No Nikon DLL is used. RAW development and sharpening are not reproduced.')
+            selected,_=QFileDialog.getOpenFileName(self,'Select Nikon profile data',str(default.parent),'Nikon profile data (prm.bin)')
+            if not selected:return
+            profile=Path(selected)
+        cancelled=threading.Event()
+        self._np3_cancel=cancelled
+        dialog=QProgressDialog('Converting Nikon NP3 colour look…','Cancel',0,100,self)
+        dialog.setWindowTitle('Import Nikon NP3 · experimental')
+        dialog.setWindowModality(Qt.WindowModality.WindowModal);dialog.setAutoClose(False)
+        dialog.canceled.connect(cancelled.set);self._np3_import_dialog=dialog
+        def convert():
+            entries=[]
+            try:
+                for index,path in enumerate(paths):
+                    entry=convert_asset(path,profile,app_data_dir()/'converted_np3',
+                        lambda value:worker.signals.progress.emit((index*100+value)/len(paths)),cancelled.is_set)
+                    entry['id']=uuid.uuid4().hex;entries.append(entry)
+                return entries
+            except CancelledError:return None
+        def finish(entries):
+            dialog.canceled.disconnect(cancelled.set)
+            dialog.close();self._np3_import_dialog=None;self._np3_cancel=None
+            if entries is None or cancelled.is_set():self.status.setText('NP3 import cancelled');return
+            self.settings.data['nikon_profile_path']=str(profile);self.settings.save()
+            self.luts.extend(entries);self.refresh_lut_list();self.commit_history(True)
+            self.status.setText(f'Added {len(entries)} NP3 colour look(s) · experimental; excludes Nikon RAW development and sharpening')
+        def failed(message,tb):
+            dialog.canceled.disconnect(cancelled.set)
+            dialog.close();self._np3_import_dialog=None;self._np3_cancel=None
+            QMessageBox.warning(self,'NP3 import',message)
+        worker=FunctionWorker(convert)
+        worker.signals.progress.connect(lambda value:dialog.setValue(int(value)))
+        self.start_worker(worker,self.decode_pool,finish,failed);dialog.show()
     def refresh_lut_list(self):
         self.lut_list.setFixedHeight(min(324,max(88,len(self.luts)*108)))
         self.lut_list.blockSignals(True);self.lut_list.clear()
@@ -1912,7 +1958,7 @@ class CanonStyleStudioQt(QMainWindow):
             p=Path(p0);ext=p.suffix.lower()
             if ext==".canonstyleproject":self.open_project(p)
             elif ext==".pf3":self.open_pf3(p)
-            elif ext==".cube":lut.append(p)
+            elif ext in (".cube",".np3"):lut.append(p)
             elif ext in HALD_IMAGE_EXTENSIONS:
                 try:parse_lut_file(p);lut.append(p)
                 except Exception:refs.append(p)
@@ -1927,6 +1973,7 @@ class CanonStyleStudioQt(QMainWindow):
             if ans==QMessageBox.StandardButton.Save:
                 self.save_project_action()
                 if self.dirty:event.ignore();return
+        if getattr(self,'_np3_cancel',None) is not None:self._np3_cancel.set()
         self.closing=True;self.full_render_timer.stop();self.canon_render_timer.stop();self.render_generation+=1;self.load_generation+=1
         self.render_pending=None;self.preview_pending=None
         for pool in (self.decode_pool,self.preview_pool,self.engine_pool):

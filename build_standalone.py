@@ -76,7 +76,8 @@ def audit_modules(executable):
     modules=CArchiveReader(str(executable)).open_embedded_archive('PYZ.pyz').toc
     unexpected=[name for name in modules if name in RESEARCH_ONLY_MODULES]
     if unexpected:raise RuntimeError(f'Research modules in application: {unexpected}')
-    required={'sample_images','sample_browser','rawpy','camera_install.family_registration_reference','camera_install.camera_families_reference',
+    required={'sample_images','sample_browser','rawpy','nikon_conversion','nikon_import','nikon_profile_data',
+              'camera_install.family_registration_reference','camera_install.camera_families_reference',
               'camera_install.independent_registration_reference','camera_install.legacy_dense9_carrier_reference'}
     if not required.issubset(modules):
         raise RuntimeError(f'Missing independent runtime modules: {sorted(required.difference(modules))}')

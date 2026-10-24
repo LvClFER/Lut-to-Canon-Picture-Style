@@ -19,6 +19,11 @@ HERE=Path(__file__).resolve().parent
 PACKAGE_NAME=f"CanonStyleStudio_{PUBLIC_VERSION}_Source"
 FILES=(
     "canon_style_studio.py","canon_engine.py","canon_dpp_worker.py","dpp_client.py","sample_images.py","sample_browser.py","nikon_np3.py",
+    "nikon_import.py","nikon_profile_data.py","nikon_conversion/__init__.py",
+    "nikon_conversion/grading.py","nikon_conversion/mixer.py","nikon_conversion/tone.py",
+    "nikon_conversion/global_controls.py","nikon_conversion/grid.py","nikon_conversion/curves.py",
+    "nikon_conversion/style_controls.py","nikon_conversion/profile_parameters.py",
+    "nikon_conversion/prepare.py","nikon_conversion/pipeline.py",
     "project_state.py","render_geometry.py","canon_runtime.py","creative_controls.py","test_report.py",
     "bootstrap.py","launch_guard.py","START_CANON_STYLE_STUDIO.bat","requirements.txt",
     "build_macos.py","build_standalone.py","MACOS_PORT_STATUS.md","assets/canon-logo.png","assets/app-icon.ico","assets/step-up.svg","assets/step-down.svg","assets/menu-down.svg",

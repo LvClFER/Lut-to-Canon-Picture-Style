@@ -1,5 +1,15 @@
 # macOS port — local work, not a release
 
+The 24 October source candidate shares the experimental Nikon NP3 colour-look
+converter now validated on Windows. It requires a separately supplied, validated
+coefficient file; no Nikon profile data or DLL is bundled. RAW development and
+sharpening are excluded. Native Mac validation of this updated candidate is
+pending; the successful 20 October builds below predate NP3 conversion.
+
+The hosted build now uses the reorganized `tests.*` module names and explicitly
+runs the NP3 reader, profile validation, conversion and import tests. The frozen
+bundle audit also requires the NP3 modules on both architectures.
+
 The editor uses the same six included basic PF3 files, independent serializers
 and editable project format as Windows. Native macOS state belongs in
 `~/Library/Application Support/CanonStyleStudio`, caches in

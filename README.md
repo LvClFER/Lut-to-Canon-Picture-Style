@@ -28,7 +28,7 @@ Version 1.0.0 is the first stable **Windows editor** release. Camera-installatio
 
 - `.cube` exports contain the colour look and enabled LUT stack, not RAW exposure/WB, the full camera base rendering or spatial sharpening. RAW exposure/WB are not written into a Picture Style either.
 - Existing camera-slot Basic controls must match the independent installation requirements; conflicting values are blocked.
-- Nikon `.np3` colour conversion is **not available**. Reading its records does not establish faithful rendering.
+- The released v1.0.0 does not convert Nikon `.np3`. The current **unreleased source candidate** adds experimental flexible-colour NP3 import through Open, LUT import or drag and drop. It needs a validated local NX Studio `prm.bin`; no Nikon DLL is executed or bundled. Conversion adds a colour LUT and preserves loaded RAW images. It excludes Nikon RAW development and sharpening, and does not reproduce Nikon camera output exactly. Converted LUTs are embedded when saving a portable project; reopening that project does not require Nikon profile data. Unsupported NP3 bases/basic hue settings and unvalidated profile versions are refused.
 - Android and macOS sources are under development; this release ships the Windows build only.
 - A preview is not a guarantee that every camera will produce an identical JPEG. Canon RAW development, imported PF3 preview and hardware coverage each have their documented limits.
 
