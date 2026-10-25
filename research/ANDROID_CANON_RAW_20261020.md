@@ -1034,3 +1034,30 @@ or second-derivative solver. Native tables/knots are private evidence only.
 Private evidence: raw-tone-spline-kernel-20261025/spline-proof.json and
 shared-helper-proof.json. The 19 offline reference tests pass; no production
 renderer or installed candidate changed.
+
+
+### Independent spline second-derivative solver
+
+The generator calls 0xdede0 to solve the tridiagonal cubic-spline system.
+The observed endpoint convention is natural for a slope sentinel greater
+than 9.9e29; otherwise the endpoint derivative is clamped to the supplied
+slope. A NativeFunction experiment checked 12 combinations: 2, 5 and 10
+nonuniform knots, each with natural/natural, zero/zero, 0.5/2 and
+natural/-0.25 endpoints. The independent spline_second_derivatives helper
+reproduces every derivative exactly in these cases.
+
+A focused actual-generator capture also recorded solves returning to 0xdcecc
+(10 knots) and 0xde108 (226 knots). Branch hooks confirmed both endpoints
+natural in both calls. All actual second derivatives match the independent
+solver exactly. Total verified: 304 derivatives over 12 synthetic cases and
+two live solves; maximum absolute error 0.0. Native one-based buffers are
+translated to ordinary zero-based Python arrays, without native data in tests.
+None is accepted for natural endpoints; finite inputs, matching lengths and
+strictly increasing knots are validated. The first quadratic unit check was
+changed from exact integer equality to floating tolerance after ordinary
+roundoff produced 2 +/- 4e-16; native-reference comparisons remain exact.
+
+Evidence: raw-tone-spline-solver-20261025/solver-proof.json and
+shared-helper-proof.json; 20 reference tests pass. This reconstructs the
+solver, not the generator stages that select/transform the knot values.
+No shipped renderer or installed build changed.

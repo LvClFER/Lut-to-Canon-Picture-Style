@@ -152,6 +152,23 @@ class RawRecipeReferenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):sample_cubic_spline([0,1],[0],[0,0],0)
         with self.assertRaises(ValueError):sample_cubic_spline([0,1],[0,1],[0,0],True)
 
+    def test_spline_second_derivatives(self):
+        from camera_install.raw_recipe_reference import spline_second_derivatives
+        self.assertEqual(spline_second_derivatives([0,1,2],[0,1,4]),[0,3,0])
+        for value in spline_second_derivatives([0,1,2],[0,1,4],0,4):
+            self.assertAlmostEqual(value,2,places=14)
+        self.assertEqual(spline_second_derivatives([0,1],[0,1],0,0),[6,-6])
+        self.assertEqual(spline_second_derivatives([0,1],[0,1],1e30,1e30),[0,0])
+        knots=[0,0.30000000000000004,0.8,1.5,2.4000000000000004]
+        values=[0,0.3045202066613396,0.7813560908995228,1.2224949866040544,1.2514631805511507]
+        expected=[5.9060161735949315,-1.510685236433896,0.5538360076943238,-3.592434109281939,8.355594114096165]
+        for actual, target in zip(spline_second_derivatives(knots,values,0.5,2),expected):
+            self.assertAlmostEqual(actual,target,places=13)
+        for knots,values in (([0],[0]),([0,0],[0,1]),([1,0],[0,1]),([0,1],[0]),([0,float('inf')],[0,1])):
+            with self.assertRaises(ValueError):spline_second_derivatives(knots,values)
+        for slope in (True,float('nan'),float('inf')):
+            with self.assertRaises(ValueError):spline_second_derivatives([0,1],[0,1],slope)
+
     def test_tone_interpolation_and_saturated_endpoint(self):
         curve=[min(i*17,1023) for i in range(2048)]
         for position,expected in ((0,0),(1,17),(63,1071),(64,1088),(65,1105),

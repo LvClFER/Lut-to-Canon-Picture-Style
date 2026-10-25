@@ -4,6 +4,39 @@ from bisect import bisect_right
 from math import isfinite
 
 
+def spline_second_derivatives(knots, values, left_slope=None, right_slope=None):
+    """Observed tridiagonal spline solver; None selects a natural endpoint."""
+    if not 2 <= len(knots) <= 65535 or len(values) != len(knots):
+        raise ValueError('Require matching spline arrays with at least two knots')
+    numbers = (*knots, *values, *(s for s in (left_slope, right_slope) if s is not None))
+    if any(type(v) not in (int, float) or not isfinite(v) for v in numbers):
+        raise ValueError('Require finite spline numbers')
+    if any(left >= right for left, right in zip(knots, knots[1:])):
+        raise ValueError('Require strictly increasing spline knots')
+    second = [0.0]*len(knots)
+    work = [0.0]*len(knots)
+    if left_slope is not None and left_slope <= 9.9e29:
+        width = knots[1]-knots[0]
+        second[0] = -0.5
+        work[0] = (3/width)*((values[1]-values[0])/width-left_slope)
+    for i in range(1, len(knots)-1):
+        width = knots[i+1]-knots[i-1]
+        ratio = (knots[i]-knots[i-1])/width
+        pivot = ratio*second[i-1]+2
+        second[i] = (ratio-1)/pivot
+        difference = (values[i+1]-values[i])/(knots[i+1]-knots[i]) - (values[i]-values[i-1])/(knots[i]-knots[i-1])
+        work[i] = (6*difference/width-ratio*work[i-1])/pivot
+    q = u = 0.0
+    if right_slope is not None and right_slope <= 9.9e29:
+        width = knots[-1]-knots[-2]
+        q = 0.5
+        u = (3/width)*(right_slope-(values[-1]-values[-2])/width)
+    second[-1] = (u-q*work[-2])/(q*second[-2]+1)
+    for i in range(len(knots)-2, -1, -1):
+        second[i] = second[i]*second[i+1]+work[i]
+    return second
+
+
 def sample_cubic_spline(knots, values, second_derivatives, coordinate):
     """Observed spline evaluation; endpoint intervals also serve extrapolation."""
     if not 2 <= len(knots) <= 65535 or len(values) != len(knots) or len(second_derivatives) != len(knots):
