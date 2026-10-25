@@ -309,3 +309,32 @@ class ToneWarpChainTests(unittest.TestCase):
         params.update(base_span=-4095, edge_span=-4095, right_span=-4095)
         with self.assertRaisesRegex(ValueError, 'fallback'):
             warp_tone_coordinates([0, 4095, 16383], [0, 4095, 16383], **params)
+
+
+class ToneParameterDerivationTests(unittest.TestCase):
+    def test_symmetric_generator_ranges(self):
+        from camera_install.raw_recipe_reference import derive_tone_warp_parameters
+        for flag in (0, 1):
+            p = derive_tone_warp_parameters([1, 2, 3, 2, 4, 0], 1000, 250, 0, 4095, flag)
+            self.assertEqual(p['base_span'], 4095)
+            self.assertEqual(p['right_span'], 4095)
+            self.assertEqual(p['edge_span'], 4095)
+            self.assertEqual(p['base_offset'], 0)
+            self.assertEqual(p['right_offset'], 0)
+            self.assertEqual(p['left_power'], 3)
+            self.assertEqual(p['right_power'], 3)
+            self.assertEqual(p['scale'], 32767+(flag << 15))
+            self.assertEqual(p['pivot'], p['right_threshold'])
+
+    def test_invalid_generator_inputs(self):
+        from camera_install.raw_recipe_reference import derive_tone_warp_parameters
+        base = [[1, 2, 3, 2, 4, 0], 1000, 250, 0, 4095, 0]
+        for index, value in ((0, [1]), (0, [1, 0, 3, 2, 4, 0]),
+                             (0, [1, 2, 3, 4, 4, 0]),
+                             (0, [1, 2, float('nan'), 2, 4, 0]),
+                             (1, 0), (1, 16383), (2, 0), (3, 4095),
+                             (4, 65536), (5, 2), (5, True)):
+            case = base.copy()
+            case[index] = value
+            with self.subTest(index=index, value=value), self.assertRaises(ValueError):
+                derive_tone_warp_parameters(*case)

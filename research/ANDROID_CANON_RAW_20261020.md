@@ -1423,3 +1423,28 @@ observed instructions but is not native-oracle validated yet. The native
 nonmonotonic fallback is explicitly rejected rather than approximated.
 This is not complete Canon RAW colour rendering, and no installed build
 was updated or published.
+
+
+### Integrated generator scalar derivation
+
+The offline derivation now computes base/right spans and offsets, limited
+edge range, blend powers, scaled pivot/threshold and scale from six scalar
+settings plus typed generator entry arguments. It reproduces 33 observed
+coefficients exactly across RP2408, RP2440 and EOS R. Trailing nonincreasing
+source values also yield the observed effective end coordinate (13200),
+without taking that endpoint from the warp capture.
+
+The full private chain now uses source control points, generator entry
+scalars, range bounds and secondary adjustment control points. It no
+longer consumes captured warp coefficients, dense/final coordinates or
+final spline derivatives, yet all three final tables remain byte-exact
+(6,144 uint32 entries). Evidence:
+tone-parameter-derivation-integrated-proof-20261025.json and
+tone-entry-to-final-chain-proof-20261025.json. Synthetic regressions cover
+symmetric ranges, both scale flags and rejected malformed domains.
+
+Scope remains neutral editor EV for these three references. Nonzero EV
+preprocessing, alternate power/limited-range paths and the native fallback
+still require targeted oracle validation. Static model curve provisioning
+and complete sensor-to-colour reconstruction remain unresolved. No Canon
+curve table was bundled; no APK/EXE update or publication occurred.

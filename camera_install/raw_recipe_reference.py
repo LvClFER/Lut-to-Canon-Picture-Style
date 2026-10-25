@@ -149,6 +149,48 @@ def normalize_tone_curve(knots, values, x_lower, x_upper, y_lower, y_upper):
 
 
 
+
+def derive_tone_warp_parameters(settings, raw_pivot, target, x_lower, x_upper, scale_flag):
+    """Observed neutral-EV generator scalar derivation, before coordinate warping."""
+    if len(settings) != 6 or any(type(v) not in (int, float) or not isfinite(v) for v in settings):
+        raise ValueError('Require six finite tone settings')
+    if any(type(v) is not int or not 0 <= v <= 65535
+           for v in (raw_pivot, target, x_lower, x_upper)) or type(scale_flag) is not int or scale_flag not in (0, 1):
+        raise ValueError('Require bounded generator scalar inputs')
+    if not x_lower < x_upper or settings[1] <= 0 or settings[4] <= settings[3]:
+        raise ValueError('Invalid generator ranges or settings')
+    span = x_upper-x_lower
+    offset = x_lower*16383/4095
+    input_pivot = raw_pivot*span/4095+offset
+    output_pivot = target*4
+    high = x_upper*16383/4095
+    if not offset < input_pivot < high or not offset < output_pivot < high:
+        raise ValueError('Require interior tone pivots')
+    base_end = (output_pivot-offset)*span/(input_pivot-offset)+x_lower
+    base_span = base_end-x_lower
+    right_start = x_upper-(high-output_pivot)*span/(high-input_pivot)
+    right_span = x_upper-right_start
+    ratio = base_span/right_span
+    edge_start, edge_end = x_lower, base_end
+    if ratio > settings[1]:
+        limited_span = right_span*settings[1]
+        anchor = raw_pivot*base_span/16383+x_lower
+        edge_start = anchor-raw_pivot*limited_span/16383
+        edge_end = anchor+(16383-raw_pivot)*limited_span/16383
+    edge_span = edge_end-edge_start
+    factor = (settings[2] if settings[3] > ratio else
+              (settings[4]-ratio)*(settings[2]-1)/(settings[4]-settings[3])+1)
+    factor = max(1.0, factor)
+    right_power = max(1.0, edge_span*factor/right_span)
+    left_power = 1.0 if base_span*factor/edge_span < 1 else right_power
+    scale = 32767+(scale_flag << 15)
+    return dict(base_span=base_span, base_offset=offset, edge_span=edge_span,
+                edge_offset=edge_start*16383/4095, left_power=left_power,
+                right_power=right_power, pivot=scale*output_pivot/16383,
+                right_threshold=scale*input_pivot/16383, scale=scale,
+                right_span=right_span, right_offset=right_start*16383/4095)
+
+
 def warp_tone_coordinates(knots, values, *, raw_pivot, end_input, base_span,
                           base_offset, edge_span, edge_offset, left_power,
                           right_power, pivot, right_threshold, scale,
