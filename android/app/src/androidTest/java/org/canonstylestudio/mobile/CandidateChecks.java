@@ -18,6 +18,22 @@ public final class CandidateChecks extends Instrumentation {
             Context context=getTargetContext();
             if(!Python.isStarted())Python.start(new AndroidPlatform(context));
             Python python=Python.getInstance();
+            String conversion=python.getModule("nikon_conversion").get("CONVERSION_VERSION").toString();
+            if(!conversion.equals("relative-flexible-v5"))throw new AssertionError("Stale NP3 conversion engine");
+            python.getModule("nikon_import");python.getModule("nikon_profile_data");
+            result.putString("np3ConversionVersion",conversion);
+            for(int i=0;i<5;i++)if(inputs.containsKey("brightnessRaw"+i)) {
+                java.util.List<PyObject> developed=python.getModule("android_raw").callAttr("decode",
+                    inputs.getString("brightnessRaw"+i),context.getCacheDir().toString()).asList();
+                PyObject pixels=developed.get(0),metadata=developed.get(1);double mean=0;
+                for(PyObject channel:python.getModule("PIL.ImageStat").callAttr("Stat",pixels).get("mean").asList())mean+=channel.toDouble()/3;
+                double oldMean=Double.parseDouble(inputs.getString("brightnessOldMean"+i));
+                if(!(mean>oldMean*1.3 && mean<250)
+                        || !metadata.callAttr("__getitem__","output_transfer").toString().equals("sRGB")
+                        || metadata.callAttr("__getitem__","embedded_preview_used").toBoolean())
+                    throw new AssertionError("RAW brightness regression for fixture "+i+": "+mean);
+                result.putString("brightnessMean"+i,String.valueOf(mean));pixels.callAttr("close");
+            }
             File directory=new File(context.getCacheDir(),"candidate-check-"+java.util.UUID.randomUUID());directory.mkdirs();
             File invalidRaw=new File(directory,"invalid.cr3"),invalidOutput=new File(directory,"invalid.ppm");
             try(java.io.FileOutputStream output=new java.io.FileOutputStream(invalidRaw)){output.write(new byte[]{1,2,3,4});}
@@ -80,6 +96,15 @@ public final class CandidateChecks extends Instrumentation {
             image.callAttr("save",photo.toString());
             PyObject editor=python.getModule("mobile_editor").callAttr("Editor",new File(directory,"editor").toString());
             editor.callAttr("open",photo.toString());
+            if(inputs.containsKey("np3Source")) {
+                editor.callAttr("open",inputs.getString("np3Profile"),"nikon_profile");
+                JSONObject imported=new JSONObject(editor.callAttr("open",inputs.getString("np3Source")).toString());
+                if(imported.getJSONArray("references").length()!=1
+                        || !imported.getJSONObject("edit").getJSONArray("luts").getJSONObject(0)
+                        .getJSONObject("metadata").getString("conversionVersion").equals(conversion))
+                    throw new AssertionError("NP3 import lost photo or used stale conversion");
+                result.putBoolean("np3Converted",true);
+            }
             editor.callAttr("update","{\"contrast\":2}");
             JSONObject rendered=new JSONObject(editor.callAttr("render").toString());
             android.graphics.Bitmap preview=android.graphics.BitmapFactory.decodeFile(rendered.getString("after"));
@@ -96,7 +121,12 @@ public final class CandidateChecks extends Instrumentation {
             JSONObject recovered=new JSONObject(restored.callAttr("state").toString());
             if(recovered.getJSONObject("edit").getInt("contrast")!=2)throw new AssertionError("Session recovery failed");
             PyObject main=python.getModule("mobile_editor").callAttr("Editor",context.getFilesDir().toString());
-            main.callAttr("open",photo.toString());main.callAttr("checkpoint");
+            main.callAttr("open",photo.toString());
+            File uiLut=new File(directory,"ui-look.cube");
+            try(java.io.FileOutputStream output=new java.io.FileOutputStream(uiLut)) {
+                output.write("LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            main.callAttr("open",uiLut.toString(),"lut");main.callAttr("checkpoint");
             Intent intent=new Intent(context,EditorActivity.class);intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             Activity activity=startActivitySync(intent);waitForIdleSync();
             if(activity==null)throw new AssertionError("Activity failed to start");
@@ -110,6 +140,43 @@ public final class CandidateChecks extends Instrumentation {
                 if(!ready.get())android.os.SystemClock.sleep(100);
             }
             if(!ready.get())throw new AssertionError("Activity did not finish rendering");
+            for(String tool:new String[]{"RAW","Styles","Color","LUTs","Generate","RAW"}) {
+                runOnMainSync(()->{
+                    android.view.View photoView=activity.getWindow().getDecorView().findViewWithTag("photo-preview");
+                    android.view.View tab=activity.getWindow().getDecorView().findViewWithTag("tool-"+tool);
+                    if(tab==null || photoView==null || photoView.getHeight()<100)throw new AssertionError("Missing fixed preview or tool "+tool);
+                    int height=photoView.getHeight();tab.performClick();
+                    if(tool.equals("LUTs") && activity.getWindow().getDecorView().findViewWithTag("lut-opacity-0")==null)
+                        throw new AssertionError("LUT opacity is missing from the panel");
+                    if(photoView.getHeight()!=height || !photoView.isShown())throw new AssertionError("Tool hid the photo");
+                });waitForIdleSync();
+            }
+            runOnMainSync(()->{
+                android.view.View root=activity.getWindow().getDecorView();
+                root.findViewWithTag("tool-Color").performClick();
+                root.findViewWithTag("color-adjustments").performClick();
+                if(!root.findViewWithTag("photo-preview").isShown()
+                        || root.findViewWithTag("cancel-color-adjustments")==null)
+                    throw new AssertionError("Colour adjustments must stay inside the panel");
+                root.findViewWithTag("cancel-color-adjustments").performClick();
+                root.findViewWithTag("tool-RAW").performClick();
+            });waitForIdleSync();
+            result.putBoolean("inlineColorPanel",true);
+            runOnMainSync(()->{
+                android.view.View label=activity.getWindow().getDecorView().findViewWithTag("reset-raw_exposure");
+                android.widget.SeekBar slider=activity.getWindow().getDecorView().findViewWithTag("adjustment-raw_exposure");
+                slider.setProgress(70);long start=android.os.SystemClock.uptimeMillis();
+                for(int tap=0;tap<2;tap++)for(int action:new int[]{android.view.MotionEvent.ACTION_DOWN,android.view.MotionEvent.ACTION_UP}) {
+                    long time=start+tap*100+(action==android.view.MotionEvent.ACTION_UP?30:0);
+                    android.view.MotionEvent event=android.view.MotionEvent.obtain(start+tap*100,time,action,10,10,0);
+                    label.dispatchTouchEvent(event);event.recycle();
+                }
+                if(slider.getProgress()!=50)throw new AssertionError("Double tap did not reset exposure");
+            });
+            result.putBoolean("doubleTapReset",true);
+            File generated=new File(directory,"generated.cube");editor.callAttr("export_cube",generated.toString());
+            if(generated.length()<1000)throw new AssertionError("LUT export missing");
+            result.putBoolean("bottomToolsAndLutExport",true);
             waitForIdleSync();android.os.SystemClock.sleep(500);
             android.graphics.Bitmap screenshot=getUiAutomation().takeScreenshot();
             if(screenshot==null)throw new AssertionError("Could not capture candidate UI");

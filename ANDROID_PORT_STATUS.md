@@ -39,7 +39,8 @@ The RAW status explicitly identifies this missing calibration. Direct applicatio
 of installed Canon ICCs was evaluated against DPP references and rejected as a
 substitute: the tested fixed input-space/gamma/brightness combinations did not
 match. Those Canon ICCs are not included in the Android app. DPReview gallery
-integration and independent NP3 colour conversion are also not implemented.
+integration remains outstanding. NP3 import uses the shared independent colour
+converter described below.
 
 `camera_install/android_ptp.py` implements bounded bulk PTP framing, receive and
 send adapters compatible with the existing compiler/session controllers.
@@ -130,3 +131,69 @@ The bundled CDDL licence and copyright notice accompany the native decoder.
 References: [Chaquopy Gradle integration](https://chaquo.com/chaquopy/doc/current/android.html),
 [Android USB host](https://developer.android.com/develop/connectivity/usb/host),
 [bounded bulk transfers](https://developer.android.com/reference/android/hardware/usb/UsbDeviceConnection).
+
+## NP3 integration, 25 October 2026
+
+The Android editor now stages and imports the shared `relative-flexible-v5`
+converter. Import PF3 and Import NP3 are adjacent actions. NP3 setup accepts a
+user-selected `prm.bin` through the document picker, validates its supported
+profile before replacing the private copy and does not run Nikon software.
+Coefficient data is not bundled. Conversion runs on the background editor
+executor and can take several minutes. Failed conversion leaves edits unchanged;
+successful conversion adds one LUT, preserves loaded photographs and participates
+in undo and portable-project export. Existing embedded LUTs are unchanged.
+
+The local mobile/RAW/PTP/import/continuity suite passed 35 tests. The candidate
+compiled for ARM64 and x86-64; Android lint reported zero errors and 18 warnings.
+These checks do not establish ARM64 execution or physical USB validation.
+
+The Android 15 x86-64 emulator also converted the user's Filmstill Classic Neg
+NP3 with the packaged v5 engine and separately supplied coefficient file. The
+instrumentation passed native Python/Pillow/NumPy loading, portrait rendering,
+PF3 export, portable project/photo preservation, private-session recovery and
+activity startup. The signed debug APK is copied to
+`Desktop/CanonStyleStudio/Android/CanonStyleStudio-Android-candidate.apk`, with
+`validation-20261025.json`. It is a local test candidate; no release was published.
+
+### RAW brightness correction
+
+The five user-provided EOS RP RAWs reproduced an excessively dark opening with
+histogram normalization disabled and a BT.709 transfer curve. Native development
+now enables LibRaw's histogram brightness normalization and uses its documented
+sRGB transfer parameters (1/2.4, 12.92). User exposure remains applied before
+RGB8 output. The Android emulator developed all five files and passed the
+sensor/JPEG independence, exposure, crop, orientation and editor/project checks.
+The replacement APK is in the same Desktop Android folder, with a separate
+`validation-raw-brightness-20261025.txt` evidence file.
+
+This is automatic RAW brightness normalization, not Canon exposure/base-look
+calibration. Compared with the embedded camera references, some scenes become
+brighter than the Canon render. The embedded JPEG is used only for private
+comparison, never as the app's development input. Native reference hashes from
+earlier decoder versions are historical and change with the new transfer curve.
+
+### Fixed-preview mobile workspace
+
+The activity now keeps its comparison photo outside the settings scroll view.
+A fixed bottom toolbar selects RAW (first), Styles, Color, LUTs and Generate.
+Only the active settings panel is shown. LUT import is available directly in
+LUTs; PF3/NP3 import and coefficient setup are in Styles. Generate exposes the
+shared grading controls and exports a combined 33-point `.cube` through the
+Android document picker, excluding RAW development and sharpening. More retains
+redo, reference selection, snapshots and camera installation. System insets are
+applied on all supported Android versions, and older sessions without grading
+values remain readable. Desktop behavior is unchanged.
+Grading sliders are embedded directly in the Generate panel and apply on release;
+the photo stays visible. Each tool remembers its panel scroll position, and the
+LUT export action is placed above the grading controls.
+Double tapping adjustment labels or sliders restores neutral/default values,
+including Kelvin 5200, fineness 2, threshold 4 and identity tone-curve points.
+Slider release commits wait for the system double-tap interval so the first tap
+does not start a render before a reset gesture can complete.
+Recipe, curve, six-axis and recipe-WB editing now opens within the Color panel
+with Apply/Cancel, rather than a modal covering the photograph. The emulator
+confirmed inline-panel navigation, cancellation, fixed preview, double-tap reset
+and LUT export together.
+The LUT panel exposes enable switches, continuous opacity sliders with double-tap
+reset to 100%, removal and undoable up/down reordering. Boundary moves are
+disabled in the UI and rejected by the shared mobile API.

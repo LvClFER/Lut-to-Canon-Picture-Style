@@ -50,10 +50,10 @@ Java_org_canonstylestudio_mobile_NativeRaw_developNative(JNIEnv* env,jclass,jbyt
         params.use_camera_wb=wbMode==0;
         params.use_auto_wb=wbMode==1;
         params.use_camera_matrix=1;
-        params.no_auto_bright=1;
+        params.no_auto_bright=0;
         params.bright=static_cast<float>(std::exp2(exposure));
-        params.gamm[0]=1.0/2.222;
-        params.gamm[1]=4.5;
+        params.gamm[0]=1.0/2.4;
+        params.gamm[1]=12.92;
         checked(processor.open_file(input.c_str()),"Open RAW");
         checked(processor.unpack(),"Unpack sensor RAW");
         const auto& sizes=processor.imgdata.sizes;
@@ -90,7 +90,7 @@ Java_org_canonstylestudio_mobile_NativeRaw_developNative(JNIEnv* env,jclass,jbyt
             +quoted(processor.imgdata.idata.make)+",\"camera_model\":"+quoted(processor.imgdata.idata.model)
             +",\"width\":"+std::to_string(image->width)+",\"height\":"+std::to_string(image->height)
             +",\"camera_crop_applied\":"+(cameraCrop?"true":"false")
-            +",\"embedded_preview_used\":false,\"sensor_exposure_applied\":true,\"canon_base_render_verified\":false}";
+            +",\"embedded_preview_used\":false,\"sensor_exposure_applied\":true,\"brightness_normalization\":\"LibRaw histogram\",\"output_transfer\":\"sRGB\",\"canon_base_render_verified\":false}";
         return env->NewStringUTF(metadata.c_str());
     } catch(const std::exception& error) {
         if(created)std::remove(output.c_str());

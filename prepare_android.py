@@ -10,7 +10,9 @@ def stage(root=None):
     destination = root / 'android/app/src/main/python'
     destination.mkdir(parents=True, exist_ok=True)
     sources = [root / name for name in ('mobile_editor.py', 'mobile_camera.py', 'android_raw.py', 'canon_engine.py', 'canon_runtime.py',
-                                        'creative_controls.py', 'project_state.py', 'nikon_np3.py')]
+                                        'creative_controls.py', 'project_state.py', 'nikon_np3.py',
+                                        'nikon_import.py', 'nikon_profile_data.py')]
+    sources += sorted((root / 'nikon_conversion').glob('*.py'))
     sources += sorted((root / 'camera_install').glob('*.py'))
     sources += sorted((root / 'basic_pf3').glob('*.pf3'))
     assert len(list((root / 'basic_pf3').glob('*.pf3'))) == 6, 'Missing bundled bases'

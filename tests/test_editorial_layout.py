@@ -12,6 +12,15 @@ import canon_style_studio as studio
 
 
 class EditorialLayoutTests(unittest.TestCase):
+    def test_double_click_resets_slider_and_commits(self):
+        from PySide6.QtTest import QTest, QSignalSpy
+        for minimum, initial, expected in ((-4, 0, 0), (1, 2, 2), (1, 4, 4)):
+            slider=studio.ValueSlider('Test',minimum,5,initial)
+            slider.setValue(5)
+            committed=QSignalSpy(slider.committed)
+            QTest.mouseDClick(slider.value_label,Qt.MouseButton.LeftButton)
+            self.assertEqual(slider.value(),expected)
+            self.assertEqual(committed.count(),1)
     @classmethod
     def setUpClass(cls):
         cls.app=QApplication.instance() or QApplication([])

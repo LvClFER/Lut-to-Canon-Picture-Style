@@ -42,7 +42,7 @@ if os.name == "nt" and getattr(sys, "frozen", False):
 import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 
-from PySide6.QtCore import Qt, Signal, QObject, QRunnable, QThreadPool, QTimer, QSize, QPoint, QPointF, QRectF, QMimeData, QCoreApplication
+from PySide6.QtCore import Qt, Signal, QObject, QRunnable, QThreadPool, QTimer, QSize, QPoint, QPointF, QRectF, QMimeData, QCoreApplication, QEvent
 QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
 from PySide6.QtGui import QAction, QKeySequence, QColor, QPainter, QPainterPath, QPen, QBrush, QPixmap, QImage, QIcon, QFont, QDrag
 from PySide6.QtWidgets import (
@@ -259,6 +259,25 @@ class CollapsibleSection(QWidget):
         self.header.setArrowType(Qt.ArrowType.DownArrow if on else Qt.ArrowType.RightArrow)
 
 
+class DoubleClickReset(QObject):
+    def __init__(self, widget, value):
+        super().__init__(widget)
+        self.widget, self.value = widget, value
+        widget.installEventFilter(self)
+        if hasattr(widget, 'lineEdit'):
+            widget.lineEdit().installEventFilter(self)
+
+    def eventFilter(self, target, event):
+        if event.type() == QEvent.Type.MouseButtonDblClick and event.button() == Qt.MouseButton.LeftButton:
+            self.widget.setValue(self.value)
+            if hasattr(self.widget, 'editingFinished'):
+                self.widget.editingFinished.emit()
+            elif hasattr(self.widget, 'sliderReleased'):
+                self.widget.sliderReleased.emit()
+            return True
+        return super().eventFilter(target, event)
+
+
 class ValueSlider(QWidget):
     changed = Signal(float)
     committed = Signal()
@@ -267,6 +286,7 @@ class ValueSlider(QWidget):
     def __init__(self, label, minimum, maximum, value, scale=1.0, suffix="", parent=None, card=False):
         super().__init__(parent)
         self.scale = float(scale); self.suffix = suffix
+        self.default_value = 0 if minimum <= 0 <= maximum else value
         lay = QVBoxLayout(self); lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(3)
         top = QHBoxLayout(); top.setContentsMargins(0,0,0,0)
         self.name = QLabel(label); self.value_label = QLabel(); self.value_label.setObjectName("Muted")
@@ -281,7 +301,17 @@ class ValueSlider(QWidget):
         self.slider.valueChanged.connect(self._changed)
         self.slider.sliderMoved.connect(lambda _v: self.interaction.emit())
         self.slider.sliderReleased.connect(self.committed.emit)
+        for target in (self.slider, self.name, self.value_label):
+            target.installEventFilter(self)
+            target.setToolTip('Double-click to reset to default')
         self._refresh()
+
+    def eventFilter(self, target, event):
+        if event.type() == QEvent.Type.MouseButtonDblClick and event.button() == Qt.MouseButton.LeftButton:
+            self.setValue(self.default_value)
+            self.committed.emit()
+            return True
+        return super().eventFilter(target, event)
 
     def _refresh(self):
         v = self.value()
@@ -404,7 +434,7 @@ class LutCard(QFrame):
         row.addWidget(self.handle); row.addWidget(self.enabled); row.addWidget(self.title, 1); row.addWidget(self.badge); row.addWidget(self.more)
         lay.addLayout(row)
         row2 = QHBoxLayout(); row2.setSpacing(6)
-        self.opacity = QSlider(Qt.Orientation.Horizontal); self.opacity.setRange(0,100); self.opacity.setValue(round(float(entry.get("opacity",1.0))*100))
+        self.opacity = QSlider(Qt.Orientation.Horizontal); self.opacity.setRange(0,100); self.opacity.setValue(round(float(entry.get("opacity",1.0))*100)); self.opacity._reset=DoubleClickReset(self.opacity,100)
         self.oplabel = QLabel(f"{self.opacity.value()}%"); self.oplabel.setObjectName("Muted"); self.oplabel.setMinimumWidth(38)
         row2.addSpacing(27); row2.addWidget(self.opacity, 1); row2.addWidget(self.oplabel); lay.addLayout(row2)
         self.enabled.toggled.connect(self._on_enabled)
@@ -916,8 +946,8 @@ class CanonStyleStudioQt(QMainWindow):
         self.exposure=ValueSlider("Exposure",-50,50,0,scale=0.1,suffix=" EV");sec.body_layout.addWidget(self.exposure)
         self.exposure.changed.connect(self.schedule_canon_render);self.exposure.committed.connect(self.commit_history)
         row=QHBoxLayout();row.addWidget(QLabel("White Balance"));self.wb_combo=QComboBox();self.wb_combo.addItems(["As Shot","Auto — Ambience","Auto — White","Daylight","Shade","Cloudy","Tungsten","White Fluorescent","Flash","Kelvin"]);self.wb_combo.currentTextChanged.connect(self.wb_changed);row.addWidget(self.wb_combo,1);sec.body_layout.addLayout(row)
-        row=QHBoxLayout();row.addWidget(QLabel("Kelvin"));self.kelvin=QSpinBox();self.kelvin.setRange(2500,10000);self.kelvin.setSingleStep(100);self.kelvin.setValue(5200);self.kelvin.valueChanged.connect(self.schedule_canon_render);self.kelvin.editingFinished.connect(self.commit_history);row.addWidget(self.kelvin);sec.body_layout.addLayout(row)
-        row=QHBoxLayout();row.addWidget(QLabel("RAW image/shot"));self.shot_index=QSpinBox();self.shot_index.setRange(0,999);self.shot_index.setValue(0);self.shot_index.setEnabled(False);self.shot_index.setToolTip("DPP4Lib opens the primary RAW image. Multi-shot selection remains available only through the LibRaw fallback.");row.addWidget(self.shot_index);sec.body_layout.addLayout(row)
+        row=QHBoxLayout();row.addWidget(QLabel("Kelvin"));self.kelvin=QSpinBox();self.kelvin.setRange(2500,10000);self.kelvin.setSingleStep(100);self.kelvin.setValue(5200);self.kelvin._reset=DoubleClickReset(self.kelvin,5200);self.kelvin.valueChanged.connect(self.schedule_canon_render);self.kelvin.editingFinished.connect(self.commit_history);row.addWidget(self.kelvin);sec.body_layout.addLayout(row)
+        row=QHBoxLayout();row.addWidget(QLabel("RAW image/shot"));self.shot_index=QSpinBox();self.shot_index.setRange(0,999);self.shot_index.setValue(0);self.shot_index._reset=DoubleClickReset(self.shot_index,0);self.shot_index.setEnabled(False);self.shot_index.setToolTip("DPP4Lib opens the primary RAW image. Multi-shot selection remains available only through the LibRaw fallback.");row.addWidget(self.shot_index);sec.body_layout.addLayout(row)
         self.ab_shift=ValueSlider("WB Shift  B ↔ A",-9,9,0);self.gm_shift=ValueSlider("WB Shift  G ↔ M",-9,9,0);sec.body_layout.addWidget(self.ab_shift);sec.body_layout.addWidget(self.gm_shift)
         for s in (self.ab_shift,self.gm_shift):s.changed.connect(self.schedule_canon_render);s.changed.connect(self._update_recipe_wb_status);s.committed.connect(self.commit_history)
         row=QHBoxLayout();self.eyedrop=QPushButton("Eyedropper WB");self.eyedrop.setCheckable(True);self.eyedrop.toggled.connect(self.toggle_eyedropper);row.addWidget(self.eyedrop);clear=QPushButton("Clear custom WB");clear.clicked.connect(self.clear_custom_wb);row.addWidget(clear);sec.body_layout.addLayout(row)

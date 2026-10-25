@@ -81,12 +81,26 @@ class Editor:
             self.project.edit.update(info['basic'])
             self.project.edit.update(basePictureStyle='Imported PF3', base_name='Imported PF3', custom_pf3=str(path))
             self.project.name = info['title']
+        elif kind == 'nikon_profile':
+            from nikon_profile_data import load_conversion_profile
+            load_conversion_profile(path)
+            destination = self.root / 'nikon-prm.bin'
+            temporary = destination.with_suffix('.tmp')
+            temporary.write_bytes(path.read_bytes())
+            temporary.replace(destination)
+        elif suffix == '.np3':
+            from nikon_import import convert_asset
+            profile = self.root / 'nikon-prm.bin'
+            if not profile.is_file():
+                raise ValueError('Select Nikon coefficient data (prm.bin) before importing NP3. No Nikon software is run or bundled.')
+            asset = convert_asset(path, profile, self.root / 'np3-cache')
+            self._remember()
+            self.project.edit.setdefault('luts', []).append(dict(
+                path=str(asset['cube']['path']), metadata=asset['metadata'], enabled=True, opacity=1.0))
         elif kind == 'lut' or suffix == '.cube':
             self.engine.parse_lut_file(path)
             self._remember()
             self.project.edit.setdefault('luts', []).append(dict(path=str(path), enabled=True, opacity=1.0))
-        elif suffix == '.np3':
-            raise ValueError('NP3 colour conversion is still under development; no approximate conversion is applied')
         else:
             self._source(path)
             self._remember()
@@ -151,6 +165,14 @@ class Editor:
             self.project.edit['luts'][index].update(opacity=opacity, enabled=enabled)
         return self.state()
 
+    def move_lut(self, index, offset):
+        entries = self.project.edit['luts']
+        if type(index) is not int or type(offset) is not int or offset not in (-1, 1) or not 0 <= index < len(entries) or not 0 <= index + offset < len(entries):
+            raise ValueError('Invalid LUT move')
+        self._remember()
+        entries[index], entries[index + offset] = entries[index + offset], entries[index]
+        return self.state()
+
     def undo(self, redo=False):
         from project_state import ProjectDocument
         source, target = (self.future, self.history) if redo else (self.history, self.future)
@@ -211,6 +233,13 @@ class Editor:
         if embedded:
             raise ValueError('Embedded RAW previews cannot be used for style evaluation')
         return source, metadata
+
+    def export_cube(self, output):
+        path = Path(output)
+        if path.exists():
+            raise ValueError('Refusing to overwrite an existing private export')
+        self.renderer.export_cube(path, self._luts(), self.project.edit, 33, self.project.name)
+        return str(path)
 
     def export(self, output, project=True):
         path = Path(output)

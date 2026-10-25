@@ -22,10 +22,17 @@ public class EditorActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private PyObject editor;
     private JSONObject state;
-    private LinearLayout page, controls, references;
+    private LinearLayout page, controls, references, toolHost;
+    private String selectedTool = "RAW";
+    private ScrollView toolScroll;
+    private final java.util.Map<String,Integer> toolPositions=new java.util.HashMap<>();
+    private final java.util.Map<String,View> toolPanels = new java.util.LinkedHashMap<>();
+    private final java.util.Map<String,Button> toolButtons = new java.util.LinkedHashMap<>();
     private TextView status;
     private ComparisonView comparison;
     private boolean busy = true;
+    private final Handler editTimer=new Handler(Looper.getMainLooper());
+    private Runnable pendingAdjustment;
     private String pendingKind = "auto", pendingExport;
     private String cameraRequest, cameraSource;
     private UsbDevice cameraDevice;
@@ -44,6 +51,7 @@ public class EditorActivity extends Activity {
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
         if(saved!=null) {
+            selectedTool=saved.getString("selectedTool","RAW");
             cameraRequest=saved.getString("cameraRequest");cameraSource=saved.getString("cameraSource");
             cameraSlot=saved.getInt("cameraSlot");cameraDevice=saved.getParcelable("cameraDevice");
             cameraRunning=saved.getBoolean("cameraRunning");
@@ -53,32 +61,30 @@ public class EditorActivity extends Activity {
         else registerReceiver(usbPermission,permissionFilter);
         getWindow().setStatusBarColor(Color.WHITE);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
-        ScrollView scroll = new ScrollView(this);
-        page = column(); page.setPadding(20, 20, 20, 30); page.setBackgroundColor(Color.WHITE);
-        scroll.addView(page); setContentView(scroll);
-        if(Build.VERSION.SDK_INT>=35)scroll.setOnApplyWindowInsetsListener((view,insets)->{
-            page.setPadding(20,20+insets.getSystemWindowInsetTop(),20,30+insets.getSystemWindowInsetBottom());return insets;
+        page = column(); page.setPadding(12, 0, 12, 0); page.setBackgroundColor(Color.WHITE);
+        setContentView(page);
+        page.setOnApplyWindowInsetsListener((view,insets)->{
+            page.setPadding(12,insets.getSystemWindowInsetTop(),12,insets.getSystemWindowInsetBottom());return insets;
         });
-        TextView title = text("Canon Style Studio", 26); title.setTextColor(RED); page.addView(title);
         LinearLayout actions = row(); page.addView(actions);
         button(actions, "Open", () -> choose("auto"));
-        button(actions, "+ LUT", () -> choose("lut"));
+        button(actions, "Undo", () -> run("undo", false));
         button(actions, "Save", this::saveDialog);
-        LinearLayout history = row(); HorizontalScrollView historyScroll = new HorizontalScrollView(this); historyScroll.addView(history); page.addView(historyScroll);
-        button(history, "Undo", () -> run("undo", false));
-        button(history, "Redo", () -> run("undo", true));
-        for (String slot : new String[]{"A", "B", "C"}) {
-            Button snapshot = button(history, slot, () -> new AlertDialog.Builder(this)
-                .setTitle("Snapshot " + slot).setItems(new String[]{"Store current edit", "Restore"},
-                    (d, which) -> run("snapshot", slot, which == 1)).show());
-        }
+        button(actions, "More", this::moreMenu);
         comparison = new ComparisonView();
-        page.addView(comparison, new LinearLayout.LayoutParams(-1, (int)(getResources().getDisplayMetrics().heightPixels * .48)));
-        references = row(); HorizontalScrollView strip = new HorizontalScrollView(this);
-        strip.addView(references); page.addView(strip);
-        status = text("Starting editor…", 13); status.setTag("editor-status");page.addView(status);
-        controls = column(); page.addView(controls);
-        button(page, "Send to camera · experimental", this::showCameras);
+        comparison.setTag("photo-preview");
+        page.addView(comparison, new LinearLayout.LayoutParams(-1, 0, 1));
+        status = text("Starting editor…", 11); status.setTag("editor-status");page.addView(status);
+        toolHost = column();
+        toolScroll = new ScrollView(this); toolScroll.addView(toolHost);
+        page.addView(toolScroll, new LinearLayout.LayoutParams(-1, (int)(getResources().getDisplayMetrics().heightPixels * .28)));
+        LinearLayout tools = row();page.addView(tools);
+        for(String name:new String[]{"RAW","Styles","Color","LUTs","Generate"}) {
+            Button tab=button(tools,name,()->selectTool(name));tab.setTag("tool-"+name);
+            tab.setTextSize(12);tab.setMinWidth(0);tab.setMinimumWidth(0);tab.setPadding(0,4,0,4);
+            tab.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1));toolButtons.put(name,tab);
+        }
+        references = row();
         worker.execute(() -> {
             try {
                 if (!Python.isStarted()) Python.start(new AndroidPlatform(getApplicationContext()));
@@ -89,6 +95,34 @@ public class EditorActivity extends Activity {
         });
     }
 
+    private void selectTool(String name) {
+        toolPositions.put(selectedTool,toolScroll.getScrollY());
+        selectedTool=name;
+        for(java.util.Map.Entry<String,View> entry:toolPanels.entrySet())
+            entry.getValue().setVisibility(entry.getKey().equals(name)?View.VISIBLE:View.GONE);
+        for(java.util.Map.Entry<String,Button> entry:toolButtons.entrySet())
+            entry.getValue().setTextColor(entry.getKey().equals(name)?RED:Color.DKGRAY);
+        int position=toolPositions.getOrDefault(name,0);
+        toolScroll.post(()->toolScroll.scrollTo(0,position));
+    }
+    private void tool(String name) {
+        controls=column();controls.setPadding(12,4,12,8);controls.setBackgroundColor(Color.rgb(244,242,238));
+        toolHost.addView(controls);toolPanels.put(name,controls);
+        controls.addView(text(name.equals("RAW")?"RAW development":name,18));
+    }
+    private void moreMenu() {
+        new AlertDialog.Builder(this).setItems(new String[]{"Redo","References","Snapshot A","Snapshot B","Snapshot C","Send to camera"},(d,index)->{
+            if(index==0)run("undo",true);
+            else if(index==1){
+                try {JSONArray images=state.getJSONArray("references");String[] names=new String[images.length()];
+                    for(int i=0;i<names.length;i++)names[i]=new File(images.getString(i)).getName();
+                    new AlertDialog.Builder(this).setTitle("Reference images").setItems(names,(dialog,i)->run("select_reference",i)).show();
+                }catch(JSONException e){error(e);}
+            } else if(index==5)showCameras();
+            else {String slot=new String[]{"A","B","C"}[index-2];new AlertDialog.Builder(this).setTitle("Snapshot "+slot)
+                .setItems(new String[]{"Store current edit","Restore"},(dialog,i)->run("snapshot",slot,i==1)).show();}
+        }).show();
+    }
     private LinearLayout column() { LinearLayout v = new LinearLayout(this); v.setOrientation(LinearLayout.VERTICAL); return v; }
     private LinearLayout row() { LinearLayout v = new LinearLayout(this); v.setOrientation(LinearLayout.HORIZONTAL); return v; }
     private TextView text(String value, int size) { TextView v = new TextView(this); v.setText(value); v.setTextSize(size); v.setTextColor(Color.rgb(28,28,28)); v.setPadding(4,8,4,8); return v; }
@@ -126,7 +160,19 @@ public class EditorActivity extends Activity {
                 final int index = i;
                 button(references, new File(images.getString(i)).getName(), () -> run("select_reference", index));
             }
-            controls.removeAllViews(); JSONObject edit = updated.getJSONObject("edit");
+            toolHost.removeAllViews(); toolPanels.clear(); JSONObject edit = updated.getJSONObject("edit");
+            tool("RAW");
+            slider("Exposure", "raw_exposure", -5, 5, 10, edit);
+            button(controls, "White balance: " + edit.optString("raw_wb_mode", "As Shot"), () ->
+                new AlertDialog.Builder(this).setItems(new String[]{"As Shot", "Auto", "Kelvin"}, (d, i) ->
+                    update("raw_wb_mode", new String[]{"As Shot", "Auto", "Kelvin"}[i])).show());
+            slider("Kelvin", "raw_kelvin", 2000, 15000, .01, edit);
+            slider("WB shift B ↔ A", "wb_ab_shift", -9, 9, 1, edit);
+            slider("WB shift G ↔ M", "wb_gm_shift", -9, 9, 1, edit);
+            tool("Styles");
+            button(controls,"Import PF3",()->choose("auto"));
+            button(controls,"Import NP3",()->choose("auto"));
+            button(controls,"NP3 setup: select prm.bin",()->choose("nikon_profile"));
             TextView heading = text("Picture Style", 22); controls.addView(heading);
             Spinner base = new Spinner(this);
             String current = edit.optString("basePictureStyle", "Neutral");
@@ -148,41 +194,74 @@ public class EditorActivity extends Activity {
             slider("Sharpness strength", "sharp_strength", 0, 7, 1, edit);
             slider("Fineness", "fineness", 1, 5, 1, edit);
             slider("Threshold", "threshold", 1, 5, 1, edit);
-            controls.addView(text("Preview development", 22));
-            slider("Exposure", "raw_exposure", -5, 5, 10, edit);
-            button(controls, "White balance: " + edit.optString("raw_wb_mode", "As Shot"), () ->
-                new AlertDialog.Builder(this).setItems(new String[]{"As Shot", "Auto", "Kelvin"}, (d, i) ->
-                    update("raw_wb_mode", new String[]{"As Shot", "Auto", "Kelvin"}[i])).show());
-            slider("Kelvin", "raw_kelvin", 2000, 15000, .01, edit);
-            slider("WB shift B ↔ A", "wb_ab_shift", -9, 9, 1, edit);
-            slider("WB shift G ↔ M", "wb_gm_shift", -9, 9, 1, edit);
-            controls.addView(text("Creative color", 22));
+            tool("Color");
             JSONObject creative = edit.getJSONObject("creative");
             for (String key : new String[]{"recipe_highlight", "recipe_shadow", "recipe_color"})
                 creativeSlider(key, creative);
-            button(controls, "Tone curve, six color axes and chrome", () -> settingsDialog("creative", creative));
-            button(controls, "Recipe white balance", () -> settingsDialog("recipe_wb", edit.optJSONObject("recipe_wb")));
-            controls.addView(text("LUT stack", 22)); JSONArray luts = edit.getJSONArray("luts");
+            button(controls, "Tone curve, six color axes and chrome", () -> settingsPanel("creative", creative)).setTag("color-adjustments");
+            button(controls, "Recipe white balance", () -> settingsPanel("recipe_wb", edit.optJSONObject("recipe_wb")));
+            tool("LUTs");
+            button(controls,"Import LUT (.cube / Hald)",()->choose("lut"));
+            JSONArray luts = edit.getJSONArray("luts");
             for (int i=0;i<luts.length();i++) {
                 final int index=i; JSONObject lut=luts.getJSONObject(i);
-                button(controls, new File(lut.getString("path")).getName() + " · " + Math.round(lut.optDouble("opacity", 1)*100) + "%", () ->
-                    new AlertDialog.Builder(this).setItems(new String[]{"Enable", "Disable", "Opacity 25%", "Opacity 50%", "Opacity 100%", "Remove"},
-                        (d, item) -> run("lut", index, item==2?.25:item==3?.5:1.0, item!=1, item==5)).show());
+                Switch enabled=new Switch(this);enabled.setText(new File(lut.getString("path")).getName());
+                enabled.setChecked(lut.optBoolean("enabled",true));controls.addView(enabled);
+                enabled.setOnCheckedChangeListener((view,on)->run("lut",index,lut.optDouble("opacity",1),on,false));
+                TextView opacity=text("Opacity: "+Math.round(lut.optDouble("opacity",1)*100)+"%",14);controls.addView(opacity);
+                SeekBar amount=new SeekBar(this);amount.setTag("lut-opacity-"+index);amount.setMax(100);amount.setProgress((int)Math.round(lut.optDouble("opacity",1)*100));
+                amount.setContentDescription("LUT opacity");amount.setThumbTintList(ColorStateList.valueOf(RED));amount.setProgressTintList(ColorStateList.valueOf(RED));controls.addView(amount);
+                Runnable reset=()->run("lut",index,1.0,lut.optBoolean("enabled",true),false);
+                doubleTapReset(opacity,reset);doubleTapReset(amount,reset);
+                amount.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+                    public void onStartTrackingTouch(SeekBar view){}
+                    public void onProgressChanged(SeekBar view,int value,boolean user){opacity.setText("Opacity: "+value+"%");}
+                    public void onStopTrackingTouch(SeekBar view){double value=view.getProgress()/100.0;commitAdjustment(()->run("lut",index,value,lut.optBoolean("enabled",true),false));}
+                });
+                LinearLayout order=row();controls.addView(order);
+                Button up=button(order,"Move up",()->run("move_lut",index,-1));up.setEnabled(index>0);
+                Button down=button(order,"Move down",()->run("move_lut",index,1));down.setEnabled(index<luts.length()-1);
+                button(order,"Remove",()->run("lut",index,1.0,true,true));
             }
+            tool("Generate");
+            controls.addView(text("Adjust grading, then export the combined colour LUT. RAW exposure and sharpening are excluded.",12));
+            button(controls,"Export LUT (.cube)",this::exportCube);
+            for(String key:new String[]{"brightness","contrast","saturation","hue","temperature","tint","red_gamma","green_gamma","blue_gamma","toe","mid_contrast","shoulder","lightness","density"})
+                gradingSlider(creative,key);
+            selectTool(selectedTool);
         } catch (Exception e) { error(e); }
     }
+    private void doubleTapReset(View view,Runnable reset) {
+        view.setClickable(true);
+        GestureDetector detector=new GestureDetector(this,new GestureDetector.SimpleOnGestureListener(){
+            @Override public boolean onDoubleTap(MotionEvent event){if(pendingAdjustment!=null)editTimer.removeCallbacks(pendingAdjustment);if(!busy)reset.run();return true;}
+        });
+        view.setOnTouchListener((target,event)->detector.onTouchEvent(event));
+    }
+    private void commitAdjustment(Runnable action) {
+        if(pendingAdjustment!=null)editTimer.removeCallbacks(pendingAdjustment);
+        pendingAdjustment=action;editTimer.postDelayed(action,ViewConfiguration.getDoubleTapTimeout());
+    }
+    private int defaultValue(String key) {
+        if(key.equals("raw_kelvin"))return 5200;
+        if(key.equals("fineness"))return 2;
+        if(key.equals("threshold"))return 4;
+        return 0;
+    }
     private void slider(String name, String key, double min, double max, double scale, JSONObject edit) {
-        double value=edit.optDouble(key, min); TextView label=text(name+": "+value, 14); controls.addView(label);
-        SeekBar bar=new SeekBar(this); bar.setMax((int)Math.round((max-min)*scale)); bar.setProgress((int)Math.round((value-min)*scale));
+        double value=edit.optDouble(key, min); TextView label=text(name+": "+value, 14); label.setTag("reset-"+key);controls.addView(label);
+        SeekBar bar=new SeekBar(this);bar.setTag("adjustment-"+key); bar.setMax((int)Math.round((max-min)*scale)); bar.setProgress((int)Math.round((value-min)*scale));
         bar.setContentDescription(name);bar.setThumbTintList(ColorStateList.valueOf(RED)); bar.setProgressTintList(ColorStateList.valueOf(RED)); controls.addView(bar);
+        Runnable reset=()->{bar.setProgress((int)Math.round((defaultValue(key)-min)*scale));update(key,defaultValue(key));};
+        doubleTapReset(bar,reset);doubleTapReset(label,reset);
         bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             public void onStartTrackingTouch(SeekBar b) {}
             public void onProgressChanged(SeekBar b,int p,boolean user) { label.setText(name+": "+(min+p/scale)); }
-            public void onStopTrackingTouch(SeekBar b) { double v=min+b.getProgress()/scale; update(key,key.equals("raw_exposure")?v:Math.round(v)); }
+            public void onStopTrackingTouch(SeekBar b) { double v=min+b.getProgress()/scale; commitAdjustment(()->update(key,key.equals("raw_exposure")?v:Math.round(v))); }
         });
     }
     private void creativeSlider(String key, JSONObject creative) {
-        button(controls, key.replace('_',' ')+": "+creative.optInt(key), () -> settingsDialog("creative", creative));
+        button(controls, key.replace('_',' ')+": "+creative.optInt(key), () -> settingsPanel("creative", creative));
     }
     private void setNumber(JSONObject object,String key,double value) {
         try { object.put(key,value); } catch(JSONException error) { throw new IllegalArgumentException(error); }
@@ -191,6 +270,9 @@ public class EditorActivity extends Activity {
         TextView label=text(name+": "+value,14);box.addView(label);
         SeekBar slider=new SeekBar(this);slider.setMax(max-min);slider.setProgress(value-min);
         slider.setContentDescription(name);slider.setThumbTintList(ColorStateList.valueOf(RED));slider.setProgressTintList(ColorStateList.valueOf(RED));box.addView(slider);
+        int neutral=name.startsWith("Input ")?Integer.parseInt(name.substring(6,name.indexOf('%'))):0;
+        Runnable reset=()->{int target=Math.max(min,Math.min(max,neutral));slider.setProgress(target-min);label.setText(name+": "+target);apply.accept(target);};
+        doubleTapReset(slider,reset);doubleTapReset(label,reset);
         slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             public void onStartTrackingTouch(SeekBar view) {}
             public void onStopTrackingTouch(SeekBar view) {}
@@ -199,10 +281,10 @@ public class EditorActivity extends Activity {
             }
         });
     }
-    private void settingsDialog(String key,JSONObject object) {
+    private void settingsPanel(String key,JSONObject object) {
         try {
             JSONObject settings=new JSONObject(object==null?"{}":object.toString());
-            LinearLayout box=column();box.setPadding(20,10,20,10);ScrollView scroll=new ScrollView(this);scroll.addView(box);
+            LinearLayout box=column();box.setPadding(8,4,8,8);
             if(key.equals("recipe_wb")) {
                 for(String axis:new String[]{"red","blue"})
                     localSlider(box,axis,-9,9,settings.optInt(axis),v->setNumber(settings,axis,v));
@@ -236,9 +318,44 @@ public class EditorActivity extends Activity {
                     });box.addView(level);
                 }
             }
-            new AlertDialog.Builder(this).setTitle(key.replace('_',' ')).setView(scroll).setNegativeButton("Cancel",null)
-                .setPositiveButton("Apply",(dialog,which)->update(key,settings)).show();
+            LinearLayout panel=(LinearLayout)toolPanels.get("Color");panel.removeAllViews();
+            LinearLayout actions=row();panel.addView(actions);
+            button(actions,"Apply",()->update(key,settings));
+            button(actions,"Cancel",()->showState(state)).setTag("cancel-color-adjustments");
+            panel.addView(box);toolScroll.scrollTo(0,0);
         } catch(JSONException error){error(error);}
+    }
+    private void gradingSlider(JSONObject creative,String key) throws JSONException {
+        JSONObject grading=creative.optJSONObject("grading");int limit=key.equals("hue")?180:100;
+        int value=grading==null?0:grading.optInt(key);
+        TextView label=text(key.replace('_',' ')+": "+value,14);controls.addView(label);
+        SeekBar slider=new SeekBar(this);slider.setTag("grading-"+key);slider.setContentDescription(key.replace('_',' '));
+        slider.setMax(limit*2);slider.setProgress(value+limit);
+        slider.setThumbTintList(ColorStateList.valueOf(RED));slider.setProgressTintList(ColorStateList.valueOf(RED));controls.addView(slider);
+        Runnable reset=()->{try {JSONObject copy=new JSONObject(creative.toString()),values=copy.optJSONObject("grading");
+            if(values==null){values=new JSONObject();copy.put("grading",values);}values.put(key,0);update("creative",copy);
+        }catch(JSONException e){error(e);}};
+        doubleTapReset(slider,reset);doubleTapReset(label,reset);
+        slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onStartTrackingTouch(SeekBar view){}
+            public void onProgressChanged(SeekBar view,int progress,boolean user){label.setText(key.replace('_',' ')+": "+(progress-limit));}
+            public void onStopTrackingTouch(SeekBar view){
+                try {JSONObject copy=new JSONObject(creative.toString()),values=copy.optJSONObject("grading");
+                    if(values==null){values=new JSONObject();copy.put("grading",values);}
+                    values.put(key,view.getProgress()-limit);commitAdjustment(()->update("creative",copy));
+                }catch(JSONException e){error(e);}
+            }
+        });
+    }
+    private void exportCube() {
+        busy=true;status.setText("Generating LUT…");
+        worker.execute(()->{try {
+            File output=new File(getCacheDir(),java.util.UUID.randomUUID()+".cube");
+            pendingExport=editor.callAttr("export_cube",output.toString()).toString();
+            runOnUiThread(()->{busy=false;Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType("application/octet-stream");
+                intent.putExtra(Intent.EXTRA_TITLE,"Custom look.cube");startActivityForResult(intent,2);});
+        }catch(Exception e){error(e);}});
     }
     private void choose(String kind) {
         pendingKind=kind; Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT); intent.setType("*/*");
@@ -368,6 +485,7 @@ public class EditorActivity extends Activity {
             .setNeutralButton("Close",(d,w)->finish()).show();
     }
     @Override protected void onSaveInstanceState(Bundle out) {
+        out.putString("selectedTool",selectedTool);
         super.onSaveInstanceState(out);out.putString("cameraRequest",cameraRequest);out.putString("cameraSource",cameraSource);
         out.putInt("cameraSlot",cameraSlot);out.putParcelable("cameraDevice",cameraDevice);
         out.putBoolean("cameraRunning",cameraRunning);
