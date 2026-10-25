@@ -625,3 +625,21 @@ both render-proof JSON files and `shared-helper-proof.json`. This establishes
 sampled photographic-block parity and absence of observation-induced pixel
 changes, not every pixel or the complete independent Canon renderer. No camera
 was accessed and no application preview correction was added.
+
+
+## Continuous block through exposure and signed clipping, 25 October
+
+The photographic block replay now extends through the optional Q14 factor and
+following signed channel bounds. All 2,048 observed tuples matched exactly.
+The fixture used mode 1, factor 16384 and bounds -131071–131071; these are observed
+settings, not universal camera constants. A separate synthetic native run tested
+79 tuples with factors 4096, 8192, 16384, 32768 and 65536 and two bound pairs.
+Every output matched truncation toward zero by 16384 followed by clipping.
+The independent helper requires explicit factor and bounds.
+
+Evidence is in `raw-chroma-clipped-20261025` and
+`raw-mix-exposure-20261025`, each with `trace.json` and `shared-helper-proof.json`.
+Both RAW source hashes remained unchanged; no camera was accessed. Regression
+checks cover signed fractional rounding and clipping. This extends sampled
+continuous-block parity; later lookup operations, table/coefficient construction
+and the full renderer remain unverified. No production preview changed.

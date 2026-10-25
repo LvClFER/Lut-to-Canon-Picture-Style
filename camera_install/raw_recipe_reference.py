@@ -68,6 +68,22 @@ def mix_chroma_luma(channels, weights, chroma, maximum):
     return [base + first, base + second, mixed]
 
 
+def scale_mixed_channels(values, factor, minimum, maximum):
+    """Observed Q14 scaling and signed bounds following the chroma mix."""
+    if len(values) != 3 or any(type(v) is not int or not -131072 <= v <= 131072 for v in values):
+        raise ValueError('Require three bounded signed mixed channels')
+    if type(factor) is not int or not 0 <= factor <= 65536:
+        raise ValueError('Require a bounded positive Q14 factor')
+    if type(minimum) is not int or type(maximum) is not int or not -131071 <= minimum <= maximum <= 131071:
+        raise ValueError('Invalid signed channel bounds')
+    output = []
+    for value in values:
+        product = value * factor
+        scaled = product // 16384 if product >= 0 else -((-product) // 16384)
+        output.append(max(minimum, min(maximum, scaled)))
+    return output
+
+
 def chroma_from_rgb16(rgb):
     if len(rgb)!=3 or any(type(v) is not int or not 0<=v<=65535 for v in rgb):
         raise ValueError('Require three unsigned RGB16 values')
