@@ -550,3 +550,23 @@ case. The source RAW hash remained unchanged. Evidence is in
 No wrapper around `min` or production correction was added. The next missing
 operation is the sign-dependent chroma gain consuming this minimum; table
 construction and full rendering remain unverified.
+
+
+## Sign-dependent chroma gain, 25 October
+
+The default post-tone chroma branch first truncates `chroma * amount / 1024`,
+then multiplies by a sign-selected coefficient and truncates again by 128.
+Each of the two chroma channels has separate positive and nonpositive gains.
+The sign is tested on the original chroma value, and this stage precedes later
+clipping. Combining the two divisions into one changes rounding and is incorrect.
+
+The independent helper accepts signed RGB16-range chroma, Q10 amounts 0–1024
+and Q7 coefficients 0–256. An isolated native child checked 92 vectors including
+zero, signed limits, fractional boundaries, unequal gains and deterministic
+random inputs: every pair matched. Private synthetic coefficient storage was
+used, the original RAW hash remained unchanged, and no camera was accessed.
+Evidence is in `raw-chroma-gain-20261025/trace.json` and
+`shared-helper-proof.json`. Regression tests cover sign selection, two-stage
+rounding and validation. This is the measured default branch only; downstream
+clipping, alternate processing modes, table construction and full rendering
+remain unverified. Production preview output is unchanged.

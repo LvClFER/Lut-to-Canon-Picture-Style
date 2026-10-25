@@ -34,6 +34,23 @@ def auxiliary_indices(rgb, gains=None):
     return luma, min(1023, abs(difference)), min(1023, max(0, (green - red) // 32)), difference >= 0
 
 
+def scale_chroma_pair(chroma, amount, gains):
+    """Observed sign-dependent Q10 then Q7 gain, before subsequent clipping."""
+    if len(chroma) != 2 or any(type(v) is not int or not -32768 <= v <= 32767 for v in chroma):
+        raise ValueError('Require two signed 16-bit chroma values')
+    if type(amount) is not int or not 0 <= amount <= 1024:
+        raise ValueError('Require a bounded Q10 amount')
+    if len(gains) != 4 or any(type(v) is not int or not 0 <= v <= 256 for v in gains):
+        raise ValueError('Require four bounded Q7 gains')
+    result = []
+    for index, value in enumerate(chroma):
+        product = value * amount
+        scaled = product // 1024 if product >= 0 else -((-product) // 1024)
+        product = scaled * gains[index * 2 + (0 if value > 0 else 1)]
+        result.append(product // 128 if product >= 0 else -((-product) // 128))
+    return result
+
+
 def chroma_from_rgb16(rgb):
     if len(rgb)!=3 or any(type(v) is not int or not 0<=v<=65535 for v in rgb):
         raise ValueError('Require three unsigned RGB16 values')

@@ -4,6 +4,15 @@ from camera_install.raw_recipe_reference import chroma_from_rgb16,rgb16_from_ycb
 
 
 class RawRecipeReferenceTests(unittest.TestCase):
+    def test_chroma_gain_uses_sign_and_truncates_each_stage(self):
+        from camera_install.raw_recipe_reference import scale_chroma_pair
+        self.assertEqual(scale_chroma_pair([1025,-1025],1023,[64,128,192,256]),[511,-2046])
+        self.assertEqual(scale_chroma_pair([-1,1],1023,[64,128,192,256]),[0,0])
+        self.assertEqual(scale_chroma_pair([-32768,32767],1024,[256]*4),[-65536,65534])
+        for args in (([True,0],0,[0]*4),([32768,0],0,[0]*4),([0,0],1025,[0]*4),
+                     ([0,0],True,[0]*4),([0,0],0,[257]*4),([0,0],0,[0]*3)):
+            with self.assertRaises(ValueError):scale_chroma_pair(*args)
+
     def test_auxiliary_indices_use_truncated_difference_for_table_sign(self):
         from camera_install.raw_recipe_reference import auxiliary_indices
         self.assertEqual(auxiliary_indices([0,0,31]),(0,0,0,True))
