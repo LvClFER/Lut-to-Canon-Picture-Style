@@ -719,3 +719,25 @@ no camera was accessed. Evidence: `raw-dominant-chroma-20261025` and
 `raw-dominant-gain-20261025`, each with `trace.json` and
 `shared-helper-proof.json`. Actual table construction, subsequent signed
 corrections and whole-render parity remain unverified; production is unchanged.
+
+
+## User RP scenes and portrait dispatch limitation, 25 October
+
+The longer continuous block through common gain matched another 2,048 observed
+executions from the EOS R fixture. On the user's RP landscape files IMG_2433.CR3
+and IMG_2440.CR3, 2,048 executions per file also matched exactly, with respectively
+2,045 and 2,036 distinct input tuples. Each file used its own privately observed
+tables and coefficients; no EOS R constants were substituted. All RAW hashes
+remained unchanged. Evidence: `raw-chroma-common-gain-20261025`,
+`raw-chroma-rp-2433-20261025` and `raw-chroma-rp-2440-20261025`.
+The dominant gain table was constant 128 for the initial fixture, so nonneutral
+gain remains covered by the separate synthetic tests, not that photograph.
+
+IMG_2408.CR3 (portrait) reached the colour-matching stage but none of the seven
+observed scalar checkpoints. The same checkpoints were hit on both landscape
+files. Consequently, no block-parity claim is made for that portrait. A different
+size/orientation-dependent processing route (potentially vectorized) must be
+traced; attributing the difference solely to camera model would be unsupported.
+Evidence: `raw-rp-path-20261025`, `raw-rp-path-2433-20261025` and
+`raw-rp-path-2440-20261025`. The failed initial portrait replay is an absent-route
+result, not zero-error validation. No app build or camera session was performed.
