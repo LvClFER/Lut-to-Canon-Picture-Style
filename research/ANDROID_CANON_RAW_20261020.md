@@ -1339,3 +1339,22 @@ raw-model-selector-boundaries-20261025/{oracle-proof,source-proof,render-proof-o
 117 internal groups do not imply 117 physically tested cameras. This does
 not establish the mapping from RAW metadata to groups, complete tone-table
 generation or Canon colour parity. Installed APK/EXE builds are unchanged.
+
+
+### Canon model identifier to tone-group mapping
+
+The extractor resolves its input model ID through a bounded list of 118
+identifier/group pairs. Reconstructed that metadata lookup independently.
+An owned-process native comparison covered all 118 known identifiers plus
+unknown probes (122 distinct inputs), with zero mismatches. The RP ID
+0x80000433 maps to 93; EOS R 0x80000424 maps to 91, matching the prior real
+RAW observations. Unknown identifiers become explicit errors in the Python
+reference rather than a guessed camera fallback.
+
+Evidence: raw-model-group-map-20261025/mapping-proof.json, source-proof.json
+and render-proof-observed.json. This lookup contains identifiers only, not
+colour or tone calibration arrays. It is still offline research: the model
+list includes groups 118 and 119 outside the selector's supported 1..117 range, and
+resolving a model ID does not prove that its renderer is supported. The
+metadata path from a RAW file to the extractor inputs remains to be traced.
+All 28 reference tests pass. Installed builds were not changed.

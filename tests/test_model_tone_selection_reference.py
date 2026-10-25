@@ -1,6 +1,6 @@
 import unittest
 
-from camera_install.model_tone_selection_reference import model_tone_record_index as select
+from camera_install.model_tone_selection_reference import model_tone_record_index as select, model_tone_group
 
 
 class ModelToneSelectionTests(unittest.TestCase):
@@ -204,3 +204,10 @@ class ModelToneSelectionTests(unittest.TestCase):
     def test_undefined_native_path_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "undefined"):
             select(*[78, 0, 0.008, 1, 0, 0])
+
+    def test_model_identifier_mapping(self):
+        for model_id, group in ((0x80000424, 91), (0x80000433, 93)):
+            self.assertEqual(model_tone_group(model_id), group)
+        for invalid in (0, 1, -1, 0xffffffff, 2**32, True, "EOS RP"):
+            with self.subTest(model_id=invalid), self.assertRaises(ValueError):
+                model_tone_group(invalid)
