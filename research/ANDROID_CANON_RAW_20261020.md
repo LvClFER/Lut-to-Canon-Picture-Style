@@ -1358,3 +1358,25 @@ list includes groups 118 and 119 outside the selector's supported 1..117 range, 
 resolving a model ID does not prove that its renderer is supported. The
 metadata path from a RAW file to the extractor inputs remains to be traced.
 All 28 reference tests pass. Installed builds were not changed.
+
+
+### RAW metadata provenance of selector inputs
+
+Fresh extractor-entry observations on IMG_2408, IMG_2440 and IMG_2134
+match the CR3 CMT2 TIFF ExposureTime (33434) and ISO (34855) tags exactly
+after the shutter value is quantized to float32. The CMT3 model ID tag
+0x10 also matches the extractor model ID, 0x80000433. Each file supplied
+five extractor and five selector calls; all agree with the independently
+parsed metadata and resolve through group 93 to record 55.
+
+Renamed the offline selector parameter from ambiguous exposure to
+shutter_seconds: the observed argument is capture duration, not editor EV.
+Three capture-metadata regression fixtures cover this distinction.
+Evidence: tone-input-metadata-proof-20261025.json and the three
+raw-tone-input-metadata-img_*-20261025 probe directories, each with source
+hash preservation and successful render proof. No physical camera access.
+
+Scope: these are three RP captures only. Selector/flags/option values are
+observed as 1/0/0; their complete metadata provenance and alternate paths
+remain unresolved. This does not supply model calibration curves or make
+the independent renderer complete. Installed applications are unchanged.

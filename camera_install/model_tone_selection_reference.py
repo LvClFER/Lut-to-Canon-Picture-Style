@@ -8,59 +8,59 @@ def _u32(value):
 def _s32(value):
     return (value + 2147483648) % 4294967296 - 2147483648
 
-def model_tone_record_index(model_group, iso, exposure, selector, flags, option):
-    """Select a model-table record using the observed bounded scalar inputs."""
+def model_tone_record_index(model_group, iso, shutter_seconds, selector, flags, option):
+    """Select a model-table record; shutter_seconds is capture time, not EV."""
     if type(model_group) is not int or not 1 <= model_group <= 117:
         raise ValueError('Unsupported model group')
     if any((type(v) is not int or not 0 <= v <= 4294967295 for v in (iso, selector, flags))):
         raise ValueError('Require unsigned ISO, selector and flags')
     if type(option) is not int or not 0 <= option <= 65535:
         raise ValueError('Require unsigned 16-bit option')
-    if type(exposure) not in (int, float) or abs(exposure) > 3.4028234663852886e+38 or not math.isfinite(exposure):
-        raise ValueError('Require a finite float32 exposure input')
-    exposure = struct.unpack('<f', struct.pack('<f', exposure))[0]
+    if type(shutter_seconds) not in (int, float) or abs(shutter_seconds) > 3.4028234663852886e+38 or not math.isfinite(shutter_seconds):
+        raise ValueError('Require finite float32 shutter seconds')
+    shutter_seconds = struct.unpack('<f', struct.pack('<f', shutter_seconds))[0]
     if model_group in (1,):
         if flags != 0:
             if _s32(iso) < 200:
-                if 1.0 > exposure:
+                if 1.0 > shutter_seconds:
                     return 0
-                return int(4.0 <= exposure) + 1
+                return int(4.0 <= shutter_seconds) + 1
             if _s32(iso) >= 1600:
                 if _s32(iso) >= 2500:
-                    if 1.0 <= exposure:
+                    if 1.0 <= shutter_seconds:
                         return 8
                     return 7
-                if 1.0 <= exposure:
+                if 1.0 <= shutter_seconds:
                     return 8
                 return 6
-            if 1.0 > exposure:
+            if 1.0 > shutter_seconds:
                 return 6
-            return int(4.0 <= exposure) + 7
+            return int(4.0 <= shutter_seconds) + 7
         if _s32(iso) >= 200:
             if _s32(iso) >= 250:
                 if _s32(iso) >= 1600:
-                    if 1.0 <= exposure:
+                    if 1.0 <= shutter_seconds:
                         return 5
                     return 3
-                if 1.0 > exposure:
+                if 1.0 > shutter_seconds:
                     return 3
-                return int(4.0 <= exposure) + 4
-            if 1.0 > exposure:
+                return int(4.0 <= shutter_seconds) + 4
+            if 1.0 > shutter_seconds:
                 return 3
-            return 3 if 4.0 > exposure else 5
-        if 1.0 > exposure:
+            return 3 if 4.0 > shutter_seconds else 5
+        if 1.0 > shutter_seconds:
             return 0
-        return int(4.0 <= exposure) + 1
+        return int(4.0 <= shutter_seconds) + 1
     if model_group in (2, 7, 15):
         if _s32(iso) < 100:
             return 0
-        return int(4.0 <= exposure) + 3
+        return int(4.0 <= shutter_seconds) + 3
     if model_group in (3,):
         return 14
     if model_group in (4,):
         return 15
     if model_group in (5, 6, 10):
-        return int(4.0 <= exposure) + 9
+        return int(4.0 <= shutter_seconds) + 9
     if model_group in (8,):
         return 22
     if model_group in (9,):
@@ -70,17 +70,17 @@ def model_tone_record_index(model_group, iso, exposure, selector, flags, option)
     if model_group in (12,):
         if _s32(iso) < 100:
             return 0
-        return int(15.0 <= exposure) + 3
+        return int(15.0 <= shutter_seconds) + 3
     if model_group in (14,):
         if _s32(iso) >= 100:
             if iso != 100:
-                return int(15.0 <= exposure) + 20
-            return int(15.0 <= exposure) + 18
-        return int(15.0 <= exposure) + 16
+                return int(15.0 <= shutter_seconds) + 20
+            return int(15.0 <= shutter_seconds) + 18
+        return int(15.0 <= shutter_seconds) + 16
     if model_group in (16,):
         if iso in (160, 320, 640, 1250):
-            return int(15.0 <= exposure) + 26
-        return int(15.0 <= exposure) + 24
+            return int(15.0 <= shutter_seconds) + 26
+        return int(15.0 <= shutter_seconds) + 24
     if model_group in (17,):
         return int(_s32(iso) >= 200) + 28
     if model_group in (18, 20):
@@ -90,18 +90,18 @@ def model_tone_record_index(model_group, iso, exposure, selector, flags, option)
     if model_group in (19,):
         if selector != 2:
             if iso in (160, 320, 640, 1250):
-                return int(10.0 < exposure) + 35
-            return int(10.0 < exposure) + 33
+                return int(10.0 < shutter_seconds) + 35
+            return int(10.0 < shutter_seconds) + 33
         if iso in (160, 320, 640, 1250):
-            return int(10.0 < exposure) + 39
-        return int(10.0 < exposure) + 37
+            return int(10.0 < shutter_seconds) + 39
+        return int(10.0 < shutter_seconds) + 37
     if model_group in (21,):
         if selector != 2:
             return int(iso != 100) + 41
         return int(_s32(iso) > 200) + 43
     if model_group in (22,):
         if _s32(iso) >= 200:
-            return int(10.0 > exposure) + 45
+            return int(10.0 > shutter_seconds) + 45
         return 45
     if model_group in (23, 26, 28):
         if selector != 2:
@@ -109,12 +109,12 @@ def model_tone_record_index(model_group, iso, exposure, selector, flags, option)
                 return 49
             if iso in (200, 250, 400, 500, 800, 1000, 1600, 2000, 2500, 3200) or _s32(iso) < 6400:
                 return 48
-            return int(15.0 <= exposure) + 48
+            return int(15.0 <= shutter_seconds) + 48
         if ((_s32(iso) <= 320 or iso == 640) or iso == 1250) or iso == 2500:
             return 51
         if iso in (400, 500, 800, 1000, 1600, 2000, 3200, 6400) or iso != 12800:
             return 50
-        return int(15.0 <= exposure) + 50
+        return int(15.0 <= shutter_seconds) + 50
     if model_group in (24,):
         if selector != 2:
             if iso != 50:
@@ -123,7 +123,7 @@ def model_tone_record_index(model_group, iso, exposure, selector, flags, option)
                 if iso in (160, 320, 640, 1250) or _s32(iso) >= 6400:
                     return 49
                 if iso in (3200, 4000, 5000):
-                    return int(15.0 <= exposure) + 48
+                    return int(15.0 <= shutter_seconds) + 48
                 return 48
             return 47
         if iso in (200, 250, 400, 500, 800, 1000, 1600, 2000, 3200, 4000, 5000):
@@ -131,7 +131,7 @@ def model_tone_record_index(model_group, iso, exposure, selector, flags, option)
         if iso in (320, 640, 1250, 2500, 12800, 25600):
             return 51
         if iso in (6400, 8000, 10000):
-            return int(15.0 <= exposure) + 50
+            return int(15.0 <= shutter_seconds) + 50
         return 50
     if model_group in (25,):
         if option != 24:
@@ -172,27 +172,27 @@ def model_tone_record_index(model_group, iso, exposure, selector, flags, option)
             if iso in (160, 320, 640, 1250):
                 return 53
             if iso in (800, 1000, 1600, 2000):
-                if exposure < 15.0:
+                if shutter_seconds < 15.0:
                     return 55
                 return 53
             if iso == 2500:
-                if 15.0 <= exposure:
+                if 15.0 <= shutter_seconds:
                     return 55
                 return 53
-            if iso != 5000 or 15.0 <= exposure:
+            if iso != 5000 or 15.0 <= shutter_seconds:
                 return 55
             return 53
         if iso in (320, 640, 1250, 2500):
             return 54
         if iso in (1600, 2000, 3200, 4000):
-            if exposure < 15.0:
+            if shutter_seconds < 15.0:
                 return _s32(54 + selector)
             return 54
         if iso == 5000:
-            if 15.0 <= exposure:
+            if 15.0 <= shutter_seconds:
                 return _s32(54 + selector)
             return 54
-        if iso != 10000 or 15.0 <= exposure:
+        if iso != 10000 or 15.0 <= shutter_seconds:
             return _s32(54 + selector)
         return 54
     if model_group in (31, 32, 35, 36, 37, 43, 44, 48):
@@ -211,12 +211,12 @@ def model_tone_record_index(model_group, iso, exposure, selector, flags, option)
                 return 55
             if iso in (160, 320, 640, 1250, 2500, 5000, 10000):
                 return 53
-            return 55 if 4.0 > exposure else 53
+            return 55 if 4.0 > shutter_seconds else 53
         if iso in (200, 250, 400, 500, 800, 1000):
             return 56
         if iso in (320, 640, 1250, 2500, 5000, 10000, 20000):
             return 54
-        return 56 if 4.0 > exposure else 54
+        return 56 if 4.0 > shutter_seconds else 54
     if model_group in (42, 50):
         if selector != 2:
             if iso == 50:
@@ -225,12 +225,12 @@ def model_tone_record_index(model_group, iso, exposure, selector, flags, option)
                 return 55
             if iso in (10000, 20000, 40000):
                 return 53
-            return 55 if 4.0 > exposure else 53
+            return 55 if 4.0 > shutter_seconds else 53
         if _s32(iso) <= 1250:
             return 56
         if iso in (20000, 40000):
             return 54
-        return 56 if 4.0 > exposure else 54
+        return 56 if 4.0 > shutter_seconds else 54
     if model_group in (47, 49):
         if option & option != 0:
             if option != 1:

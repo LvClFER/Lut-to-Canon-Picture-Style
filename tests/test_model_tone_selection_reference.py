@@ -211,3 +211,9 @@ class ModelToneSelectionTests(unittest.TestCase):
         for invalid in (0, 1, -1, 0xffffffff, 2**32, True, "EOS RP"):
             with self.subTest(model_id=invalid), self.assertRaises(ValueError):
                 model_tone_group(invalid)
+
+    def test_capture_metadata_inputs(self):
+        for iso, shutter in ((100, .008), (125, .00125), (500, .0015625)):
+            self.assertEqual(select(model_group=model_tone_group(0x80000433),
+                                    iso=iso, shutter_seconds=shutter,
+                                    selector=1, flags=0, option=0), 55)
