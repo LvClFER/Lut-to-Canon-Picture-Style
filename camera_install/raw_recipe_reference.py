@@ -129,6 +129,25 @@ def densify_spline(knots, values):
     return dense_knots, dense_values
 
 
+
+def normalize_tone_curve(knots, values, x_lower, x_upper, y_lower, y_upper):
+    """Observed affine normalization of dense 14-bit tone coordinates."""
+    if not 2 <= len(knots) <= 253 or len(values) != len(knots):
+        raise ValueError('Require matching bounded tone arrays')
+    if any(type(v) not in (int, float) or not isfinite(v)
+           for v in (*knots, *values)):
+        raise ValueError('Require finite tone coordinates')
+    if any(a >= b for a, b in zip(knots, knots[1:])):
+        raise ValueError('Require increasing tone knots')
+    if any(type(v) is not int or not 0 <= v <= 65535
+           for v in (x_lower, x_upper, y_lower, y_upper)):
+        raise ValueError('Require unsigned 16-bit tone bounds')
+    if x_lower >= x_upper or y_lower >= y_upper:
+        raise ValueError('Require increasing tone bounds')
+    return ([(x_upper-x_lower)*v/4095+x_lower*16383/4095 for v in knots],
+            [(y_upper-y_lower)*v/4095+y_lower*16383/4095 for v in values])
+
+
 def _trunc_q12(value):
     return value//4096 if value>=0 else -((-value)//4096)
 

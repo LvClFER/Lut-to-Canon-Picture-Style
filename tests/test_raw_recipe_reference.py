@@ -245,3 +245,30 @@ class RawRecipeReferenceTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class ToneNormalizationTests(unittest.TestCase):
+    def test_identity_and_nonzero_range(self):
+        from camera_install.raw_recipe_reference import normalize_tone_curve
+        knots = [0, 8191.5, 16383]
+        values = [0, 4000, 16383]
+        self.assertEqual(normalize_tone_curve(knots, values, 0, 4095, 0, 4095),
+                         (knots, values))
+        x, y = normalize_tone_curve(knots, values, 1365, 2730, 0, 4095)
+        self.assertEqual(x, [5461, 8191.5, 10922])
+        self.assertEqual(y, values)
+
+    def test_reject_invalid_coordinates_and_ranges(self):
+        from camera_install.raw_recipe_reference import normalize_tone_curve
+        for knots, values, bounds in (([0], [0], (0, 4095, 0, 4095)),
+                ([0, 1], [0], (0, 4095, 0, 4095)),
+                ([1, 0], [0, 1], (0, 4095, 0, 4095)),
+                ([0, float('nan')], [0, 1], (0, 4095, 0, 4095)),
+                ([0, 1], [0, float('inf')], (0, 4095, 0, 4095)),
+                ([0, 1], [0, 1], (0, 0, 0, 4095)),
+                ([0, 1], [0, 1], (0, 4095, 4095, 0)),
+                ([0, 1], [0, 1], (-1, 4095, 0, 4095)),
+                ([0, 1], [0, 1], (0, 65536, 0, 4095)),
+                ([0, 1], [0, 1], (False, 4095, 0, 4095))):
+            with self.subTest(knots=knots, bounds=bounds), self.assertRaises(ValueError):
+                normalize_tone_curve(knots, values, *bounds)

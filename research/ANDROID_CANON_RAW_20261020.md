@@ -1380,3 +1380,21 @@ Scope: these are three RP captures only. Selector/flags/option values are
 observed as 1/0/0; their complete metadata provenance and alternate paths
 remain unresolved. This does not supply model calibration curves or make
 the independent renderer complete. Installed applications are unchanged.
+
+
+### Independent dense-curve normalization chain
+
+Added the bounded affine normalization helper to the offline RAW reference.
+It preserves the native 4095 denominator and 16383-scaled lower offset,
+including nonzero lower bounds. Chaining the existing natural spline
+densification and this normalization from the captured source control
+points reproduces all 226 X and 226 Y coordinates exactly in each of the
+RP2408, RP2440 and EOS R references (1,356 scalar comparisons, max error 0).
+The comparison uses source knots and scalar bounds, not captured dense
+coordinates as inputs. Source model control points remain private fixtures.
+
+Evidence: tone-dense-normalization-chain-proof-20261025.json. Synthetic
+regressions cover identity, nonzero bounds and malformed coordinates or
+ranges. This is an offline intermediate stage; the coordinate warp and
+final resampling are not yet integrated into a complete generator API,
+and no installed build has changed.
