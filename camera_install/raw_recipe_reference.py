@@ -5,6 +5,15 @@ from math import isfinite
 import struct
 
 
+def model_tone_style_index(style_id):
+    """Observed model tone subrecord selection, including Fine Detail's remap."""
+    indices = {0x21:7, 0x22:7, 0x23:7, 0x81:0, 0x82:1, 0x83:2,
+               0x84:3, 0x85:4, 0x86:5, 0x87:0, 0x88:3, 0xff:8}
+    if type(style_id) is not int or style_id not in indices:
+        raise ValueError('Unsupported model tone style identifier')
+    return indices[style_id]
+
+
 def decode_model_tone_record(data, mode, normalize_ranges):
     """Observed bounded big-endian model record to the padded native descriptor."""
     if not isinstance(data, (bytes, bytearray, memoryview)) or len(data) < 6:

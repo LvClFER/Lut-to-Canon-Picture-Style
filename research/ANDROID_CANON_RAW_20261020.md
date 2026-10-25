@@ -1248,3 +1248,38 @@ instruction produced an error-free completed trace. Model/style record
 selection and an independently distributable source of calibration data
 remain unresolved; no model record or DLL was bundled, and no installed
 app or physical camera changed.
+
+
+### Model record and style-subrecord selection
+
+The model tone extractor uses 0x57570 for its record index and 0x55440 for
+its style index, then remaps Fine Detail index 6 to tone subrecord 3.
+Static inspection finds 117 accepted model-group slots sharing 46 selection
+paths; this is internal dispatch coverage, not 117 validated camera models.
+Selection compares ISO, a float field (observed 0.00800000038 in the RP
+fixture), a selector, flags and another narrow option. The float resembles
+exposure duration, but its semantic unit is not independently established.
+An early probe labelled the selector cameraId; it is now recorded as
+selector because that meaning was not proven.
+
+Seven completed developments cover all six styles on RP IMG_2408 and
+Standard on the EOS R fixture. RP selects model group 93, ISO 100, selector
+1, flags/option 0 and record index 55. EOS R selects group 91, ISO 250
+and the same record index. Style indices are 0,1,2,3,4,6; Fine Detail's
+final tone subrecord is 3. Selected packed-record RVAs match
+Standard_RVA + final_style_index*0x20a in all seven cases. Matching is by
+the actual generator descriptor hash, not the first parsed record: setup
+also reads Standard before the requested style, so first-hit selection
+would incorrectly report Standard for every case.
+
+The independent model_tone_style_index reference handles all observed style
+identifiers and rejects unsupported inputs. A NativeFunction comparison of
+all 256 byte identifiers finds 12 supported identifiers, with exact mapping
+after the extractor remap; unsupported native results are 32768 and become
+explicit validation errors. This does not establish custom-style rendering
+or replace the unresolved model/ISO/float/flag record-index logic.
+
+Evidence: tone-selection-seven-cases-20261025.json and
+raw-tone-style-index-oracle-20261025/style-index-proof.json. All 24 tests
+pass. No model calibration records were bundled and installed builds did
+not change.

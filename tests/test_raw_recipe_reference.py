@@ -4,6 +4,14 @@ from camera_install.raw_recipe_reference import chroma_from_rgb16,rgb16_from_ycb
 
 
 class RawRecipeReferenceTests(unittest.TestCase):
+    def test_model_tone_style_indices(self):
+        from camera_install.raw_recipe_reference import model_tone_style_index
+        for style,index in ((0x21,7),(0x22,7),(0x23,7),(0x81,0),(0x82,1),
+                            (0x83,2),(0x84,3),(0x85,4),(0x86,5),(0x87,0),(0x88,3),(0xff,8)):
+            self.assertEqual(model_tone_style_index(style),index)
+        for invalid in (0,-1,0x89,0x100,0xffffffff,True,129.0):
+            with self.assertRaises(ValueError):model_tone_style_index(invalid)
+
     def test_model_tone_record_endianness_scaling_and_bounds(self):
         import struct
         from camera_install.raw_recipe_reference import decode_model_tone_record
