@@ -834,3 +834,27 @@ vector arithmetic are the next comparisons. Source hashing passed and no camera
 was accessed. Evidence: `raw-vector-q10-gain-20261025` and
 `raw-vector-q10-rgb-20261025`; the latter includes `shared-helper-proof.json`.
 No production preview or APK change was made.
+
+
+## Located vector/scalar auxiliary-index divergence, 25 October
+
+Direct vector spill observations identified an actual arithmetic difference:
+negative G-B differences use arithmetic shift by five (floor division by 32)
+in the vector path, whereas the scalar path truncates toward zero. The vector
+also chooses its table from the unshifted difference sign. For -1 through -31,
+scalar chooses index zero/nonnegative table; vector chooses index one/negative
+table. For other nonmultiples of 32, vector magnitude can be one greater.
+
+Across 256 native blocks (2,048 pixels), all luma, magnitude, positive-difference
+and table-sign outputs matched the vector-aware independent reference. The scalar
+reference differed on 720 pixels. Thus at least one real source of path-dependent
+output is established, not merely hypothesized. Other downstream differences can
+still remain; this is not whole-vector equivalence or proof that this one change
+explains the full-frame error. The observed mode was the default luma branch.
+
+`auxiliary_indices(..., vectorized=True)` now expresses this measured distinction;
+its default preserves the verified scalar contract. Boundary regression tests
+cover -31/-33 and mode validation. Source hashing passed and no camera was
+accessed. Evidence: `raw-vector-aux-indices-20261025/trace.json` and
+`shared-helper-proof.json`. This reference change is not wired into production
+rendering; the APK is unchanged.

@@ -4,6 +4,14 @@ from camera_install.raw_recipe_reference import chroma_from_rgb16,rgb16_from_ycb
 
 
 class RawRecipeReferenceTests(unittest.TestCase):
+    def test_vector_auxiliary_indices_round_negative_differences_down(self):
+        from camera_install.raw_recipe_reference import auxiliary_indices
+        self.assertEqual(auxiliary_indices([0,0,31],vectorized=True),(0,1,0,False))
+        self.assertEqual(auxiliary_indices([0,0,31]),(0,0,0,True))
+        self.assertEqual(auxiliary_indices([0,0,33],vectorized=True),(0,2,0,False))
+        self.assertEqual(auxiliary_indices([0,0,33]),(0,1,0,False))
+        with self.assertRaises(ValueError):auxiliary_indices([0]*3,vectorized=1)
+
     def test_second_chroma_conversion_matches_native_in_both_modes(self):
         from camera_install.raw_recipe_reference import post_lookup_chroma
         cases = [([[0, 65535, 0], 0], [-21759, -27391]), ([[0, 65535, 0], 1], [-24478, -27391]), ([[-41010, 11779, -33370], 1], [-15420, -22690]), ([[-55341, 9136, -27533], 0], [-7504, -29230])]

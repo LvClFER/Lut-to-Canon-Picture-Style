@@ -25,13 +25,16 @@ def auxiliary_luma_bin(rgb, gains=None):
     return min(1023, (2 * red + green + blue) // 128)
 
 
-def auxiliary_indices(rgb, gains=None):
+def auxiliary_indices(rgb, gains=None, vectorized=False):
     """Observed luma/chroma lookup coordinates and green-minus-blue table sign."""
     luma = auxiliary_luma_bin(rgb, gains)
+    if type(vectorized) is not bool:
+        raise ValueError('Require a boolean processing mode')
     red, green, blue = rgb
     delta = green - blue
-    difference = delta // 32 if delta >= 0 else -((-delta) // 32)
-    return luma, min(1023, abs(difference)), min(1023, max(0, (green - red) // 32)), difference >= 0
+    difference = delta // 32 if vectorized or delta >= 0 else -((-delta) // 32)
+    nonnegative = delta >= 0 if vectorized else difference >= 0
+    return luma, min(1023, abs(difference)), min(1023, max(0, (green - red) // 32)), nonnegative
 
 
 def scale_chroma_pair(chroma, amount, gains):
