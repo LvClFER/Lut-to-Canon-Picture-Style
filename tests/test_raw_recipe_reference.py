@@ -420,3 +420,22 @@ class StyleRangePropertyTests(unittest.TestCase):
         for invalid in (True, -1, 256, 129.0, "Standard"):
             with self.assertRaises(ValueError):
                 style_range_property_id(invalid)
+
+
+class BaselineRangeCorrectionTests(unittest.TestCase):
+    def test_native_verified_rp_and_eosr_baselines(self):
+        from camera_install.raw_recipe_reference import correct_tone_range_baseline
+        fields = [14, 0, 16383, 1200, 0, 16383]
+        for baseline, upper in ((.3326, 20630.797096898492), (.324, 20508.181382128383)):
+            with self.subTest(baseline=baseline):
+                result = correct_tone_range_baseline(fields, 1200, baseline)
+                self.assertEqual(result, [14, 0, upper, 1200, 0, 16383])
+        self.assertEqual(correct_tone_range_baseline(fields, 1200, 0), fields)
+        self.assertEqual(fields, [14, 0, 16383, 1200, 0, 16383])
+
+    def test_baseline_domain_validation(self):
+        from camera_install.raw_recipe_reference import correct_tone_range_baseline
+        for pivot, baseline in ((0, 0), (65536, 0), (True, 0),
+                                (1200, float('nan')), (1200, 1e9)):
+            with self.subTest(pivot=pivot, baseline=baseline), self.assertRaises(ValueError):
+                correct_tone_range_baseline([14, 0, 16383, 1200, 0, 16383], pivot, baseline)

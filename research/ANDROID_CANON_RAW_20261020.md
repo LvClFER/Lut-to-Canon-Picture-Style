@@ -1596,8 +1596,11 @@ property setters at 0x5c750/0x5eed0 from module load. It observed 97
 style-property writes. The initial writes return to 0xb57e2 inside
 0xb2520..0xb5b10, with a 136-byte source block and its last six doubles
 (offset 0x58) already containing the baseline range. The creation loop
-reads property 0x20302 from its temporary source object at 0xb578a and
-copies it into that per-style block before the setter at 0xb57df.
+attempts an optional property-0x20302 override from its temporary source
+object at 0xb578a. Subsequent return-code observation established status
+13 (absent) for all 14 calls in the tested render, so this override is NOT
+the initial range's origin. The block is already populated before the
+setter at 0xb57df. This supersedes the initial copy-origin inference.
 
 The temporary source object's getter resolves to 0x84e70. Disassembly
 shows a bounded search over pointer entries [style ID, property ID, data
@@ -1618,3 +1621,40 @@ style-range-vector-constructor-20261025.asm. These are distinct from
 validation that the upstream range is independently obtainable. No new
 production API was added merely to wrap the copy. No installed build,
 public release or physical camera state was changed.
+
+
+### Original neutral descriptor initialization and baseline correction
+
+Tracked initial 136-byte property allocations through data constructor
+0x5aa00. Their first call chain leads to 0xb0b45 in initializer
+0xae1e0..0xb1a2e, before the later 0xb57df override loop. The default
+0x20302 descriptor is initialized by 0x9c4f0 at 0xaeb97. Its first six
+doubles are [14,0,16383,1200,0,16383]. The initializer fetches gray pivot
+from model property 0x2e0f02 and property 0x1e0050, then reads baseline
+correction 0x1ff548. In the observed path the upper bound becomes
+2**(log10(upper/gray)/log10(2)+baselineEV)*gray. Zero correction skips
+the logarithmic roundtrip, and the target field is then set to gray.
+
+Three fresh owned-process probes reproduce all six corrected fields
+exactly: RP2408 and RP2440 use baseline .3326 and upper
+20630.797096898492; EOS R uses .324 and upper 20508.181382128383.
+The first natural-log implementation differed from EOS R by
+1.4551915228366852e-11. A native oracle established that 0xe47d0 is
+log10 (inputs 2,10,e,16383/1200), and the base-10 implementation matches
+exactly. Native source/render proofs accompany each successful probe.
+Evidence: tone-baseline-correction-observations-20261025.json,
+tone-baseline-correction-proof-20261025.json and
+raw-tone-baseline-log-oracle-20261025/trace.json.
+
+Also corrected the optional-cache provenance above after checking return
+statuses. A hardware watch on the first mutable Standard range only
+observed a later allocation/copy; it did not prove its initial writer.
+Its first probe failed while retaining a mutable Frida return wrapper;
+the corrected probe copies the pointer value and renders successfully.
+Failed probes are excluded from mathematical evidence.
+
+The independent correction helper accepts caller-supplied baseline and
+gray values. Baseline property 0x1ff548 provenance remains unresolved;
+it must not be assumed to be an EXIF tag or hardcoded for all cameras.
+No native correction/profile table was bundled. Full colour rendering,
+installed applications and public releases remain unchanged.

@@ -1,7 +1,7 @@
 """Observed integer RAW-recipe primitives; offline references, not a renderer."""
 
 from bisect import bisect_right
-from math import isfinite
+from math import isfinite, log10
 import struct
 
 
@@ -175,6 +175,26 @@ def prepare_tone_entry_ranges(fields):
         raise ValueError('Range descriptor exceeds signed 32-bit output')
     return result
 
+
+
+
+def correct_tone_range_baseline(fields, gray_pivot, baseline_ev):
+    """Observed baseline-EV correction before user exposure compensation."""
+    prepare_tone_entry_ranges(fields)
+    if type(gray_pivot) is not int or not 1 <= gray_pivot <= 65535:
+        raise ValueError('Require a positive 16-bit gray pivot')
+    if type(baseline_ev) not in (int, float) or not isfinite(baseline_ev) or fields[2] <= 0:
+        raise ValueError('Require finite baseline EV and a positive upper bound')
+    result = list(fields)
+    if baseline_ev != 0:
+        try:
+            exponent = log10(fields[2]/gray_pivot)/log10(2.0)+baseline_ev
+            result[2] = 2.0**exponent*gray_pivot
+        except (OverflowError, ValueError) as error:
+            raise ValueError('Baseline correction exceeds numeric range') from error
+    result[3] = gray_pivot
+    prepare_tone_entry_ranges(result)
+    return result
 
 
 def scale_tone_range_exposure(fields, exposure_ev):
