@@ -760,3 +760,23 @@ unchanged. Evidence: `raw-rp-loop-2408-20261025` and
 The next task is vector-path equivalence or an independently checked scalar
 oracle for that path. Portrait rendering is not blocked on physical equipment;
 its native processing route still needs software investigation.
+
+
+## Native scalar-only versus vector loop on portrait, 25 October
+
+An owned experimental child redirected each main recipe row at the existing
+vector/scalar gate to the scalar loop, starting at column zero. This is a private
+native-path comparison, not an independent-rendering implementation. A separate
+unmodified child rendered the same IMG_2408 input/settings. Both produced RGB
+1680x1120 output, but hashes differed. Across 5,644,800 channels, absolute error
+was 0.1364622307 on the 0–255 scale, maximum 3, 99th percentile 1, with 730,327
+changed channels. The paths are therefore close but not bit-identical; rounding
+or other path differences still need localization. No exact equivalence claim
+is made and the modified output is not a Canon photographic reference.
+
+The observed row width was 1120 and the original scalar start 1120; the private
+redirect set the scalar start to zero and bypassed the vector body. The RAW hash
+remained unchanged and no camera was accessed. Evidence:
+`raw-force-scalar-rp-2408-20261025`, including both pixel buffers, render-proof
+JSON files and `comparison-proof.json`. No native binary was patched on disk and
+no production application code was changed.
