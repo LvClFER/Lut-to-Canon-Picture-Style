@@ -1587,3 +1587,34 @@ raw-style-range-property-oracle-20261025/property-oracle-proof.json.
 Unusable instruction-level backtrace frames were excluded as evidence.
 The baseline range itself remains unbundled research data; installed
 applications and public releases were not changed.
+
+
+### Creation of the style-property range block
+
+A fresh owned-process RP2408 probe intercepted the two candidate shared
+property setters at 0x5c750/0x5eed0 from module load. It observed 97
+style-property writes. The initial writes return to 0xb57e2 inside
+0xb2520..0xb5b10, with a 136-byte source block and its last six doubles
+(offset 0x58) already containing the baseline range. The creation loop
+reads property 0x20302 from its temporary source object at 0xb578a and
+copies it into that per-style block before the setter at 0xb57df.
+
+The temporary source object's getter resolves to 0x84e70. Disassembly
+shows a bounded search over pointer entries [style ID, property ID, data
+pointer], then a byte copy. Its setter slot is 0x90ce0; a targeted hook
+there observed no property-0x20302 writes during this render. Thus neither
+this source getter nor the observed style-property creator establishes
+the mathematical origin of the upper bound. The earlier hardware trap
+was object cleanup, not its calculation, and must not be interpreted as
+that calculation's writer.
+
+Evidence: raw-style-property-writers-20261025/
+style-property-provenance-proof.json, trace.json, source-proof.json and
+render-proof-observed.json. Supporting private disassembly files:
+style-property-creation-20261025.asm,
+style-range-upstream-getter-20261025.asm,
+style-range-property-population-20261025.asm and
+style-range-vector-constructor-20261025.asm. These are distinct from
+validation that the upstream range is independently obtainable. No new
+production API was added merely to wrap the copy. No installed build,
+public release or physical camera state was changed.
