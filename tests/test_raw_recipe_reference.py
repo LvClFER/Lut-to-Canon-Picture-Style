@@ -4,6 +4,13 @@ from camera_install.raw_recipe_reference import chroma_from_rgb16,rgb16_from_ycb
 
 
 class RawRecipeReferenceTests(unittest.TestCase):
+    def test_auxiliary_indices_use_truncated_difference_for_table_sign(self):
+        from camera_install.raw_recipe_reference import auxiliary_indices
+        self.assertEqual(auxiliary_indices([0,0,31]),(0,0,0,True))
+        self.assertEqual(auxiliary_indices([0,0,32]),(0,1,0,False))
+        self.assertEqual(auxiliary_indices([0,65535,0]),(511,1023,1023,True))
+        self.assertEqual(auxiliary_indices([65535,0,65535]),(1023,1023,0,False))
+
     def test_auxiliary_luma_minimum_branch_with_q10_gains(self):
         for rgb,gains,expected in (([65535]*3,[1024]*3,1023),
                                    ([65535]*3,[512,1024,2048],1023),

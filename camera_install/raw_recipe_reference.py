@@ -25,6 +25,15 @@ def auxiliary_luma_bin(rgb, gains=None):
     return min(1023, (2 * red + green + blue) // 128)
 
 
+def auxiliary_indices(rgb, gains=None):
+    """Observed luma/chroma lookup coordinates and green-minus-blue table sign."""
+    luma = auxiliary_luma_bin(rgb, gains)
+    red, green, blue = rgb
+    delta = green - blue
+    difference = delta // 32 if delta >= 0 else -((-delta) // 32)
+    return luma, min(1023, abs(difference)), min(1023, max(0, (green - red) // 32)), difference >= 0
+
+
 def chroma_from_rgb16(rgb):
     if len(rgb)!=3 or any(type(v) is not int or not 0<=v<=65535 for v in rgb):
         raise ValueError('Require three unsigned RGB16 values')

@@ -516,3 +516,17 @@ hash verification passed, synthetic output was discarded and no camera session
 was opened. Evidence is in `raw-luma-minimum-20261025/trace.json` and
 `shared-helper-proof.json`. Positive Q10 gains are bounded to 8192 in the helper;
 signed/overflow domains and full rendering remain outside this evidence.
+
+
+## Combined auxiliary indices, 25 October
+
+The scalar lookup setup now has a combined reference: luma bin; magnitude of
+trunc((G-B)/32), capped at 1023; positive part of trunc((G-R)/32), capped at 1023;
+and the sign selecting the G-B auxiliary table. The sign is taken after integer
+truncation: differences -1 through -31 select the nonnegative table, unlike -32.
+An isolated native run checked all four results for 81 channel vectors with zero
+mismatches. The unchanged RAW hash was verified. Evidence is in
+`raw-aux-indexes-20261025/trace.json` and `shared-helper-proof.json`.
+Regression tests cover sign boundaries and clipped indices. This does not yet
+reconstruct auxiliary table contents or their use in the final tone coordinate;
+the production Android renderer remains unchanged.
