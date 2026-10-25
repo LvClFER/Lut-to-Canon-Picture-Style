@@ -780,3 +780,24 @@ remained unchanged and no camera was accessed. Evidence:
 `raw-force-scalar-rp-2408-20261025`, including both pixel buffers, render-proof
 JSON files and `comparison-proof.json`. No native binary was patched on disk and
 no production application code was changed.
+
+
+## Localizing native scalar/vector differences, 25 October
+
+Paired RGB16 captures place the scalar-only versus default-vector difference
+before both the profile lattice and colour matching. For IMG_2408, the usable
+1120x1080 area before the lattice had mean absolute difference 24.136738/65535,
+maximum 193, p99 67. After the lattice the mean was 26.804674, maximum 308,
+p99 156. The latter exactly matched the captured colour-matching input metrics.
+After colour matching, RGB16 difference was mean 31.765152, maximum 514, p99 257;
+these are RGB16 values and must not be reported on a 0–255 scale.
+
+Padding was excluded from lattice comparisons using captured width and stride.
+All paired source hashes remained unchanged. Evidence:
+`raw-path-colour-{vector,scalar}-20261025` and
+`raw-path-lattice-{vector,scalar}-20261025`; comparison-proof JSON files are in
+the scalar folders. The error is therefore already present in the native recipe
+output, rather than arising solely from final display or colour matching.
+Rounding differences are a hypothesis, not yet a proven cause. The next useful
+checkpoint is inside the vector recipe arithmetic. No camera or production
+application was changed by this analysis.
