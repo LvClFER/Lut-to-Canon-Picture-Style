@@ -13,6 +13,14 @@ def scale_channel_q10(value, percent, coefficient, maximum):
     return min(maximum, (value * percent // 100) * coefficient // 1024)
 
 
+def auxiliary_luma_bin(rgb):
+    """Observed default scalar branch's 10-bit table index, not standard luminance."""
+    if len(rgb) != 3 or any(type(v) is not int or not 0 <= v <= 65535 for v in rgb):
+        raise ValueError('Require three unsigned RGB16 values')
+    red, green, blue = rgb
+    return min(1023, (2 * red + green + blue) // 128)
+
+
 def chroma_from_rgb16(rgb):
     if len(rgb)!=3 or any(type(v) is not int or not 0<=v<=65535 for v in rgb):
         raise ValueError('Require three unsigned RGB16 values')

@@ -1,9 +1,18 @@
 import unittest
 
-from camera_install.raw_recipe_reference import chroma_from_rgb16,rgb16_from_ycbcr,sample_tone64,scale_channel_q10
+from camera_install.raw_recipe_reference import chroma_from_rgb16,rgb16_from_ycbcr,sample_tone64,scale_channel_q10,auxiliary_luma_bin
 
 
 class RawRecipeReferenceTests(unittest.TestCase):
+    def test_default_auxiliary_luma_bin_boundaries_and_channel_order(self):
+        for rgb, expected in (([0,0,0],0),([63,0,0],0),([64,0,0],1),
+                              ([0,127,0],0),([0,128,0],1),([0,0,128],1),
+                              ([65535,0,0],1023),([0,65535,0],511),
+                              ([32768]*3,1023),([65535]*3,1023)):
+            self.assertEqual(auxiliary_luma_bin(rgb),expected)
+        for rgb in ([True,0,0],[-1,0,0],[65536,0,0],[1.0,0,0],[0,0]):
+            with self.assertRaises(ValueError):auxiliary_luma_bin(rgb)
+
     def test_channel_gain_rounds_between_stages_and_caps(self):
         for args, expected in (((99,99,1536,65535),147), ((1,99,1536,65535),0),
                                ((65535,200,1536,65535),65535), ((65535,100,1,65535),63),

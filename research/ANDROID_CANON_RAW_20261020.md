@@ -484,3 +484,20 @@ hash remained unchanged, and no camera was accessed. Private evidence is in
 This reconstructs one coefficient-dependent arithmetic stage; coefficient
 generation, the remaining auxiliary stages and full Canon rendering are still
 unverified. No correction was added to the Android preview from this result.
+
+## Default auxiliary luminosity index, 25 October
+
+The default scalar branch computes a bounded auxiliary-table index as
+`min(1023, (2*R + G + B) // 128)` from the observed ordered channel registers.
+This is a particular native lookup coordinate, not a claim that standard RGB
+luminance has these weights. Two native mode checks can choose a different
+branch; that alternate branch has not been reconstructed here.
+
+An isolated owned child checked 81 vectors: channel corners, small integer
+boundaries, neutral levels and deterministic random RGB16 values. Every native
+index matched the independent helper, including the final 1023 cap. The source
+RAW hash remained unchanged; synthetic output was discarded. Evidence is in
+`raw-luma-bin-20261025/trace.json` and `shared-helper-proof.json`. Regression tests
+cover the asymmetric channel order, truncation, saturation and invalid values.
+The link from auxiliary lookup results to the later tone coordinate, and full
+independent RAW development, remain unverified; production rendering is unchanged.
