@@ -663,3 +663,22 @@ profile. Source RAW hashing passed and no camera was accessed. Evidence is in
 Regression tests cover reflection, nonzero origin, positive-only capping, coarse
 rounding, priority and invalid inputs. Table generation and whole-render parity
 remain unverified; production previews were not changed.
+
+
+## Photographic block through all three signed lookups, 25 October
+
+Observation was extended from the chroma gain entry through the common exit of
+the three post-mix lookups. All 2,048 photographic samples matched the independent
+composition of gain, channel mix, Q14 exposure, signed clipping and signed lookup.
+The observed mode pair was (1,0), positive lookup cap 41024. The private full table
+contained 131073 signed storage entries with actual values 0–39745, within the
+reference helper's verified uint16 bounds. Its contents are not bundled or treated
+as portable coefficients. Lookup arithmetic was cross-checked against the shared
+helper on selected samples; the larger replay validates the full table once.
+
+Evidence is in `raw-chroma-looked-up-20261025`, including the table capture,
+`trace.json` and `shared-helper-proof.json`. The source RAW hash remained unchanged;
+no native pixels or registers were substituted and no camera was accessed. This
+validates a longer sampled block in the observed mode, not the subsequent colour
+conversion, table generation, alternate modes or the full independent renderer.
+Production rendering remains unchanged.
