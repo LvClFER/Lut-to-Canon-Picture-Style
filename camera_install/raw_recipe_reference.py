@@ -132,6 +132,17 @@ def chroma_from_rgb16(rgb, vectorized=False):
     return [value//4096 if vectorized else _trunc_q12(value) for value in numerators]
 
 
+def pre_tone_rgb16(rgb, vectorized=False):
+    """Observed Q10 luminance and first chroma round trip, before tone processing."""
+    cb, cr = chroma_from_rgb16(rgb, vectorized=vectorized)
+    red, green, blue = rgb
+    luma = (306*red + 601*green + 117*blue)//1024
+    values = (4096*luma + 5742*cr - 2*cb + 2048,
+              4098*luma - 2925*cr - 1412*cb + 2048,
+              4095*luma + 7254*cb + 2048)
+    return [2*(value//4096 if vectorized else _trunc_q12(value)) for value in values]
+
+
 def rgb16_from_ycbcr(luma, chroma):
     """Final observed conversion, including RGB16 clipping."""
     if type(luma) is not int or not 0<=luma<=65535 or len(chroma)!=2 or any(

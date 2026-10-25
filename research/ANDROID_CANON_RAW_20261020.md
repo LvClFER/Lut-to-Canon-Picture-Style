@@ -921,3 +921,33 @@ the remaining discrepancy in this scene and configuration. This does not
 establish equivalence for negative pre-tone channels in other scenes.
 The source hash was rechecked against IMG_2408.CR3. Evidence:
 raw-force-scalar-vector-premix-20261025/counterfactual-proof.json.
+
+
+### Vector pre-tone chroma round trip checkpoint
+
+A fresh owned-process capture sampled native luminance directly from rax+r9*2
+at 0x1ebe4e, the RGB matrix spills, and all six post-round-trip vectors at
+0x1ece48 (RGB paired spills e00/e10, de0/df0, dc0/dd0). Reconstructed Q12
+chroma and RGB equations match all 6,144 values across 2,048 pixels.
+The new offline pre_tone_rgb16 helper reproduces the same capture exactly;
+18 reference tests pass. Luminance is still supplied by the native pipeline,
+so this does not reconstruct its origin or establish an independent renderer.
+Evidence: raw-vector-premix-20261025/trace.json, comparison-proof.json and
+shared-helper-proof.json, with successful render and unchanged source proof.
+Production rendering and installed candidates remain unchanged.
+
+
+### Independent pre-tone luminance, three RAW captures
+
+The luminance plane used above matches `(306*R + 601*G + 117*B)//1024`
+exactly on 2,048 captured pixels each from RP IMG_2408, RP IMG_2440 and the
+original EOS R fixture. Q10 constants also occur in native RGB-to-luma code
+(e.g. 0x250139..0x250156), although those separate routines were not proven
+to generate this particular plane. The pre_tone_rgb16 reference now computes
+luma from its RGB argument rather than accepting native luma. Its complete
+pre-tone round trip matches all 18,432 output channel values in the three
+captures. Evidence: independent-premix-proof.json in raw-vector-premix-20261025,
+raw-vector-premix-rp2440-20261025 and raw-vector-premix-eosr-20261025.
+This removes the native-luma input from this block only; upstream RGB
+development, later tone tables and the complete independent renderer remain
+unresolved. The 18 reference tests pass, and no installed build changed.

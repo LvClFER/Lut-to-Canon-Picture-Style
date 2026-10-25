@@ -125,6 +125,16 @@ class RawRecipeReferenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             chroma_from_rgb16([0,0,0], vectorized=1)
 
+    def test_native_vector_pre_tone_round_trip(self):
+        from camera_install.raw_recipe_reference import pre_tone_rgb16
+        for rgb, expected in (([2262,2381,2476],[4524,4764,4952]),
+                               ([2291,2404,2506],[4580,4808,5008]),
+                               ([2366,2493,2602],[4732,4986,5202])):
+            self.assertEqual(pre_tone_rgb16(rgb,vectorized=True),expected)
+        self.assertEqual(pre_tone_rgb16([0,0,0],vectorized=True),[0,0,0])
+        for invalid in (-1,65536,True,1.0):
+            with self.assertRaises(ValueError):pre_tone_rgb16([invalid,0,0])
+
     def test_tone_interpolation_and_saturated_endpoint(self):
         curve=[min(i*17,1023) for i in range(2048)]
         for position,expected in ((0,0),(1,17),(63,1071),(64,1088),(65,1105),
