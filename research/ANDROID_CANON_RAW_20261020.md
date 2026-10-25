@@ -1176,3 +1176,32 @@ or Standard ordinates. This only excludes that literal storage representation;
 it does not prove the absence of another encoded representation. Source-knot
 selection and camera-specific entry bounds remain to be traced. No production
 API or installed build changed during this step.
+
+
+### Source tone descriptors across all six base styles
+
+Six fresh RP IMG_2408 developments captured the generator descriptor directly
+at entry (274 bytes). Its third uint16 is the source point count; point x
+values start at byte 6 and y values at byte 134. All observed cases have
+10 points. Standard/Portrait/Landscape share descriptor SHA-256
+833a27cec33dd4ac07b747409d22226bff3cea4b9ffb176bc9b9cca5eab136bc;
+Neutral/Faithful/Fine Detail share
+defed157976179ee7c7666d31d6ce62bcfc34ef710138b1ea8156e07f2a883aa.
+Their x positions coincide but ordinates differ. This is tone-only evidence;
+it does not make the complete colour rendering equivalent within either group.
+Private descriptors and full curves remain outside the tracked app assets.
+
+The source component is resolved by the generic getter 0x60030, called from
+0x62073. Runtime RTTI identifies its underlying object as CDppMemoryStream.
+Virtual slot +0x130 dispatches to 0x54310, which returns the pointer at object
+offset +0x70. Adding 0x40 to that returned buffer yields the exact descriptor
+pointer passed to 0xdc120 (checked within one owned-process render). This
+locates the source storage; how it is populated/selected remains unresolved.
+
+Literal little/big-endian uint16 source-knot sequences were absent from the
+two source RAWs. Literal uint16 sequences were also not found by the earlier
+installed-file scan. These searches do not exclude compression, interleaving,
+scaling or another representation and do not establish the source of the data.
+Evidence: tone-descriptors-six-styles-20261025.json and
+raw-tone-source-component-20261025/component-proof.json, with completed
+renders and unchanged source hashes. No installed build changed.
