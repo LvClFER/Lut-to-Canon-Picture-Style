@@ -951,3 +951,68 @@ raw-vector-premix-rp2440-20261025 and raw-vector-premix-eosr-20261025.
 This removes the native-luma input from this block only; upstream RGB
 development, later tone tables and the complete independent renderer remain
 unresolved. The 18 reference tests pass, and no installed build changed.
+
+
+### Continuous vector pre-tone to tone output
+
+The next capture checks the continuous path from RGB input through independent
+Q10 luma/chroma round trip, neutral gain/limits and tone interpolation.
+At 0x1ed58e the three paired planes 1440/1460/1480 match 6,144 predicted
+values in RP IMG_2408 (gain 512/512, limits 131071/131072, optional exposure
+plane absent, both pre-tone flags zero). Post-tone paired planes fa0/fc0/fe0
+at 0x1ef021 match all 18,432 output values across IMG_2408, IMG_2440 and the
+EOS R fixture, reusing sample_tone64 and pre_tone_rgb16. The tone table is
+2048 uint32 entries, captured privately through rbp-0x30. It remains native
+reference data, not reconstructed portable constants. No table was added to
+the app. Evidence: raw-vector-tone-input-20261025 and
+raw-vector-tone-output[-rp2440|-eosr]-20261025/comparison-proof.json.
+This confirms continuity for the observed neutral branches, not arbitrary
+exposure/optional corrections or a complete independent RAW renderer.
+
+
+### Tone-buffer allocation and copy provenance
+
+To locate the generator rather than fit captured values, bounded owned-process
+probes followed the actual tone allocation. A general JavaScript heap hook and
+two enlarged heap-context experiments exceeded the 40-second deadline and
+were terminated by their own cleanup. No evidence from those timed-out runs
+is treated as a completed render. A compact native heap filter completed,
+then a focused DppCore calloc return hook at 0x754b completed without global
+heap overhead. The 8,196-byte allocation containing the 8,192-byte curve
+comes through 0x3a420 / 0x3a4d3 and the object-copy path 0x60590.
+
+A subsequent focused 0x60590 probe recorded 14 8,192-byte curve copies via
+callers 0x6076e and 0x60787. Every source/destination pair has the same SHA-256
+when the copy returns. The actual tone pointer at 0x1ed58e is among those
+destinations; chronological sequence numbers are preserved because addresses
+are reused. This locates a copying stage, not the original table generator.
+The next investigation must follow the source object before that stage.
+Evidence: raw-tone-dpp-allocation-20261025/allocation-proof.json and
+raw-tone-copy-provenance-20261025/provenance-proof.json. Completed probes
+record successful rendering and unchanged source hashes. No captured table
+or installed Canon code was added to any distributable.
+
+
+### Actual tone generator located
+
+Following buffer construction removed the copy-path ambiguity. The two original
+8,192-byte buffers are constructed by 0x39ea0 through factory 0x69d10, called
+from 0x62a46 and 0x62a73 inside 0x61de0..0x64974. The first feeds tone; the
+second has an identity prefix. The original first buffer is the source of the
+subsequent copy chain (verified in raw-tone-buffer-constructor-20261025).
+
+The observed branch fills that first buffer by calling 0xdc120 from 0x62bd1
+(return 0x62bd6). A focused enter/leave probe captured the output pointer,
+2,048-entry count, 112 parameter bytes and the complete generated uint32 table.
+Its SHA-256 is a974f1a85e582ed3b79a9e6b81653a6104579b64fab8b85fb13d7b21002f5979,
+exactly the table consumed by the RP IMG_2408 vector renderer. Thus 0xdc120
+is a verified generator for this branch, unlike the previously excluded
+0x59f30 or generic copy routines. Function bounds are 0xdc120..0xde6cc.
+The alternate call at 0x62ad6 to 0xd6a30 was not exercised by this probe.
+
+Evidence: raw-tone-buffer-factory-20261025/factory-proof.json and
+raw-tone-generator-20261025/generator-proof.json plus 129_generated-tone_0.u16.
+The original CR3 hash remains unchanged and rendering completed. Captured
+stack arguments are raw words (upper bits of narrow arguments are not typed
+values); their meaning remains unverified. The mathematical generator still
+needs reconstruction. No native table or implementation was bundled.
