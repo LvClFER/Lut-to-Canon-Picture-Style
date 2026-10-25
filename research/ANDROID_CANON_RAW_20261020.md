@@ -530,3 +530,23 @@ mismatches. The unchanged RAW hash was verified. Evidence is in
 Regression tests cover sign boundaries and clipped indices. This does not yet
 reconstruct auxiliary table contents or their use in the final tone coordinate;
 the production Android renderer remains unchanged.
+
+
+## Auxiliary lookup ordering and minimum, 25 October
+
+Following the observed execution corrects an earlier working assumption: these
+auxiliary tables are consumed after tone sampling, in the chroma-adjustment
+stage. Their indices are prepared earlier, but they do not directly create the
+preceding tone coordinate. The scalar code reads three unsigned 16-bit values
+using the reconstructed indices and selects their minimum. For the nonnegative
+G-B selector, the eventual lookup substitutes the separate positive-table
+pointer; preserving that pointer substitution matters when joining the stages.
+
+An isolated owned child substituted only private synthetic table allocations
+and checked 71 triples, including ties, all orderings, unsigned 16-bit limits and
+deterministic random values. Native selection equalled Python `min` in every
+case. The source RAW hash remained unchanged. Evidence is in
+`raw-aux-minimum-20261025/trace.json` and `shared-helper-proof.json`.
+No wrapper around `min` or production correction was added. The next missing
+operation is the sign-dependent chroma gain consuming this minimum; table
+construction and full rendering remain unverified.
