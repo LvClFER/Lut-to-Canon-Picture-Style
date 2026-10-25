@@ -1310,3 +1310,32 @@ This establishes decoder breadth, not the model/ISO selection rules,
 96 physical camera validations or complete Canon RAW colour matching.
 No captured model table or decoded descriptors were added to the app.
 Installed candidates remain unchanged.
+
+
+### Independent model tone-record selection
+
+Added an offline Python reconstruction of the scalar record selector for
+all 117 internal model groups. It uses ordinary branches, float32 input
+quantization and the observed signed/unsigned integer semantics; it does
+not load Canon libraries, interpret machine instructions or bundle model
+calibration tables. No production renderer calls it yet.
+
+The initial 9,977 defined random cases matched the native selector. A fresh
+owned-process boundary run matched another 65,331 cases across all groups:
+ISO thresholds and their immediate neighbours, signed uint32 boundaries,
+float32 neighbours of 1/4/10/15, selectors, flags and option boundaries.
+There were zero mismatches. Source hashing confirms the RAW was unchanged.
+The first attempted probe exited without rendering because RAW_SOURCE was
+missing; only the subsequent successful render is counted as evidence.
+
+189 boundary combinations reach a native path that reads an unwritten
+home-stack slot. The independent reference rejects these explicitly rather
+than inventing a stable result; they were excluded from native comparison.
+Tests preserve native-verified examples for every group and every observed
+return value, reject invalid inputs and cover the undefined path.
+
+Evidence: raw-model-selector-oracle-20261025/oracle-proof.json and
+raw-model-selector-boundaries-20261025/{oracle-proof,source-proof,render-proof-observed}.json.
+117 internal groups do not imply 117 physically tested cameras. This does
+not establish the mapping from RAW metadata to groups, complete tone-table
+generation or Canon colour parity. Installed APK/EXE builds are unchanged.
