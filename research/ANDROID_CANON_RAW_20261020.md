@@ -817,3 +817,20 @@ Source hashing passed and no camera was accessed. Evidence is in
 `raw-vector-initial-gain-20261025/trace.json` and `shared-helper-proof.json`.
 The first differing downstream vector operation remains to be located. Production
 rendering and the APK are unchanged.
+
+
+## Vector percentage/Q10 gains across all channels, 25 October
+
+The checkpoint now covers all eight lanes in all three channels for 256 vector
+blocks (6,144 values) on IMG_2408. Initial gain, common percentage, Q10 gain and
+individual channel caps all matched the independent scalar arithmetic exactly.
+Observed settings were ratio 512/512, percentage 100 and coefficient 1024; this
+is not arbitrary-gain vector validation. A preliminary blue-only checkpoint also
+matched all 2,048 values. No native values were substituted.
+
+The differing full-frame output therefore first diverges after this checkpoint
+in the observed default configuration. Luma/chroma index generation and later
+vector arithmetic are the next comparisons. Source hashing passed and no camera
+was accessed. Evidence: `raw-vector-q10-gain-20261025` and
+`raw-vector-q10-rgb-20261025`; the latter includes `shared-helper-proof.json`.
+No production preview or APK change was made.
