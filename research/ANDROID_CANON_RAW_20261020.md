@@ -879,3 +879,45 @@ and was discarded. The RAW hash remained unchanged; no disk binary or production
 application was patched and no camera was accessed. Investigation must continue
 at later vector arithmetic rather than attributing the raster error to these
 indices alone.
+
+
+### Vector first chroma matrix, 25 October 2026
+
+The owned EOS RP IMG_2408 probe captured 256 eight-pixel blocks at the actual
+vector matrix spills and after its Q12 shifts: 4,096 chroma outputs. Both
+coefficient sets match the scalar reference, but arithmetic right shift rounds
+negative numerators down rather than toward zero. The floor reference matches
+all 4,096 outputs; truncation differs on 2177 outputs.
+Inputs are RGB at paired spills 0x80/0x150, 0x160/0x170 and
+0x130/0x240; outputs are Cr at 0xc80/0xc90 and Cb at 0xca0/0xcb0.
+Private evidence: raw-vector-first-chroma-20261025/comparison-proof.json and
+trace.json, with successful render and unchanged source hash. This is a
+checkpoint result, not evidence that this rounding explains the final raster
+difference. No production renderer, shipped build or camera state changed.
+
+
+The full-frame counterfactual changed only the two scalar Q12 rounding biases,
+while forcing scalar processing for every main-image pixel. The callback ran
+2,419,200 times and removed 1,275,332 nonzero rounding biases. Final RGB8 changed
+on 176,474 channels versus the original scalar frame. Against the unmodified
+vector frame, mean absolute error only decreased from 0.13646223072562358 to
+0.1363499149659864 /255 (maximum 3, p99 1). This proves a raster effect, but
+not the main cause of the remaining scalar/vector discrepancy. Source CR3
+hash remained unchanged. Private evidence: raw-force-scalar-vector-chroma-20261025.
+The offline chroma reference now exposes the observed vector rounding mode;
+its default scalar behavior is preserved. All 2,048 captured pixels match the
+shared helper, and 17 reference tests pass. No production render path changed.
+
+
+### Pre-tone RGB conversion rounding counterfactual
+
+A second owned-process experiment also removed the scalar signed-division
+biases at 0x1f3cd6, 0x1f3d03 and 0x1f3d26, immediately after the first chroma
+matrix. Across the full RP portrait this added 3,628,800 callback invocations
+but no additional nonzero bias removals: total calls 6,048,000, changed biases
+still 1,275,332. Its final raster is byte-for-byte identical to the chroma-only
+counterfactual. Thus these three additional rounding sites cannot explain
+the remaining discrepancy in this scene and configuration. This does not
+establish equivalence for negative pre-tone channels in other scenes.
+The source hash was rechecked against IMG_2408.CR3. Evidence:
+raw-force-scalar-vector-premix-20261025/counterfactual-proof.json.

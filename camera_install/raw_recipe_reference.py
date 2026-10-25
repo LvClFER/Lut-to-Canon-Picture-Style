@@ -122,12 +122,14 @@ def post_lookup_chroma(rgb, boost_first=False):
     return [max(-32768, min(32767, value)) for value in (first, second)]
 
 
-def chroma_from_rgb16(rgb):
+def chroma_from_rgb16(rgb, vectorized=False):
     if len(rgb)!=3 or any(type(v) is not int or not 0<=v<=65535 for v in rgb):
         raise ValueError('Require three unsigned RGB16 values')
+    if type(vectorized) is not bool:
+        raise ValueError('Require a boolean processing mode')
     red,green,blue=rgb
-    return [_trunc_q12(2048*blue-1356*green-691*red),
-            _trunc_q12(2048*red-333*blue-1714*green)]
+    numerators=(2048*blue-1356*green-691*red, 2048*red-333*blue-1714*green)
+    return [value//4096 if vectorized else _trunc_q12(value) for value in numerators]
 
 
 def rgb16_from_ycbcr(luma, chroma):

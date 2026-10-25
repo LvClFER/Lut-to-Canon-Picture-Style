@@ -118,6 +118,13 @@ class RawRecipeReferenceTests(unittest.TestCase):
         for y,chroma,expected in cases:
             with self.subTest(y=y,chroma=chroma):self.assertEqual(rgb16_from_ycbcr(y,chroma),expected)
 
+    def test_vector_chroma_rounds_negative_values_down(self):
+        self.assertEqual(chroma_from_rgb16([342,398,444], vectorized=True), [32,-32])
+        self.assertEqual(chroma_from_rgb16([0,0,1], vectorized=True), [0,-1])
+        self.assertEqual(chroma_from_rgb16([65535]*3, vectorized=True), [15,15])
+        with self.assertRaises(ValueError):
+            chroma_from_rgb16([0,0,0], vectorized=1)
+
     def test_tone_interpolation_and_saturated_endpoint(self):
         curve=[min(i*17,1023) for i in range(2048)]
         for position,expected in ((0,0),(1,17),(63,1071),(64,1088),(65,1105),
