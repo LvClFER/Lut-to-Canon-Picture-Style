@@ -1016,3 +1016,21 @@ The original CR3 hash remains unchanged and rendering completed. Captured
 stack arguments are raw words (upper bits of narrow arguments are not typed
 values); their meaning remains unverified. The mathematical generator still
 needs reconstruction. No native table or implementation was bundled.
+
+
+### Tone-generator cubic spline evaluator
+
+The confirmed generator invokes 0xdf420, a cubic-spline evaluator with
+one-based native knot/value/second-derivative arrays and endpoint-interval
+extrapolation. An owned-process NativeFunction probe evaluated 11 synthetic
+queries from -0.2 to 1.2 over five supplied knots, including exact knots, both
+endpoints, mixed second derivatives and extrapolation. The independent
+sample_cubic_spline helper matches within 1e-14 (maximum error 0.0).
+It uses ordinary zero-based arrays, validates finite values and increasing
+knots, and adds no dependency. The actual RP generator hit return site
+0xdcfca with 10 knots: 0,150,300,600,1200,2400,4800,9600,13200,16383.
+This establishes the evaluator and its use, not the knot-value generation
+or second-derivative solver. Native tables/knots are private evidence only.
+Private evidence: raw-tone-spline-kernel-20261025/spline-proof.json and
+shared-helper-proof.json. The 19 offline reference tests pass; no production
+renderer or installed candidate changed.

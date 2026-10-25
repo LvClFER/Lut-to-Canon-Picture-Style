@@ -135,6 +135,23 @@ class RawRecipeReferenceTests(unittest.TestCase):
         for invalid in (-1,65536,True,1.0):
             with self.assertRaises(ValueError):pre_tone_rgb16([invalid,0,0])
 
+    def test_native_cubic_spline_kernel(self):
+        from camera_install.raw_recipe_reference import sample_cubic_spline
+        knots=[0,0.1,0.35,0.7,1]
+        values=[0,0.2,0.3,0.8,1]
+        second=[0,-0.4,0.25,0.6,0]
+        for coordinate, expected in ((-0.2,-0.396),(0,0),(0.01,0.020066),
+                                     (0.1,0.2),(0.2,0.240725),(0.35,0.3),
+                                     (0.5,0.5080357142857144),(0.7,0.8),
+                                     (0.9,0.9306666666666666),(1,1),(1.2,1.1366666666666667)):
+            self.assertAlmostEqual(sample_cubic_spline(knots,values,second,coordinate),expected,places=14)
+        self.assertEqual(sample_cubic_spline([0,1],[0,2],[0,0],0.5),1)
+        for bad_knots in ([0],[0,0],[1,0],[0,float('nan')],[0,float('inf')]):
+            with self.assertRaises(ValueError):
+                sample_cubic_spline(bad_knots,[0]*len(bad_knots),[0]*len(bad_knots),0)
+        with self.assertRaises(ValueError):sample_cubic_spline([0,1],[0],[0,0],0)
+        with self.assertRaises(ValueError):sample_cubic_spline([0,1],[0,1],[0,0],True)
+
     def test_tone_interpolation_and_saturated_endpoint(self):
         curve=[min(i*17,1023) for i in range(2048)]
         for position,expected in ((0,0),(1,17),(63,1071),(64,1088),(65,1105),

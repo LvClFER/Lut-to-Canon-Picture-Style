@@ -1,5 +1,26 @@
 """Observed integer RAW-recipe primitives; offline references, not a renderer."""
 
+from bisect import bisect_right
+from math import isfinite
+
+
+def sample_cubic_spline(knots, values, second_derivatives, coordinate):
+    """Observed spline evaluation; endpoint intervals also serve extrapolation."""
+    if not 2 <= len(knots) <= 65535 or len(values) != len(knots) or len(second_derivatives) != len(knots):
+        raise ValueError('Require matching spline arrays with at least two knots')
+    if any(type(v) not in (int, float) or not isfinite(v)
+           for array in (knots, values, second_derivatives, (coordinate,)) for v in array):
+        raise ValueError('Require finite spline numbers')
+    if any(left >= right for left, right in zip(knots, knots[1:])):
+        raise ValueError('Require strictly increasing spline knots')
+    upper = min(len(knots)-1, max(1, bisect_right(knots, coordinate)))
+    lower = upper-1
+    width = knots[upper]-knots[lower]
+    a = (knots[upper]-coordinate)/width
+    b = (coordinate-knots[lower])/width
+    correction = (a*a*a-a)*second_derivatives[lower] + (b*b*b-b)*second_derivatives[upper]
+    return correction*(width*width)/6 + (a*values[lower] + b*values[upper])
+
 
 def _trunc_q12(value):
     return value//4096 if value>=0 else -((-value)//4096)
