@@ -1205,3 +1205,46 @@ scaling or another representation and do not establish the source of the data.
 Evidence: tone-descriptors-six-styles-20261025.json and
 raw-tone-source-component-20261025/component-proof.json, with completed
 renders and unchanged source hashes. No installed build changed.
+
+
+### Model-provider provenance and packed-record decoder
+
+The source memory stream is 352 bytes. Its construction/copy routine 0x60c90
+receives a stack-built payload from caller 0x68d84. The builder at
+0x68930..0x69096 first requests property 0x2e0f01 (1,918 bytes) through
+CDppModelObject::dispatch at DppCore 0x129910. A focused registry trace
+confirmed successful callback DppModel.dll+0x4ed40. The core callback receives
+the source tone descriptor unchanged at property-block offset 0x224;
+0x599b0 copies those 274 bytes into the 352-byte stream payload. Hashes match
+from provider output through packing and final generator input.
+
+DppModel.dll is in DPP4Lib/Model/. Its callback reaches the property case
+at 0x1692d and, in the observed configuration, invokes the tone extractor
+0x566f0 through 0x17002. The extractor selects a model record and style
+subrecord (observed strides 0xe46 and 0x20a), then parses via 0x55090 ->
+0x54e60. The actual Standard source begins at DppModel RVA 0x1f25356.
+It consumes 58 bytes, and a PE RVA-to-file comparison confirms the packed
+record exists byte-for-byte in the installed DLL. The earlier literal scan
+missed it because it searched little-endian data; this record is big-endian.
+
+The independent decode_model_tone_record reads bounded big-endian headers,
+two point arrays, six trailing fields and any version extensions into the
+padded 274-byte little-endian descriptor. It reproduces the native mode
+override, 12-to-14-bit point scaling and optional range normalization.
+Synthetic unit fixtures contain no Canon model records. A direct owned-process
+NativeFunction comparison passes three cases (scaling, version extension,
+normalization on/off) byte-for-byte, plus the real 58-byte Standard record
+whose output matches the consumed descriptor SHA-256. All 23 tests pass,
+including truncated/oversized/malformed inputs.
+
+Evidence: raw-tone-stream-payload-20261025/payload-proof.json,
+raw-tone-camera-provider-20261025/provider-proof.json,
+raw-tone-model-dispatch-20261025/dispatch-proof.json,
+raw-tone-packed-record-20261025/packed-record-proof.json and
+raw-tone-record-decoder-20261025/decoder-proof.json. The dynamic block trace
+is an investigation aid, not proof that every basic block was captured.
+The original short-call interception failed; moving it to a preceding
+instruction produced an error-free completed trace. Model/style record
+selection and an independently distributable source of calibration data
+remain unresolved; no model record or DLL was bundled, and no installed
+app or physical camera changed.

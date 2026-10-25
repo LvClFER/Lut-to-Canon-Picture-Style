@@ -2,6 +2,37 @@
 
 from bisect import bisect_right
 from math import isfinite
+import struct
+
+
+def decode_model_tone_record(data, mode, normalize_ranges):
+    """Observed bounded big-endian model record to the padded native descriptor."""
+    if not isinstance(data, (bytes, bytearray, memoryview)) or len(data) < 6:
+        raise ValueError('Require a complete model tone header')
+    if type(mode) is not int or not 0 <= mode <= 65535 or type(normalize_ranges) is not bool:
+        raise ValueError('Require an unsigned mode and boolean range normalization')
+    count, version, active = struct.unpack_from('>3H', data)
+    if not 2 <= active <= count <= 64:
+        raise ValueError('Require bounded model tone point counts')
+    consumed = 2*(3+2*count+6+max(0, version-9))
+    if len(data) < consumed:
+        raise ValueError('Truncated model tone record')
+    knots = list(struct.unpack_from('>'+str(count)+'H', data, 6))
+    values = list(struct.unpack_from('>'+str(count)+'H', data, 6+2*count))
+    limits = list(struct.unpack_from('>6H', data, 6+4*count))
+    limits[4] = mode
+    if limits[0] == 4095:
+        knots = [(v*16383//4095)&65535 for v in knots]
+        values = [(v*16383//4095)&65535 for v in values]
+        limits[5] = (limits[5]*4)&65535
+    elif limits[2] == 16383 and normalize_ranges:
+        limits[0] = limits[2] = 4095
+    descriptor = bytearray(274)
+    struct.pack_into('<3H', descriptor, 0, count, version, active)
+    struct.pack_into('<'+str(count)+'H', descriptor, 6, *knots)
+    struct.pack_into('<'+str(count)+'H', descriptor, 134, *values)
+    struct.pack_into('<6H', descriptor, 262, *limits)
+    return bytes(descriptor), consumed
 
 
 def spline_second_derivatives(knots, values, left_slope=None, right_slope=None):

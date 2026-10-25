@@ -4,6 +4,28 @@ from camera_install.raw_recipe_reference import chroma_from_rgb16,rgb16_from_ycb
 
 
 class RawRecipeReferenceTests(unittest.TestCase):
+    def test_model_tone_record_endianness_scaling_and_bounds(self):
+        import struct
+        from camera_install.raw_recipe_reference import decode_model_tone_record
+        record=struct.pack('>15H',3,9,3,0,2048,4095,0,1000,4095,4095,0,4095,0,5,100)
+        descriptor,consumed=decode_model_tone_record(record,7,True)
+        self.assertEqual(consumed,len(record))
+        self.assertEqual(struct.unpack_from('<3H',descriptor,6),(0,8193,16383))
+        self.assertEqual(struct.unpack_from('<3H',descriptor,134),(0,4000,16383))
+        self.assertEqual(struct.unpack_from('<6H',descriptor,262),(4095,0,4095,0,7,400))
+        self.assertEqual(descriptor[12:134],bytes(122))
+        record=struct.pack('>14H',2,10,2,0,16383,0,16383,16383,0,16383,0,0,1200,123)
+        descriptor,consumed=decode_model_tone_record(record+b'extra',1,True)
+        self.assertEqual(consumed,len(record))
+        self.assertEqual(struct.unpack_from('<6H',descriptor,262),(4095,0,4095,0,1,1200))
+        self.assertEqual(struct.unpack_from('<2H',descriptor,6),(0,16383))
+        descriptor,_=decode_model_tone_record(record,1,False)
+        self.assertEqual(struct.unpack_from('<H',descriptor,262),(16383,))
+        for bad in (b'',record[:5],record[:-1],struct.pack('>3H',65,9,65),struct.pack('>3H',2,9,3)):
+            with self.assertRaises(ValueError):decode_model_tone_record(bad,1,True)
+        with self.assertRaises(ValueError):decode_model_tone_record(record,True,True)
+        with self.assertRaises(ValueError):decode_model_tone_record(record,1,1)
+
     def test_vector_auxiliary_indices_round_negative_differences_down(self):
         from camera_install.raw_recipe_reference import auxiliary_indices
         self.assertEqual(auxiliary_indices([0,0,31],vectorized=True),(0,1,0,False))
