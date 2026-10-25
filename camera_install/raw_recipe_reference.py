@@ -13,11 +13,15 @@ def scale_channel_q10(value, percent, coefficient, maximum):
     return min(maximum, (value * percent // 100) * coefficient // 1024)
 
 
-def auxiliary_luma_bin(rgb):
-    """Observed default scalar branch's 10-bit table index, not standard luminance."""
+def auxiliary_luma_bin(rgb, gains=None):
+    """Observed scalar branches' 10-bit table index, not standard luminance."""
     if len(rgb) != 3 or any(type(v) is not int or not 0 <= v <= 65535 for v in rgb):
         raise ValueError('Require three unsigned RGB16 values')
     red, green, blue = rgb
+    if gains is not None:
+        if len(gains) != 3 or any(type(v) is not int or not 0 <= v <= 8192 for v in gains):
+            raise ValueError('Require three bounded positive Q10 gains')
+        return min(1023, min(v * gain // 1024 for v, gain in zip(rgb, gains)) // 32)
     return min(1023, (2 * red + green + blue) // 128)
 
 

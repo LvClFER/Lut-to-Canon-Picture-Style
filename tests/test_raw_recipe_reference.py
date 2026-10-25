@@ -4,6 +4,16 @@ from camera_install.raw_recipe_reference import chroma_from_rgb16,rgb16_from_ycb
 
 
 class RawRecipeReferenceTests(unittest.TestCase):
+    def test_auxiliary_luma_minimum_branch_with_q10_gains(self):
+        for rgb,gains,expected in (([65535]*3,[1024]*3,1023),
+                                   ([65535]*3,[512,1024,2048],1023),
+                                   ([31]*3,[1024]*3,0),([32]*3,[1024]*3,1),
+                                   ([1000,2000,3000],[512,1024,2048],15),
+                                   ([65535]*3,[8192,1,0],0)):
+            self.assertEqual(auxiliary_luma_bin(rgb,gains),expected)
+        for gains in ([0,0],[-1,0,0],[8193,0,0],[True,0,0],[1.0,0,0]):
+            with self.assertRaises(ValueError):auxiliary_luma_bin([0]*3,gains)
+
     def test_default_auxiliary_luma_bin_boundaries_and_channel_order(self):
         for rgb, expected in (([0,0,0],0),([63,0,0],0),([64,0,0],1),
                               ([0,127,0],0),([0,128,0],1),([0,0,128],1),

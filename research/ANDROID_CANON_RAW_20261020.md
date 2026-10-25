@@ -501,3 +501,18 @@ RAW hash remained unchanged; synthetic output was discarded. Evidence is in
 cover the asymmetric channel order, truncation, saturation and invalid values.
 The link from auxiliary lookup results to the later tone coordinate, and full
 independent RAW development, remain unverified; production rendering is unchanged.
+
+## Coefficient-weighted minimum index, 25 October
+
+The alternate scalar branch computes each ordered channel times its Q10 gain,
+truncates each result, takes the minimum, divides by 32 and caps at 1023:
+`min(1023, min(channel * gain // 1024) // 32)`. Its gains are explicit inputs to
+the reference helper; their camera/profile-dependent generation is not inferred.
+
+An isolated native probe forced this branch for 82 bounded synthetic vectors,
+covering zero and unequal gains, small boundaries, saturation and deterministic
+random channels/gains. All outputs matched the independent helper. Original RAW
+hash verification passed, synthetic output was discarded and no camera session
+was opened. Evidence is in `raw-luma-minimum-20261025/trace.json` and
+`shared-helper-proof.json`. Positive Q10 gains are bounded to 8192 in the helper;
+signed/overflow domains and full rendering remain outside this evidence.
