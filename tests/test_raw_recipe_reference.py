@@ -180,6 +180,19 @@ class RawRecipeReferenceTests(unittest.TestCase):
         for size,maximum in ((0,1),(1,0),(65536,1),(1,65536),(True,1)):
             with self.assertRaises(ValueError):build_spline_lookup([0,1],[0,1],size,maximum)
 
+    def test_spline_densification_preserves_controls(self):
+        from camera_install.raw_recipe_reference import densify_spline
+        x,y=densify_spline([0,1],[0,2])
+        self.assertEqual(len(x),126)
+        self.assertEqual((x[0],y[0],x[-1],y[-1]),(0,0,1,2))
+        self.assertTrue(all(a<b for a,b in zip(x,x[1:])))
+        for coordinate,value in zip(x,y):self.assertAlmostEqual(value,2*coordinate,places=14)
+        x,y=densify_spline([0,0.25,1],[0,0.5,1])
+        self.assertEqual(len(x),167)
+        self.assertEqual((x[83],y[83]),(0.25,0.5))
+        with self.assertRaises(ValueError):densify_spline(list(range(252)),list(range(252)))
+        with self.assertRaises(ValueError):densify_spline([0],[0])
+
     def test_tone_interpolation_and_saturated_endpoint(self):
         curve=[min(i*17,1023) for i in range(2048)]
         for position,expected in ((0,0),(1,17),(63,1071),(64,1088),(65,1105),

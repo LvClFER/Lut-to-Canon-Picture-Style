@@ -69,6 +69,26 @@ def build_spline_lookup(knots, values, size, maximum):
     return result
 
 
+def densify_spline(knots, values):
+    """Observed 251-budget subdivision, preserving original control points."""
+    if len(knots) > 251:
+        raise ValueError('Require at most 251 source knots')
+    second = spline_second_derivatives(knots, values)
+    subdivisions = 251//len(knots)
+    dense_knots, dense_values = [], []
+    for i, coordinate in enumerate(knots):
+        dense_knots.append(coordinate)
+        dense_values.append(values[i])
+        if i == len(knots)-1:
+            break
+        width = knots[i+1]-coordinate
+        for j in range(1, subdivisions):
+            query = j*width/subdivisions+coordinate
+            dense_knots.append(query)
+            dense_values.append(min(values[-1], sample_cubic_spline(knots, values, second, query)))
+    return dense_knots, dense_values
+
+
 def _trunc_q12(value):
     return value//4096 if value>=0 else -((-value)//4096)
 

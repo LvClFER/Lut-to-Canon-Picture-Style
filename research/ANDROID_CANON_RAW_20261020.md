@@ -1087,3 +1087,27 @@ reference inputs; this does not reconstruct the upstream mapping that creates
 them. No captured arrays were bundled. The 21 reference tests pass, including
 quantization/monotonicity and identity-roundoff regression checks. Installed
 Windows/Android candidates remain unchanged.
+
+
+### Source-knot expansion and initial normalization
+
+The first generator spline expands each original interval using
+`subdivisions = 251 // source_count`, preserving original points and
+evaluating inserted points at `left + j*width/subdivisions`; inserted values
+are capped by the last source ordinate. With 10 source knots this yields
+226 points. The new independent densify_spline helper matches all 452
+positions/ordinates exactly at 0xdd078. Tests cover control preservation,
+strictly increasing positions and the knot budget (22 tests pass).
+
+The following normalization at 0xdd3e4 also matches all 452 values exactly:
+`(upper-lower)*value/4095 + lower*16383/4095`, independently for each axis.
+The observed ranges in RP IMG_2408 are x=0..5157, y=0..4095. These are
+observed parameters, not portable camera constants; later generator stages
+still transform the normalized points before the final 226-knot spline.
+A preliminary comparison incorrectly assumed denominator 16383; disassembly
+resolved the actual denominator 4095 and separate offset multiplier 16383.
+Only the corrected formula has zero-error evidence.
+
+Private evidence: raw-tone-densification-20261025/shared-helper-proof.json
+and raw-tone-normalization-20261025/normalization-proof.json, with completed
+renders and unchanged source hashes. No installed candidate was modified.
