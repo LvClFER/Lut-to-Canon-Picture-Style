@@ -346,3 +346,16 @@ class AdaptiveToneSamplerTests(unittest.TestCase):
         table = resample_tone_curve([0, 100, 200], [0, 3200, 12800])
         self.assertEqual(table[:4], [0, 32, 92, 188])
         self.assertEqual(table[-1], 1023)
+
+
+class EditorExposureToneInputsTests(unittest.TestCase):
+    def test_native_verified_exposure_entry_scalars(self):
+        from camera_install.raw_recipe_reference import derive_tone_warp_parameters
+        fixtures = [(1200, 20630, 16380, 20965.901995653032, 2.343805671236489), (377, 6498, 5146.05, 6604.852400711323, 2.337395154861804), (238, 4093, 3248.7000000000003, 4159.729895277613, 2.342964626396629), (150, 2578, 2047.4999999999998, 2619.928472633867, 2.344529655737059), (75, 1289, 1023.7499999999999, 1309.9642363169335, 2.344529655737059)]
+        for target, upper, base_span, right_span, power in fixtures:
+            with self.subTest(target=target, upper=upper):
+                p = derive_tone_warp_parameters([1, 2, 3, 2, 4, 0],
+                                                1200, target, 0, upper, 0)
+                self.assertEqual(p["base_span"], base_span)
+                self.assertEqual(p["right_span"], right_span)
+                self.assertEqual(p["right_power"], power)

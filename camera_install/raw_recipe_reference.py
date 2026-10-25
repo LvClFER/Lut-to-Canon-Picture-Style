@@ -151,7 +151,7 @@ def normalize_tone_curve(knots, values, x_lower, x_upper, y_lower, y_upper):
 
 
 def derive_tone_warp_parameters(settings, raw_pivot, target, x_lower, x_upper, scale_flag):
-    """Observed neutral-EV generator scalar derivation, before coordinate warping."""
+    """Observed core-entry scalar derivation; editor EV is reflected in its inputs."""
     if len(settings) != 6 or any(type(v) not in (int, float) or not isfinite(v) for v in settings):
         raise ValueError('Require six finite tone settings')
     if any(type(v) is not int or not 0 <= v <= 65535

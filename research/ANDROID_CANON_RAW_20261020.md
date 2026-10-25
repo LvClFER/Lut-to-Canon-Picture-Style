@@ -1480,3 +1480,28 @@ decision without bundling model curves.
 Remaining limits: nonzero-EV preprocessing, nonmonotonic fallback, model
 curve provisioning and complete sensor-to-colour reconstruction. Installed
 applications are unchanged; no physical camera access or publication.
+
+
+### Editor exposure coverage through core-entry scalars
+
+Five fresh owned-process renders of RP2408 used editor compensation -2,
+-1/3, +1/3, +1 and +2 EV. Source hashes remained unchanged. The six core
+settings remain (1,2,3,2,4,0), and the raw pivot remains 1200; changes are
+already encoded upstream in the core target/upper-bound arguments:
+(1200,20630), (377,6498), (238,4093), (150,2578), (75,1289).
+
+Using those typed entry scalars, the existing independent derivation,
+densification, normalization, warp and adaptive sampler reproduce all
+10,240 pre-secondary-lookup table entries exactly. Added five native-
+verified scalar regression fixtures and corrected the helper docstring:
+neutral core settings do not imply that editor EV was neutral.
+Evidence: tone-editor-exposure-chain-proof-20261025.json and five
+raw-tone-exposure-*-20261025 folders with source/render proofs.
+
+This validates the downstream chain at these editor settings, not an
+independent implementation of upstream EV preparation. In particular,
+scaling an already rounded upper bound would lose information (20630 at
+-2 EV cannot be obtained by multiplying the rounded neutral 5157 by four).
+The unrounded upstream source still needs tracing. Static model curves,
+nonmonotonic fallback and complete colour rendering remain unresolved.
+Installed builds were unchanged and nothing was published.
