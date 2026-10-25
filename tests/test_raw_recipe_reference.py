@@ -359,3 +359,21 @@ class EditorExposureToneInputsTests(unittest.TestCase):
                 self.assertEqual(p["base_span"], base_span)
                 self.assertEqual(p["right_span"], right_span)
                 self.assertEqual(p["right_power"], power)
+
+
+class ToneRangePreparationTests(unittest.TestCase):
+    def test_native_verified_unrounded_ranges(self):
+        from camera_install.raw_recipe_reference import prepare_tone_entry_ranges
+        fixtures = [([14, 0, 82523.18838759397, 4800, 0, 16383], [0, 1200, 20630, 0, 4095]), ([14, 0, 25993.17553849245, 1511.9052598738479, 0, 16383], [0, 377, 6498, 0, 4095]), ([14, 0, 16374.674507279571, 952.4406311809197, 0, 16383], [0, 238, 4093, 0, 4095]), ([14, 0, 10315.398548449246, 600, 0, 16383], [0, 150, 2578, 0, 4095]), ([14, 0, 5157.699274224623, 300, 0, 16383], [0, 75, 1289, 0, 4095])]
+        for fields, expected in fixtures:
+            with self.subTest(fields=fields):
+                self.assertEqual(prepare_tone_entry_ranges(fields), expected)
+
+    def test_signed_truncation_and_limits(self):
+        from camera_install.raw_recipe_reference import prepare_tone_entry_ranges
+        self.assertEqual(prepare_tone_entry_ranges([14, -7.9, 7.9, -3.9, 3.9, 0]), [-1, 0, 1, 0, 0])
+        for fields in ([14], [14, 0, 0, 0, 0, float("nan")],
+                       [-1, 0, 0, 0, 0, 0], [33, 0, 0, 0, 0, 0],
+                       [0, 1e10, 0, 0, 0, 0]):
+            with self.subTest(fields=fields), self.assertRaises(ValueError):
+                prepare_tone_entry_ranges(fields)

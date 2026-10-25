@@ -1505,3 +1505,30 @@ scaling an already rounded upper bound would lose information (20630 at
 The unrounded upstream source still needs tracing. Static model curves,
 nonmonotonic fallback and complete colour rendering remain unresolved.
 Installed builds were unchanged and nothing was published.
+
+
+### Unrounded range descriptor preparation
+
+Traced the generator target/upper inputs to the six-double property
+0x20302 range descriptor through DppCore 0x561e0. The factor is
+2**12 / 2**descriptor[0]; each scalar is truncated only after multiplication.
+Output order is fields 1,3,2,4,5 (lower,target,upper,y-lower,y-upper).
+The five EV probes carry scale 14 and retain full-precision upper values:
+82523.18838759397,25993.17553849245,16374.674507279571,
+10315.398548449246,5157.699274224623.
+
+The independent bounded helper matches 322 actually written output scalars
+across 94 native calls. Calls with null optional output pointers are
+compared only at outputs the native routine wrote. Initial comparison
+caught a swapped target/upper output order, then corrected from the call
+ABI; no mismatching comparison is counted as a successful proof.
+Evidence: tone-range-preparation-proof-20261025.json and five
+raw-tone-range-preparation-*-20261025 directories, each with render/source
+proofs. Five complete native-verified descriptor fixtures are unit tested.
+
+Chaining from these unrounded descriptors instead of captured generator
+range arguments still reproduces all 10,240 pre-secondary-lookup entries
+exactly: tone-unrounded-descriptor-chain-proof-20261025.json.
+The descriptor itself is still observed input: its upstream sensor/EV
+construction has not been independently reconstructed. The result must
+not be described as complete EV or RAW rendering. Builds remain unchanged.

@@ -150,6 +150,20 @@ def normalize_tone_curve(knots, values, x_lower, x_upper, y_lower, y_upper):
 
 
 
+
+def prepare_tone_entry_ranges(fields):
+    """Observed six-double range descriptor to five signed integer entry scalars."""
+    if len(fields) != 6 or any(type(v) not in (int, float) or not isfinite(v) for v in fields):
+        raise ValueError('Require six finite range descriptor fields')
+    if not 0 <= fields[0] <= 32:
+        raise ValueError('Unsupported range descriptor scale')
+    factor = 2.0**12 / 2.0**fields[0]
+    result = [int(factor*fields[i]) for i in (1, 3, 2, 4, 5)]
+    if any(not -2147483648 <= value <= 2147483647 for value in result):
+        raise ValueError('Range descriptor exceeds signed 32-bit output')
+    return result
+
+
 def derive_tone_warp_parameters(settings, raw_pivot, target, x_lower, x_upper, scale_flag):
     """Observed core-entry scalar derivation; editor EV is reflected in its inputs."""
     if len(settings) != 6 or any(type(v) not in (int, float) or not isfinite(v) for v in settings):
