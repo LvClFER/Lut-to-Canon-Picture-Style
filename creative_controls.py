@@ -313,20 +313,16 @@ def apply_creative_rgb(rgb, settings=None):
         light -= grading["shoulder"] / 100.0 * light ** 2 * (1 - light)
         light = np.clip(light + grading["lightness"] / 400.0, 0, 1)
 
-    # Familiar recipe-style tone controls, expressed in perceptual lightness.
-    # They deliberately preserve black, white and the middle-grey join. Negative
-    # Highlight softens highlights; negative Shadow lifts/softens shadows.
+    # A zero-slope adjustment at each boundary avoids a cusp at the midtone join.
     shadow_level = float(controls["recipe_shadow"])
     highlight_level = float(controls["recipe_highlight"])
     shadows = light < 0.5
     if shadow_level:
-        shadow_gamma = 2.0 ** (shadow_level * 0.25)
         shadow_input = np.clip(light[shadows] / 0.5, 0.0, 1.0)
-        light[shadows] = 0.5 * (shadow_input ** shadow_gamma)
+        light[shadows] = 0.5 * (shadow_input - 0.75 * shadow_level * shadow_input**2 * (1-shadow_input)**2)
     if highlight_level:
-        highlight_gamma = 2.0 ** (-highlight_level * 0.25)
         highlight_input = np.clip((light[~shadows] - 0.5) / 0.5, 0.0, 1.0)
-        light[~shadows] = 0.5 + 0.5 * (highlight_input ** highlight_gamma)
+        light[~shadows] = 0.5 + 0.5 * (highlight_input + 0.75 * highlight_level * highlight_input**2 * (1-highlight_input)**2)
 
     aa, bb = lab[..., 1], lab[..., 2]
     chroma = np.sqrt(aa * aa + bb * bb)
@@ -391,7 +387,7 @@ def creative_cube(settings=None, size=65):
     rgb = np.stack([grid[2], grid[1], grid[0]], axis=-1).reshape(-1, 3) / float(size - 1)
     output = apply_creative_rgb(rgb, controls).astype(np.float32)
     encoded = json.dumps(controls, sort_keys=True, separators=(",", ":"))
-    fingerprint = hashlib.sha256((encoded + f"|{size}|creative-v3").encode("utf-8")).hexdigest()
+    fingerprint = hashlib.sha256((encoded + f"|{size}|creative-v4").encode("utf-8")).hexdigest()
     return {
         "path": None,
         "title": "Creative Color",

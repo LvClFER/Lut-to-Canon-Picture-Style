@@ -18,6 +18,14 @@ public final class CandidateChecks extends Instrumentation {
             Context context=getTargetContext();
             if(!Python.isStarted())Python.start(new AndroidPlatform(context));
             Python python=Python.getInstance();
+            python.getBuiltins().callAttr("exec",
+                "import numpy as np\nfrom creative_controls import apply_creative_rgb,linear_to_srgb\n"
+                +"join=float(linear_to_srgb(np.asarray(.5**3)))\nx=join+np.array([-.001,-.0005,0,.0005,.001])\n"
+                +"for key in ('recipe_highlight','recipe_shadow'):\n for level in (-2,4):\n"
+                +"  y=apply_creative_rgb(np.repeat(x[:,None],3,axis=1),{key:level})[:,0]\n"
+                +"  assert np.all(np.abs(np.diff(y)/np.diff(x)-1)<.03), 'Recipe tone cusp remains'\n",
+                python.getBuiltins().callAttr("dict"));
+            result.putBoolean("smoothRecipeTone",true);
             String conversion=python.getModule("nikon_conversion").get("CONVERSION_VERSION").toString();
             if(!conversion.equals("relative-flexible-v5"))throw new AssertionError("Stale NP3 conversion engine");
             python.getModule("nikon_import");python.getModule("nikon_profile_data");

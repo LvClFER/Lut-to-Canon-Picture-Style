@@ -197,3 +197,19 @@ and LUT export together.
 The LUT panel exposes enable switches, continuous opacity sliders with double-tap
 reset to 100%, removal and undoable up/down reordering. Boundary moves are
 disabled in the UI and rejected by the shared mobile API.
+
+### Shared recipe Highlight/Shadow continuity fix
+
+The former piecewise powers had a derivative discontinuity at perceptual
+lightness 0.5: Highlight +4 caused a measured RGB slope jump from 1 to about 33
+near the join, while -2 collapsed it to about 0.055. Recipe tone adjustments now
+use a bounded polynomial with zero adjustment and zero adjustment slope at each
+half's boundaries. Black, white and the join are preserved, the unaffected half
+is unchanged, and every supported level remains monotonic. Positive Highlight
+brightens its half; positive Shadow darkens its half; negatives soften them.
+This remains an approximate recipe look, not calibrated Fujifilm equivalence.
+
+The shared creative-LUT fingerprint was advanced to v4 to invalidate stale
+generated caches. Existing externally baked LUT files remain unchanged. Nineteen
+local recipe-tone/generator/mobile tests and the packaged Android smooth-tone
+check passed; the same core correction is included in the local Windows build.
