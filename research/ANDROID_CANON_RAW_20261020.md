@@ -1111,3 +1111,28 @@ Only the corrected formula has zero-error evidence.
 Private evidence: raw-tone-densification-20261025/shared-helper-proof.json
 and raw-tone-normalization-20261025/normalization-proof.json, with completed
 renders and unchanged source hashes. No installed candidate was modified.
+
+
+### Intermediate-point warp equations verified
+
+The next generator block at 0xdd730..0xde0a3 blends three affine coordinate
+transforms around a pivot. Each transform is
+`(input*span/4095 + offset)*output_scale/16383`. Below the pivot its edge
+blend uses `1-(1-t)**left_power`; above it, the observed branch blends
+linearly toward the right transform. The alternate upper power branch is
+visible in disassembly but is not established by these neutral captures.
+Ordinate scaling is `value*65535/16383` in the observed configuration.
+
+Focused probes captured the scalar spans/offsets/pivot/powers, original dense
+points and final points, and separately watched the nonmonotonic fallback.
+Using those scalar reference parameters, independent arithmetic matches all
+452 final coordinate/ordinate values per RAW exactly for RP IMG_2408,
+RP IMG_2440 and the EOS R fixture (1,356 values total). None took the
+fallback branch. RP IMG_2408 uses raw pivot 1200, plateau endpoint 13200
+and coordinate output scale 32767. Those are evidence, not hardcoded app
+constants. The origin of the scalar warp parameters remains unresolved.
+
+Evidence: raw-tone-point-warp[-rp2440|-eosr]-20261025/
+mathematical-warp-proof.json, trace.json and source/render proofs. No new
+production API was added for opaque captured parameters; the next work is
+the parameter derivation. Installed builds remain unchanged.
