@@ -55,6 +55,20 @@ def sample_cubic_spline(knots, values, second_derivatives, coordinate):
     return correction*(width*width)/6 + (a*values[lower] + b*values[upper])
 
 
+def build_spline_lookup(knots, values, size, maximum):
+    """Observed natural spline LUT: truncate, clamp, then enforce nondecreasing output."""
+    if any(type(v) is not int or not 1 <= v <= 65535 for v in (size, maximum)):
+        raise ValueError('Require bounded positive LUT size and exclusive maximum')
+    second = spline_second_derivatives(knots, values)
+    result = []
+    previous = 0
+    for coordinate in range(size):
+        value = int(max(0, min(maximum-1, sample_cubic_spline(knots, values, second, coordinate))))
+        previous = max(previous, value)
+        result.append(previous)
+    return result
+
+
 def _trunc_q12(value):
     return value//4096 if value>=0 else -((-value)//4096)
 

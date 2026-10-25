@@ -169,6 +169,17 @@ class RawRecipeReferenceTests(unittest.TestCase):
         for slope in (True,float('nan'),float('inf')):
             with self.assertRaises(ValueError):spline_second_derivatives([0,1],[0,1],slope)
 
+    def test_spline_lookup_quantization_and_monotonicity(self):
+        from camera_install.raw_recipe_reference import build_spline_lookup
+        self.assertEqual(build_spline_lookup([0,2],[0,4],5,5),[0,2,4,4,4])
+        self.assertEqual(build_spline_lookup([0,2],[4,0],5,5),[4,4,4,4,4])
+        knots=[0,128,408,512,612,892,1020]
+        lookup=build_spline_lookup(knots,knots,1024,1024)
+        for position,expected in ((0,0),(357,356),(654,653),(850,849),(885,884),(1023,1023)):
+            self.assertEqual(lookup[position],expected)
+        for size,maximum in ((0,1),(1,0),(65536,1),(1,65536),(True,1)):
+            with self.assertRaises(ValueError):build_spline_lookup([0,1],[0,1],size,maximum)
+
     def test_tone_interpolation_and_saturated_endpoint(self):
         curve=[min(i*17,1023) for i in range(2048)]
         for position,expected in ((0,0),(1,17),(63,1071),(64,1088),(65,1105),

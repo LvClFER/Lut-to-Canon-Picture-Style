@@ -1061,3 +1061,29 @@ Evidence: raw-tone-spline-solver-20261025/solver-proof.json and
 shared-helper-proof.json; 20 reference tests pass. This reconstructs the
 solver, not the generator stages that select/transform the knot values.
 No shipped renderer or installed build changed.
+
+
+### Complete final-table resampling from intermediate knots
+
+The 226-knot natural spline captured at 0xde108 reproduces every table entry
+before final adjustment using sample(i*64)/64, add 0.5, truncate and clamp
+to 0..1023. The four remaining differences in RP IMG_2408 are introduced
+by 0xd8020, not the main spline: entries 24,63,129,153 each decrease by one.
+That adjustment builds a secondary 1,024-entry spline lookup via 0xd85d0,
+then maps entries 1..643 through it in this fixture. Its seven neutral control
+pairs are identity points, but floating interpolation plus truncation still
+changes certain integer codes. An identity shortcut would therefore be wrong.
+
+The independent build_spline_lookup implements natural spline evaluation,
+truncation/clamping and nondecreasing output. It matches all 1,024 native
+lookup entries. Combining that lookup with the reconstructed main spline
+resampling matches all 2,048 final tone entries. Fresh RP IMG_2440 and EOS R
+probes also match both complete tables exactly (6,144 final entries and
+3,072 adjustment entries across three RAWs). Evidence:
+raw-tone-final-resampling[-rp2440|-eosr]-20261025/independent-final-table-proof.json.
+
+The intermediate knots/values and adjustment controls are still native
+reference inputs; this does not reconstruct the upstream mapping that creates
+them. No captured arrays were bundled. The 21 reference tests pass, including
+quantization/monotonicity and identity-roundoff regression checks. Installed
+Windows/Android candidates remain unchanged.
