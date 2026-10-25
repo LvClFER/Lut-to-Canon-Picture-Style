@@ -14,6 +14,18 @@ def model_tone_style_index(style_id):
     return indices[style_id]
 
 
+
+def style_range_property_id(style_id):
+    """Observed recipe property holding each style's baseline tone range."""
+    properties = {0x21:0x20a08, 0x22:0x20a08, 0x23:0x20a08,
+                  0x81:0x20a02, 0x82:0x20a03, 0x83:0x20a04,
+                  0x84:0x20a05, 0x85:0x20a06, 0x86:0x20a07,
+                  0x87:0x20a01, 0x88:0x20a20, 0xf0:0x20a00, 0xff:0x20a09}
+    if type(style_id) is not int or style_id not in properties:
+        raise ValueError('Unsupported style range property identifier')
+    return properties[style_id]
+
+
 def decode_model_tone_record(data, mode, normalize_ranges):
     """Observed bounded big-endian model record to the padded native descriptor."""
     if not isinstance(data, (bytes, bytearray, memoryview)) or len(data) < 6:

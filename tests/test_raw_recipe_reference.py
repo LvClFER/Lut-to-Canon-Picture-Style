@@ -404,3 +404,19 @@ class ToneRangeExposureScalingTests(unittest.TestCase):
         fields[1] = 1
         with self.assertRaisesRegex(ValueError, 'lower-bound'):
             scale_tone_range_exposure(fields, 1)
+
+
+class StyleRangePropertyTests(unittest.TestCase):
+    def test_native_verified_property_identifiers(self):
+        from camera_install.raw_recipe_reference import style_range_property_id
+        expected = {33: 133640, 34: 133640, 35: 133640, 129: 133634, 130: 133635, 131: 133636, 132: 133637, 133: 133638, 134: 133639, 135: 133633, 136: 133664, 240: 133632, 255: 133641}
+        for style_id in range(256):
+            with self.subTest(style_id=style_id):
+                if style_id in expected:
+                    self.assertEqual(style_range_property_id(style_id), expected[style_id])
+                else:
+                    with self.assertRaises(ValueError):
+                        style_range_property_id(style_id)
+        for invalid in (True, -1, 256, 129.0, "Standard"):
+            with self.assertRaises(ValueError):
+                style_range_property_id(invalid)

@@ -1558,3 +1558,32 @@ This removes the captured EV-adjusted descriptor as a necessary input,
 but the neutral descriptor (especially its scene-dependent upper value)
 is still observed input. Complete RAW rendering is not established.
 No camera access, installed-build modification or publication occurred.
+
+
+### Baseline range provenance in selected Picture Style properties
+
+A targeted scan of property 0x20302 write sites found the observed baseline
+writer at DppCore 0xa316e and EV-adjusted writer at 0xa3858. The initial
+write copies the first six doubles from selected style-property data at
+offset 0x58 (observed at 0xa30d0). The selector DppCore 0x97ea0 maps the
+style ID to that recipe property. An independent metadata-only mapping
+matched all 256 byte identifiers in a fresh native oracle: 13 recognized,
+243 native zero results represented as explicit Python validation errors.
+This mapping differs from the model tone subrecord mapping, especially
+Fine Detail and Auto, so those APIs must not be conflated.
+
+Fresh source/render-preserving probes covered RP Standard, Neutral and
+Faithful plus EOS R Standard. Their selected recipe properties were
+0x20a02,0x20a05,0x20a06,0x20a02 respectively. All three RP style-property
+ranges share upper 20630.797096898492, while EOS R Standard has
+20508.181382128383. They are heap-backed property data, not directly
+static module addresses. This establishes the immediate copy origin,
+not the ultimate writer of that style-property range. Earlier references
+to scene dependence were hypotheses; these observations establish only
+a difference between the tested RP/EOS R files.
+
+Evidence: tone-style-range-provenance-proof-20261025.json and
+raw-style-range-property-oracle-20261025/property-oracle-proof.json.
+Unusable instruction-level backtrace frames were excluded as evidence.
+The baseline range itself remains unbundled research data; installed
+applications and public releases were not changed.
