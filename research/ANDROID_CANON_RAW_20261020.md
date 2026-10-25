@@ -858,3 +858,24 @@ cover -31/-33 and mode validation. Source hashing passed and no camera was
 accessed. Evidence: `raw-vector-aux-indices-20261025/trace.json` and
 `shared-helper-proof.json`. This reference change is not wired into production
 rendering; the APK is unchanged.
+
+
+## Counterfactual auxiliary-index rounding test, 25 October
+
+A private scalar-only child was modified to use vector-style floor division for
+the auxiliary channel differences across the full IMG_2408 recipe frame. A
+retained native CModule callback counted 1,209,600 executions and 658,378 actually
+changed index calculations. Nevertheless, the final RGB buffer was byte-identical
+to the unmodified scalar-only result. Therefore this measured index discrepancy
+does NOT explain the observed scalar/vector image error under these settings.
+It can still matter for other table/settings combinations, but such an image
+effect has not been established. No claim is made that all internal values stayed
+identical: the measured equality is the final RGB buffer.
+
+Evidence: `raw-force-scalar-vector-indices-20261025`, including counters in
+`trace.json` and `counterfactual-proof.json`. The private callback module was kept
+alive for the entire run; an initial run without this lifetime guarantee failed
+and was discarded. The RAW hash remained unchanged; no disk binary or production
+application was patched and no camera was accessed. Investigation must continue
+at later vector arithmetic rather than attributing the raster error to these
+indices alone.
