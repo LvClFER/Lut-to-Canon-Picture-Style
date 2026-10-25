@@ -801,3 +801,19 @@ output, rather than arising solely from final display or colour matching.
 Rounding differences are a hypothesis, not yet a proven cause. The next useful
 checkpoint is inside the vector recipe arithmetic. No camera or production
 application was changed by this analysis.
+
+
+## First vector gain checkpoint, 25 October
+
+The initial vector gain was observed directly from its native spill buffer on
+IMG_2408: 256 blocks, four blue-channel lanes each, all 1,024 values matched the
+scalar expression `min(cap, 2*input*numerator//denominator)`. The observed ratio
+was 512/512 and both optional preprocessing flags were zero. This excludes that
+specific blue-channel operation in this configuration as the measured discrepancy's
+origin; it does not validate arbitrary ratios, optional paths, other channels or
+the complete vector loop. No floating-register substitution was performed.
+
+Source hashing passed and no camera was accessed. Evidence is in
+`raw-vector-initial-gain-20261025/trace.json` and `shared-helper-proof.json`.
+The first differing downstream vector operation remains to be located. Production
+rendering and the APK are unchanged.
