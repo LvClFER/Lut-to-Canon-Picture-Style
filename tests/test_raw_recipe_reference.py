@@ -338,3 +338,11 @@ class ToneParameterDerivationTests(unittest.TestCase):
             case[index] = value
             with self.subTest(index=index, value=value), self.assertRaises(ValueError):
                 derive_tone_warp_parameters(*case)
+
+
+class AdaptiveToneSamplerTests(unittest.TestCase):
+    def test_curvature_change_uses_linear_interpolation(self):
+        from camera_install.raw_recipe_reference import resample_tone_curve
+        table = resample_tone_curve([0, 100, 200], [0, 3200, 12800])
+        self.assertEqual(table[:4], [0, 32, 92, 188])
+        self.assertEqual(table[-1], 1023)

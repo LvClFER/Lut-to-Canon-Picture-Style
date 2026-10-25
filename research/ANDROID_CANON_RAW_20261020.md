@@ -1448,3 +1448,35 @@ preprocessing, alternate power/limited-range paths and the native fallback
 still require targeted oracle validation. Static model curve provisioning
 and complete sensor-to-colour reconstruction remain unresolved. No Canon
 curve table was bundled; no APK/EXE update or publication occurred.
+
+
+### Alternate warp branches and adaptive final sampler
+
+Three fresh owned-process probes changed only temporary generator inputs:
+upper-power target 450, upper-limited target 900, and lower-limited span
+limit 0.4 with target 300. All used the RP2408 source and preserved its
+hash. Derived coefficients and warped coordinates match exactly in all
+three, exercising the previously unvalidated power and limited-span paths.
+
+Initial final sampling disagreed in two entries of upper-limited and four
+of lower-limited. The final generator calls a distinct cached evaluator
+(DppCore 0xdf670), which uses linear interpolation if either endpoint
+second derivative times 0.3 in absolute value is no greater than the
+absolute difference of the two derivatives. Otherwise it uses the cubic
+formula. This curvature guard was absent from the independent sampler.
+It belongs only to this final sampler; the generic spline and densification
+functions retain their existing cubic behavior.
+
+After implementing the guard, all 6,144 pre-secondary-lookup entries in
+the three alternate cases match exactly. The original RP2408/RP2440/EOS R
+pre-lookup tables also remain exact. Evidence:
+tone-alternate-warp-oracle-proof-20261025.json and
+tone-adaptive-sampler-regression-proof-20261025.json, plus three
+raw-tone-warp-*-20261025 probe directories with source/render proofs.
+The failed initial comparison is retained in this account, not counted as
+success. A synthetic sharp-curvature regression covers the interpolation
+decision without bundling model curves.
+
+Remaining limits: nonzero-EV preprocessing, nonmonotonic fallback, model
+curve provisioning and complete sensor-to-colour reconstruction. Installed
+applications are unchanged; no physical camera access or publication.

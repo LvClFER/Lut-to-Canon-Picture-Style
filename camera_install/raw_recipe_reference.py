@@ -224,7 +224,6 @@ def warp_tone_coordinates(knots, values, *, raw_pivot, end_input, base_span,
             if right_threshold >= pivot:
                 warped = base+(right-base)*fraction
             else:
-                # shortcut: alternate branch still needs a native oracle fixture.
                 warped = edge+(right-edge)*(1-(1-fraction)**right_power)
         else:
             warped = base
@@ -242,8 +241,22 @@ def warp_tone_coordinates(knots, values, *, raw_pivot, end_input, base_span,
 def resample_tone_curve(knots, values):
     """Observed 2048-entry tone sampling before the secondary adjustment LUT."""
     second = spline_second_derivatives(knots, values)
-    return [min(1023, max(0, int(sample_cubic_spline(
-                knots, values, second, i*64)/64+0.5))) for i in range(2048)]
+    result = []
+    for i in range(2048):
+        coordinate = i*64
+        upper = min(len(knots)-1, max(1, bisect_right(knots, coordinate)))
+        lower = upper-1
+        delta = abs(second[lower]-second[upper])
+        # The final cached sampler switches to linear at sharp curvature changes.
+        if 0.3*abs(second[lower]) <= delta or 0.3*abs(second[upper]) <= delta:
+            width = knots[upper]-knots[lower]
+            a = (knots[upper]-coordinate)/width
+            b = (coordinate-knots[lower])/width
+            value = a*values[lower]+b*values[upper]
+        else:
+            value = sample_cubic_spline(knots, values, second, coordinate)
+        result.append(min(1023, max(0, int(value/64+0.5))))
+    return result
 
 
 def _trunc_q12(value):
