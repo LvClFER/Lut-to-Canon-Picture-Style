@@ -1283,3 +1283,30 @@ Evidence: tone-selection-seven-cases-20261025.json and
 raw-tone-style-index-oracle-20261025/style-index-proof.json. All 24 tests
 pass. No model calibration records were bundled and installed builds did
 not change.
+
+
+### Full-table model tone decoding coverage
+
+The selected source table at DppModel RVA 0x1ef4160 declares 96 records.
+Its extent is 4 + 96*3654 = 350,788 bytes. Each record contains seven
+522-byte style subrecords; each subrecord contains nine 58-byte curves.
+The independent decoder consumes the entire declared extent exactly:
+6,048 curves, no gaps or overruns. Packed headers are (10,9,active), with
+active counts 6..10. Counts: active 10=4092, 9=1123, 8=467, 7=232, 6=134.
+
+A fresh owned-process NativeFunction run decoded every curve using the
+native parser with mode 1 and range normalization enabled. Its 6,048
+274-byte descriptors match the independent decoder byte-for-byte across
+all 1,657,152 bytes, SHA-256
+d4fa85304c3dc916dbb2e590a05c78f7aad18efc0003c5560a21991842f5aa8b.
+Every native invocation consumed exactly 58 bytes. The synthetic parser
+checks already cover version extensions and the alternate scaling branch;
+this full-table run specifically covers the observed version-9 table.
+
+Evidence: raw-tone-model-table-20261025/table-decoding-proof.json and
+raw-tone-full-table-decoder-20261025/full-table-proof.json. The private
+probe verifies the table version before using its version-specific RVA.
+This establishes decoder breadth, not the model/ISO selection rules,
+96 physical camera validations or complete Canon RAW colour matching.
+No captured model table or decoded descriptors were added to the app.
+Installed candidates remain unchanged.
