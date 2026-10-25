@@ -148,6 +148,62 @@ def normalize_tone_curve(knots, values, x_lower, x_upper, y_lower, y_upper):
             [(y_upper-y_lower)*v/4095+y_lower*16383/4095 for v in values])
 
 
+
+def warp_tone_coordinates(knots, values, *, raw_pivot, end_input, base_span,
+                          base_offset, edge_span, edge_offset, left_power,
+                          right_power, pivot, right_threshold, scale,
+                          start_input, right_span, right_offset):
+    """Observed coordinate warp; reject the unresolved nonmonotonic fallback."""
+    if not 2 <= len(knots) <= 253 or len(values) != len(knots):
+        raise ValueError('Require matching bounded tone arrays')
+    numbers = (*knots, *values, raw_pivot, end_input, base_span, base_offset,
+               edge_span, edge_offset, left_power, right_power, pivot,
+               right_threshold, scale, start_input, right_span, right_offset)
+    if any(type(v) not in (int, float) or not isfinite(v) for v in numbers):
+        raise ValueError('Require finite tone warp inputs')
+    if (any(a >= b for a, b in zip(knots, knots[1:])) or
+            not start_input <= raw_pivot <= end_input or
+            left_power < 1 or right_power < 1 or scale <= 0):
+        raise ValueError('Invalid tone warp domain or powers')
+    result = []
+    for coordinate in knots:
+        base = (coordinate*base_span/4095+base_offset)*scale/16383
+        edge = (coordinate*edge_span/4095+edge_offset)*scale/16383
+        right = (coordinate*right_span/4095+right_offset)*scale/16383
+        if base < pivot:
+            fraction = ((raw_pivot-coordinate)/(raw_pivot-start_input)
+                        if raw_pivot != start_input else 0.0)
+            blend = 1-(1-min(1.0, max(0.0, fraction)))**left_power
+            warped = edge+(base-edge)*blend
+        elif base > pivot:
+            fraction = ((coordinate-raw_pivot)/(end_input-raw_pivot)
+                        if end_input != raw_pivot else 0.0)
+            fraction = min(1.0, max(0.0, fraction))
+            if right_threshold >= pivot:
+                warped = base+(right-base)*fraction
+            else:
+                # shortcut: alternate branch still needs a native oracle fixture.
+                warped = edge+(right-edge)*(1-(1-fraction)**right_power)
+        else:
+            warped = base
+        result.append(warped)
+    # shortcut: native fallback is not reconstructed; reject instead of guessing.
+    if any(a >= b for a, b in zip(result, result[1:])):
+        raise ValueError('Unsupported nonmonotonic tone warp fallback')
+    scaled_values = [v*65535/16383 for v in values]
+    if any(not isfinite(v) for v in (*result, *scaled_values)):
+        raise ValueError('Tone warp exceeds finite numeric range')
+    return result, scaled_values
+
+
+
+def resample_tone_curve(knots, values):
+    """Observed 2048-entry tone sampling before the secondary adjustment LUT."""
+    second = spline_second_derivatives(knots, values)
+    return [min(1023, max(0, int(sample_cubic_spline(
+                knots, values, second, i*64)/64+0.5))) for i in range(2048)]
+
+
 def _trunc_q12(value):
     return value//4096 if value>=0 else -((-value)//4096)
 

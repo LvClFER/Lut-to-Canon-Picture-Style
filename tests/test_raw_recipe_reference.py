@@ -272,3 +272,40 @@ class ToneNormalizationTests(unittest.TestCase):
                 ([0, 1], [0, 1], (False, 4095, 0, 4095))):
             with self.subTest(knots=knots, bounds=bounds), self.assertRaises(ValueError):
                 normalize_tone_curve(knots, values, *bounds)
+
+
+class ToneWarpChainTests(unittest.TestCase):
+    def parameters(self):
+        return dict(raw_pivot=4095, end_input=16383, base_span=4095,
+                    base_offset=0, edge_span=4095, edge_offset=0, left_power=2,
+                    right_power=2, pivot=4095, right_threshold=4095,
+                    scale=16383, start_input=0, right_span=4095, right_offset=0)
+
+    def test_identity_coordinates_and_resampling(self):
+        from camera_install.raw_recipe_reference import warp_tone_coordinates, resample_tone_curve
+        knots = [0, 4095, 16383]
+        x, y = warp_tone_coordinates(knots, knots, **self.parameters())
+        self.assertEqual(x, knots)
+        self.assertEqual(y, [0, 4095*65535/16383, 65535])
+        table = resample_tone_curve(x, y)
+        self.assertEqual(len(table), 2048)
+        self.assertEqual([table[i] for i in (0, 1, 100, 255, 256, 2047)],
+                         [0, 4, 400, 1020, 1023, 1023])
+        self.assertTrue(all(a <= b for a, b in zip(table, table[1:])))
+
+    def test_warp_domain_validation(self):
+        from camera_install.raw_recipe_reference import warp_tone_coordinates
+        for key, value in (('scale', 0), ('left_power', .5),
+                           ('right_power', float('nan')), ('raw_pivot', -1),
+                           ('end_input', 0)):
+            params = self.parameters()
+            params[key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                warp_tone_coordinates([0, 16383], [0, 16383], **params)
+
+    def test_nonmonotonic_fallback_is_explicit(self):
+        from camera_install.raw_recipe_reference import warp_tone_coordinates
+        params = self.parameters()
+        params.update(base_span=-4095, edge_span=-4095, right_span=-4095)
+        with self.assertRaisesRegex(ValueError, 'fallback'):
+            warp_tone_coordinates([0, 4095, 16383], [0, 4095, 16383], **params)

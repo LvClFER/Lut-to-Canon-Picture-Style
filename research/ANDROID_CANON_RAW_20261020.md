@@ -1398,3 +1398,28 @@ regressions cover identity, nonzero bounds and malformed coordinates or
 ranges. This is an offline intermediate stage; the coordinate warp and
 final resampling are not yet integrated into a complete generator API,
 and no installed build has changed.
+
+
+### Source-control-point to final tone table chain
+
+Integrated offline coordinate warping and fixed 2048-entry resampling
+with the existing spline/normalization primitives. Starting from source
+control points, using observed scalar warp parameters and secondary
+lookup control points, the independent chain reproduces all 6,144 final
+uint32 entries across RP2408, RP2440 and EOS R exactly. No captured final
+table, dense coordinates or final spline derivatives are used as inputs.
+
+Evidence: tone-coordinate-warp-chain-proof-20261025.json (1,356 warped
+coordinates, maximum absolute error zero) and
+tone-source-to-final-chain-proof-20261025.json (three tables, zero unequal
+entries). The source model curves and scalar observations remain private
+research inputs, not bundled calibration assets. Synthetic unit tests
+cover identity coordinates, clipping/resampling and invalid warp domains.
+
+Limits: the scalar warp parameters still come from observations rather
+than the integrated generator-entry derivation. These three references
+exercise the linear upper blend; the alternate power branch follows the
+observed instructions but is not native-oracle validated yet. The native
+nonmonotonic fallback is explicitly rejected rather than approximated.
+This is not complete Canon RAW colour rendering, and no installed build
+was updated or published.
