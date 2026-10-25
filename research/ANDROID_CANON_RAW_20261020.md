@@ -591,3 +591,19 @@ synthetic output was discarded and no camera was accessed. Private evidence:
 `raw-chroma-mix-20261025/trace.json` and `shared-helper-proof.json`.
 Regression tests cover truncation and upper-only limits. Full rendering and
 coefficient generation remain unverified; no app preview change was made.
+
+
+## Continuous post-tone chroma block, 25 October
+
+A further native probe measured the entire instruction span from sign-dependent
+chroma gain through the following channel mix, with no intermediate synthetic
+replacement. It supplied 512 deterministic tuples of channel inputs, signed
+chroma, Q10 amounts, separate sign gains and upper limits. Composing the two
+independent helpers reproduced every native output, with zero mismatches.
+This validates their connection rather than only isolated arithmetic. Selected
+vectors are regression tests; all captures remain private. The source RAW hash
+was unchanged and no camera was accessed. Evidence:
+`raw-chroma-block-20261025/trace.json` and `shared-helper-proof.json`.
+Optional subsequent exposure scaling, clipping, later lookups, auxiliary table
+construction and the complete Canon render remain unverified. No production
+preview or distributable was changed by this offline validation.

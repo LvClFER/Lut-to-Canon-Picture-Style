@@ -4,6 +4,14 @@ from camera_install.raw_recipe_reference import chroma_from_rgb16,rgb16_from_ycb
 
 
 class RawRecipeReferenceTests(unittest.TestCase):
+    def test_continuous_chroma_block_matches_native_vectors(self):
+        from camera_install.raw_recipe_reference import scale_chroma_pair, mix_chroma_luma
+        cases = [([[14043, 57398, 34363], [306, 601, 117], [-10253, 2944], 850, [171, 99, 184, 185], 32767], [35229, 45321, 41288]), ([[28075, 18587, 21551], [306, 601, 117], [-13763, 12679], 243, [102, 187, 190, 122], 65535], [16989, 26225, 20422]), ([[35881, 35288, 28951], [306, 601, 117], [7597, 13273], 41, [58, 54, 116, 17], 32767], [34878, 35222, 34474])]
+        for inputs, expected in cases:
+            channels, weights, chroma, amount, gains, maximum = inputs
+            adjusted = scale_chroma_pair(chroma, amount, gains)
+            self.assertEqual(mix_chroma_luma(channels, weights, adjusted, maximum), expected)
+
     def test_post_gain_mix_caps_only_upper_chroma_and_truncates(self):
         from camera_install.raw_recipe_reference import mix_chroma_luma
         self.assertEqual(mix_chroma_luma([0]*3,[306,601,117],[-65536,65534],32767),[-65536,32767,-4095])
