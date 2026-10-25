@@ -1532,3 +1532,29 @@ exactly: tone-unrounded-descriptor-chain-proof-20261025.json.
 The descriptor itself is still observed input: its upstream sensor/EV
 construction has not been independently reconstructed. The result must
 not be described as complete EV or RAW rendering. Builds remain unchanged.
+
+
+### Zero-lower-bound descriptor EV scaling
+
+Traced the range getter through temporary wrapper DppCore 0xe60e0,
+dispatch 0xe64d0, proxy 0x26540 and cached property getter 0x5c0e0. The
+latter only copies an already computed range. An owned hardware write
+watchpoint on the old cached upper field triggered during object cleanup
+and copying (0xe331, through 0x5adb2/0x69fe4/0x6cc98); this is not evidence
+of the upstream mathematical writer. A failed short-instruction hook was
+replaced by a preceding instruction hook; its failed output is not proof.
+
+Independently, baseline and EV descriptors captured in each of five
+successful reference processes establish exact double-precision scaling
+of fields 2 (upper) and 3 (target) by 2**(-EV), with the other four fields
+unchanged, for the observed zero lower bound. All five reconstructed
+descriptors match the observed doubles exactly and give identical integer
+core-entry arguments. Evidence: tone-range-ev-scaling-proof-20261025.json.
+The offline helper preserves the input and postpones quantization until
+prepare_tone_entry_ranges. Tests cover all five cases and reject nonzero
+lower-bound descriptors until that path has native evidence.
+
+This removes the captured EV-adjusted descriptor as a necessary input,
+but the neutral descriptor (especially its scene-dependent upper value)
+is still observed input. Complete RAW rendering is not established.
+No camera access, installed-build modification or publication occurred.

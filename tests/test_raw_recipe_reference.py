@@ -377,3 +377,30 @@ class ToneRangePreparationTests(unittest.TestCase):
                        [0, 1e10, 0, 0, 0, 0]):
             with self.subTest(fields=fields), self.assertRaises(ValueError):
                 prepare_tone_entry_ranges(fields)
+
+
+class ToneRangeExposureScalingTests(unittest.TestCase):
+    def test_scaling_preserves_precision_and_input(self):
+        from camera_install.raw_recipe_reference import scale_tone_range_exposure, prepare_tone_entry_ranges
+        fields = [14, 0, 20630.797096898492, 1200, 0, 16383]
+        original = fields.copy()
+        for ev, expected in ((-2, [0, 1200, 20630, 0, 4095]),
+                             (-1/3, [0, 377, 6498, 0, 4095]),
+                             (1/3, [0, 238, 4093, 0, 4095]),
+                             (1, [0, 150, 2578, 0, 4095]),
+                             (2, [0, 75, 1289, 0, 4095])):
+            with self.subTest(ev=ev):
+                scaled = scale_tone_range_exposure(fields, ev)
+                self.assertEqual(prepare_tone_entry_ranges(scaled), expected)
+                self.assertEqual([scaled[i] for i in (0, 1, 4, 5)], [14, 0, 0, 16383])
+        self.assertEqual(fields, original)
+
+    def test_reject_unverified_domain(self):
+        from camera_install.raw_recipe_reference import scale_tone_range_exposure
+        fields = [14, 0, 20000, 1200, 0, 16383]
+        for ev in (True, float('nan'), float('inf'), -5.01, 5.01):
+            with self.subTest(ev=ev), self.assertRaises(ValueError):
+                scale_tone_range_exposure(fields, ev)
+        fields[1] = 1
+        with self.assertRaisesRegex(ValueError, 'lower-bound'):
+            scale_tone_range_exposure(fields, 1)

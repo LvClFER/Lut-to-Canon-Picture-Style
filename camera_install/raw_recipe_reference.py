@@ -164,6 +164,23 @@ def prepare_tone_entry_ranges(fields):
     return result
 
 
+
+def scale_tone_range_exposure(fields, exposure_ev):
+    """Observed EV scaling of a zero-lower-bound unrounded range descriptor."""
+    prepare_tone_entry_ranges(fields)
+    if type(exposure_ev) not in (int, float) or not isfinite(exposure_ev) or not -5 <= exposure_ev <= 5:
+        raise ValueError('Require finite exposure compensation in -5..5 EV')
+    # shortcut: nonzero lower-bound exposure behavior still needs a native fixture.
+    if fields[1] != 0:
+        raise ValueError('Unsupported nonzero lower-bound exposure descriptor')
+    result = list(fields)
+    factor = 2.0**(-exposure_ev)
+    result[2] *= factor
+    result[3] *= factor
+    prepare_tone_entry_ranges(result)
+    return result
+
+
 def derive_tone_warp_parameters(settings, raw_pivot, target, x_lower, x_upper, scale_flag):
     """Observed core-entry scalar derivation; editor EV is reflected in its inputs."""
     if len(settings) != 6 or any(type(v) not in (int, float) or not isfinite(v) for v in settings):
