@@ -607,3 +607,21 @@ was unchanged and no camera was accessed. Evidence:
 Optional subsequent exposure scaling, clipping, later lookups, auxiliary table
 construction and the complete Canon render remain unverified. No production
 preview or distributable was changed by this offline validation.
+
+
+## Photographic post-tone block samples, 25 October
+
+The same gain-plus-mix block was then observed without substituting any native
+register, pointer, coefficient or pixel. All 2,048 sampled executions matched the
+composed independent helpers exactly; there were 1,984 distinct input tuples.
+Observed real coefficients included Q10 channel weights [450,464,110], sign
+gains [163,162,167,164], auxiliary amount 1016 and upper limit 41024. These are
+measurements for this fixture/settings, not portable constants.
+
+An uninstrumented render from a separate owned process matched the observed
+render's full RGB pixel hash, mode and dimensions exactly. The RAW source hash
+also remained unchanged. Evidence is in `raw-chroma-observed-20261025`, including
+both render-proof JSON files and `shared-helper-proof.json`. This establishes
+sampled photographic-block parity and absence of observation-induced pixel
+changes, not every pixel or the complete independent Canon renderer. No camera
+was accessed and no application preview correction was added.
