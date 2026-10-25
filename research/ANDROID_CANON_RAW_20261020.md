@@ -466,3 +466,21 @@ The profile lattice, these colour primitives and curve sampling still need to
 be joined with the remaining coefficient-dependent and auxiliary-table stages.
 No partial conversion has been applied to the already developed Android image,
 and the independent Canon-base-render verification flag remains false.
+
+## Positive channel gain, 25 October
+
+A bounded isolated native probe checked 69 synthetic channel-gain vectors at
+the scalar percentage/Q10 stage, including truncation boundaries, zero gain,
+clipping and doubled RGB16 inputs through 131070. The independently replayed
+expression is `min(maximum, (value * percent // 100) * coefficient // 1024)`.
+All 69 outputs matched exactly. The reference helper limits percentage to 0–200,
+coefficient to 0–8192 and cap to 0–65535; signed or overflowing domains are not
+claimed. Regression tests cover intermediate truncation and invalid inputs.
+
+The owned child restored the temporary coefficient fields after each measured
+channel. Its synthetic output is not a photographic reference. The original RAW
+hash remained unchanged, and no camera was accessed. Private evidence is in
+`raw-channel-gain-20261025/trace.json` and `shared-helper-proof.json`.
+This reconstructs one coefficient-dependent arithmetic stage; coefficient
+generation, the remaining auxiliary stages and full Canon rendering are still
+unverified. No correction was added to the Android preview from this result.

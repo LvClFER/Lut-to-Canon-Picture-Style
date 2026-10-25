@@ -1,9 +1,19 @@
 import unittest
 
-from camera_install.raw_recipe_reference import chroma_from_rgb16,rgb16_from_ycbcr,sample_tone64
+from camera_install.raw_recipe_reference import chroma_from_rgb16,rgb16_from_ycbcr,sample_tone64,scale_channel_q10
 
 
 class RawRecipeReferenceTests(unittest.TestCase):
+    def test_channel_gain_rounds_between_stages_and_caps(self):
+        for args, expected in (((99,99,1536,65535),147), ((1,99,1536,65535),0),
+                               ((65535,200,1536,65535),65535), ((65535,100,1,65535),63),
+                               ((32767,100,1023,65535),32735), ((65535,0,8192,65535),0)):
+            self.assertEqual(scale_channel_q10(*args),expected)
+        for index in range(4):
+            for invalid in (-1, True, 1.5):
+                args=[100,100,1024,65535];args[index]=invalid
+                with self.assertRaises(ValueError):scale_channel_q10(*args)
+
     def test_native_chroma_vectors_and_signed_rounding(self):
         cases=(([0,0,65535],[32767,-5327]),([0,65535,0],[-21695,-27423]),
                ([65535,0,0],[-11055,32767]),([65535]*3,[15,15]),

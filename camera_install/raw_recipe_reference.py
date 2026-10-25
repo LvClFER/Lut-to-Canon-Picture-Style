@@ -5,6 +5,14 @@ def _trunc_q12(value):
     return value//4096 if value>=0 else -((-value)//4096)
 
 
+def scale_channel_q10(value, percent, coefficient, maximum):
+    """Observed positive channel gain: truncate percentage, then Q10 gain, then cap."""
+    for number, upper in ((value, 131070), (percent, 200), (coefficient, 8192), (maximum, 65535)):
+        if type(number) is not int or not 0 <= number <= upper:
+            raise ValueError('Require bounded positive channel-gain inputs')
+    return min(maximum, (value * percent // 100) * coefficient // 1024)
+
+
 def chroma_from_rgb16(rgb):
     if len(rgb)!=3 or any(type(v) is not int or not 0<=v<=65535 for v in rgb):
         raise ValueError('Require three unsigned RGB16 values')
