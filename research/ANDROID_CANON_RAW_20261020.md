@@ -741,3 +741,22 @@ traced; attributing the difference solely to camera model would be unsupported.
 Evidence: `raw-rp-path-20261025`, `raw-rp-path-2433-20261025` and
 `raw-rp-path-2440-20261025`. The failed initial portrait replay is an absent-route
 result, not zero-error validation. No app build or camera session was performed.
+
+
+## Scalar tail versus vector processing, 25 October
+
+The portrait discrepancy is now explained by loop dispatch, rather than camera
+model. The vector loop advances its column counter by eight. For IMG_2408,
+the scalar gate observes width 1120 and start 1120: no scalar pixels remain.
+For IMG_2433 it observes width 1620 and start 1616: four scalar pixels remain
+per row. The scalar hooks cover those tail pixels, not the main vector block.
+Thus earlier 2,048 photographic sample matches validate the scalar tail across
+rows; they must not be described as vector/main-frame arithmetic validation.
+
+All three captured row gates matched these widths/start positions, and scalar
+entry was observed only for the landscape case. Both source hashes remained
+unchanged. Evidence: `raw-rp-loop-2408-20261025` and
+`raw-rp-loop-2433-20261025`, including `dispatch-proof.json`.
+The next task is vector-path equivalence or an independently checked scalar
+oracle for that path. Portrait rendering is not blocked on physical equipment;
+its native processing route still needs software investigation.
