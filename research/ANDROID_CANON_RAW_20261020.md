@@ -1136,3 +1136,43 @@ Evidence: raw-tone-point-warp[-rp2440|-eosr]-20261025/
 mathematical-warp-proof.json, trace.json and source/render proofs. No new
 production API was added for opaque captured parameters; the next work is
 the parameter derivation. Installed builds remain unchanged.
+
+
+### Warp coefficients derived from generator entry arguments
+
+The captured intermediate spans/offsets are now independently derivable for
+the observed branch. Let L/U be the typed lower/upper entry bounds, P the
+exposure-scaled integer raw pivot, T four times the exposure-scaled integer
+target, and S the output scale (32767 in these captures). With
+D=U-L, O=L*16383/4095, Q=P*D/4095+O and H=U*16383/4095:
+
+- Aend=(T-O)*D/(Q-O)+L; A=Aend-L.
+- Bstart=U-(H-T)*D/(H-Q); B=U-Bstart.
+- Base offset is O; right offset is Bstart*16383/4095.
+- The scaled pivot is S*T/16383; right threshold is S*Q/16383.
+
+The six scalar settings at generator entry are 1,2,3,2,4,0 in these runs;
+only their roles in the observed formulas are established. The final value
+scales P and target by 2**EV, with native integer truncation before subsequent
+scaling. Settings slots 1..4 supply maximum span ratio, base power, transition
+threshold and upper transition threshold. If A/B exceeds the maximum ratio,
+the edge span/offset are limited around the raw-pivot anchor; otherwise the
+edge span is A and its lower endpoint L. The power factor is the base power
+below the transition, otherwise a linear interpolation toward 1, clamped
+from below by 1. The native right exponent is max(1,edge_span*factor/B);
+the observed left-exponent selection uses 1 when A*factor/edge_span<1,
+otherwise that same right exponent.
+
+Independent arithmetic reproduces all 12 recorded coefficient/metadata
+values exactly in each of the three RAW captures (36 comparisons, max error
+0.0), without reading intermediate native coefficients as inputs. Evidence:
+derived-parameter-proof.json in raw-tone-point-warp[-rp2440|-eosr]-20261025.
+This verifies the neutral branch/entry values, not arbitrary settings,
+degenerate denominators, the nonmonotonic fallback or all exposure branches.
+
+A separate read-only search decoded all 26 fields in each of the six bundled
+PF3s and found no literal uint16 sequence matching these ten source knots
+or Standard ordinates. This only excludes that literal storage representation;
+it does not prove the absence of another encoded representation. Source-knot
+selection and camera-specific entry bounds remain to be traced. No production
+API or installed build changed during this step.
