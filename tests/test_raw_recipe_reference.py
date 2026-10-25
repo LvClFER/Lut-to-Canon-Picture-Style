@@ -4,6 +4,15 @@ from camera_install.raw_recipe_reference import chroma_from_rgb16,rgb16_from_ycb
 
 
 class RawRecipeReferenceTests(unittest.TestCase):
+    def test_post_gain_mix_caps_only_upper_chroma_and_truncates(self):
+        from camera_install.raw_recipe_reference import mix_chroma_luma
+        self.assertEqual(mix_chroma_luma([0]*3,[306,601,117],[-65536,65534],32767),[-65536,32767,-4095])
+        self.assertEqual(mix_chroma_luma([0]*3,[306,601,117],[1,0],65535),[1,0,0])
+        self.assertEqual(mix_chroma_luma([1000]*3,[306,601,117],[0,0],65535),[1000]*3)
+        for channels,weights,chroma,limit in (([0]*3,[1024]*3,[0,0],0),([0]*3,[0]*3,[65536,0],0),
+                                             ([0]*3,[0]*3,[0,0],True),([True]*3,[0]*3,[0,0],0)):
+            with self.assertRaises(ValueError):mix_chroma_luma(channels,weights,chroma,limit)
+
     def test_chroma_gain_uses_sign_and_truncates_each_stage(self):
         from camera_install.raw_recipe_reference import scale_chroma_pair
         self.assertEqual(scale_chroma_pair([1025,-1025],1023,[64,128,192,256]),[511,-2046])

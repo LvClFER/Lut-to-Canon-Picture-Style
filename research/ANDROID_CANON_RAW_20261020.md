@@ -570,3 +570,24 @@ Evidence is in `raw-chroma-gain-20261025/trace.json` and
 rounding and validation. This is the measured default branch only; downstream
 clipping, alternate processing modes, table construction and full rendering
 remain unverified. Production preview output is unchanged.
+
+
+## Post-gain channel mix, 25 October
+
+The following scalar stage caps each gained chroma only from above, forms a
+Q10-weighted base from three ordered pre-tone channels, and produces
+`base+first`, `base+second`, and
+`trunc((8192*base - 1536*first - 4096*second)/8192)`.
+Negative chroma remains negative here; symmetric clipping would be incorrect.
+The outputs precede optional exposure scaling and later clipping/lookup stages.
+
+The independent helper restricts positive Q10 weights to a sum of at most 1024,
+unsigned channel inputs to RGB16, post-gain chroma to -65536–65535 and upper cap
+to RGB16. These bounds keep the observed integer intermediates overflow-free.
+An isolated native probe checked 77 vectors covering channel-only weights,
+zero weights, unequal weights, signed chroma, upper clipping and deterministic
+random inputs. Every output matched. The source RAW hash remained unchanged;
+synthetic output was discarded and no camera was accessed. Private evidence:
+`raw-chroma-mix-20261025/trace.json` and `shared-helper-proof.json`.
+Regression tests cover truncation and upper-only limits. Full rendering and
+coefficient generation remain unverified; no app preview change was made.

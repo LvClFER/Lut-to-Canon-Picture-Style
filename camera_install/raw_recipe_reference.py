@@ -51,6 +51,23 @@ def scale_chroma_pair(chroma, amount, gains):
     return result
 
 
+def mix_chroma_luma(channels, weights, chroma, maximum):
+    """Observed post-gain mix before optional exposure scaling and clipping."""
+    if len(channels) != 3 or any(type(v) is not int or not 0 <= v <= 65535 for v in channels):
+        raise ValueError('Require three unsigned 16-bit channels')
+    if len(weights) != 3 or any(type(v) is not int or not 0 <= v <= 1024 for v in weights) or sum(weights) > 1024:
+        raise ValueError('Require bounded positive Q10 weights summing to at most 1024')
+    if len(chroma) != 2 or any(type(v) is not int or not -65536 <= v <= 65535 for v in chroma):
+        raise ValueError('Require bounded post-gain chroma')
+    if type(maximum) is not int or not 0 <= maximum <= 65535:
+        raise ValueError('Require unsigned 16-bit upper limit')
+    base = sum(value * weight for value, weight in zip(channels, weights)) // 1024
+    first, second = (min(value, maximum) for value in chroma)
+    numerator = base * 8192 - first * 1536 - second * 4096
+    mixed = numerator // 8192 if numerator >= 0 else -((-numerator) // 8192)
+    return [base + first, base + second, mixed]
+
+
 def chroma_from_rgb16(rgb):
     if len(rgb)!=3 or any(type(v) is not int or not 0<=v<=65535 for v in rgb):
         raise ValueError('Require three unsigned RGB16 values')
