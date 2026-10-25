@@ -106,6 +106,19 @@ def signed_curve_lookup(value, positive_limit, full=None, coarse=None):
     return 2 * lookup(0) - lookup(-value)
 
 
+def post_lookup_chroma(rgb, boost_first=False):
+    """Observed second chroma conversion, distinct from the pre-tone matrix."""
+    if len(rgb) != 3 or any(type(v) is not int or not -262144 <= v <= 262144 for v in rgb) or type(boost_first) is not bool:
+        raise ValueError('Require bounded signed lookup outputs and a boolean mode')
+    red, green, blue = rgb
+    first = _trunc_q12(2048 * blue - 1360 * green - 688 * red)
+    if boost_first:
+        product = first * 9
+        first = product // 8 if product >= 0 else -((-product) // 8)
+    second = _trunc_q12(2048 * red - 1712 * green - 336 * blue)
+    return [max(-32768, min(32767, value)) for value in (first, second)]
+
+
 def chroma_from_rgb16(rgb):
     if len(rgb)!=3 or any(type(v) is not int or not 0<=v<=65535 for v in rgb):
         raise ValueError('Require three unsigned RGB16 values')

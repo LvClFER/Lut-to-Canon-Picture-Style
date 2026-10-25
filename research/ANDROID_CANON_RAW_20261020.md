@@ -682,3 +682,21 @@ no native pixels or registers were substituted and no camera was accessed. This
 validates a longer sampled block in the observed mode, not the subsequent colour
 conversion, table generation, alternate modes or the full independent renderer.
 Production rendering remains unchanged.
+
+
+## Second chroma conversion after lookup, 25 October
+
+A separate post-lookup matrix uses coefficients (2048,-1360,-688) for the first
+component and (2048,-1712,-336) for the second, with truncation toward zero by
+4096. These differ from the pre-tone matrix and must not be merged. One explicit
+mode additionally multiplies the first truncated component by 9/8, truncating
+again. Both components are then clipped to signed 16-bit bounds.
+
+An isolated native probe checked 144 tuples across both modes, RGB corners and
+deterministic signed lookup outputs: every pair matched. The reference helper
+bounds each input to +/-262144, keeping its integer products overflow-free.
+Selected native vectors are regression cases, including neutral white producing
+zero in this matrix. Source hashing passed and no camera was accessed. Evidence:
+`raw-second-chroma-20261025/trace.json` and `shared-helper-proof.json`.
+Subsequent component corrections and final integration remain unverified; no
+production rendering change was made.

@@ -4,6 +4,15 @@ from camera_install.raw_recipe_reference import chroma_from_rgb16,rgb16_from_ycb
 
 
 class RawRecipeReferenceTests(unittest.TestCase):
+    def test_second_chroma_conversion_matches_native_in_both_modes(self):
+        from camera_install.raw_recipe_reference import post_lookup_chroma
+        cases = [([[0, 65535, 0], 0], [-21759, -27391]), ([[0, 65535, 0], 1], [-24478, -27391]), ([[-41010, 11779, -33370], 1], [-15420, -22690]), ([[-55341, 9136, -27533], 0], [-7504, -29230])]
+        for (rgb, mode), expected in cases:
+            self.assertEqual(post_lookup_chroma(rgb, bool(mode)), expected)
+        self.assertEqual(post_lookup_chroma([65535]*3), [0,0])
+        for rgb, mode in (([True,0,0],False),([262145,0,0],False),([0]*3,1)):
+            with self.assertRaises(ValueError):post_lookup_chroma(rgb,mode)
+
     def test_signed_lookup_reflects_about_nonzero_origin_and_caps_only_positive(self):
         from camera_install.raw_recipe_reference import signed_curve_lookup
         full=[(i*3+7)%65536 for i in range(131073)]
