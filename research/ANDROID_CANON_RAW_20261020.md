@@ -700,3 +700,22 @@ zero in this matrix. Source hashing passed and no camera was accessed. Evidence:
 `raw-second-chroma-20261025/trace.json` and `shared-helper-proof.json`.
 Subsequent component corrections and final integration remain unverified; no
 production rendering change was made.
+
+
+## Dominant-chroma lookup and common gain, 25 October
+
+The next signed-mode block selects the chroma component with greater absolute
+magnitude, choosing the first on ties. The lookup index is that magnitude capped
+at 32767, including abs(-32768). The selected signed component is retained for a
+later correction. A uint16 table read at that index supplies a common Q7 gain
+for both components, truncating each signed product toward zero by 128.
+
+An isolated native run checked 100 index/dominant selections; another checked
+100 complete selection-plus-gain outputs with a private synthetic table. All
+matched. Selection uses ordinary `max(pair,key=abs)` (first tie wins), and the
+gain reuses the existing independent gain helper with identity Q10 amount.
+No redundant wrapper was introduced. The source RAW hashes remained unchanged;
+no camera was accessed. Evidence: `raw-dominant-chroma-20261025` and
+`raw-dominant-gain-20261025`, each with `trace.json` and
+`shared-helper-proof.json`. Actual table construction, subsequent signed
+corrections and whole-render parity remain unverified; production is unchanged.
