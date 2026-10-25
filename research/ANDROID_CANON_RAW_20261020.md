@@ -643,3 +643,23 @@ Both RAW source hashes remained unchanged; no camera was accessed. Regression
 checks cover signed fractional rounding and clipping. This extends sampled
 continuous-block parity; later lookup operations, table/coefficient construction
 and the full renderer remain unverified. No production preview changed.
+
+
+## Post-mix signed curve lookup, 25 October
+
+The next observed channel branch supports a full 131073-entry table, a coarse
+4097-entry table indexed by `(coordinate+1)//32` with output multiplied by 32,
+or a linear fallback `2*coordinate`. A full table takes precedence. Nonnegative
+input is capped by an explicit positive limit. Negative input instead reflects
+lookup(abs(input)) about lookup(0): `2*lookup(0)-lookup(abs(input))`, without using
+that positive cap. A nonzero table origin therefore matters.
+
+An isolated native child tested 49 combinations across all three paths, signed
+limits, coarse boundaries and positive caps. Every output matched the independent
+helper. Synthetic full values were bounded to uint16 and coarse values to 12 bits;
+these are the helper's verified table bounds, not a claim about every native
+profile. Source RAW hashing passed and no camera was accessed. Evidence is in
+`raw-signed-lookup-20261025/trace.json` and `shared-helper-proof.json`.
+Regression tests cover reflection, nonzero origin, positive-only capping, coarse
+rounding, priority and invalid inputs. Table generation and whole-render parity
+remain unverified; production previews were not changed.

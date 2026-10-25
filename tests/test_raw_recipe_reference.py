@@ -4,6 +4,20 @@ from camera_install.raw_recipe_reference import chroma_from_rgb16,rgb16_from_ycb
 
 
 class RawRecipeReferenceTests(unittest.TestCase):
+    def test_signed_lookup_reflects_about_nonzero_origin_and_caps_only_positive(self):
+        from camera_install.raw_recipe_reference import signed_curve_lookup
+        full=[(i*3+7)%65536 for i in range(131073)]
+        coarse=[(i*5+3)%4096 for i in range(4097)]
+        self.assertEqual(signed_curve_lookup(-32,0,full=full),-89)
+        self.assertEqual(signed_curve_lookup(32,0,full=full),7)
+        self.assertEqual(signed_curve_lookup(-31,0,coarse=coarse),-64)
+        self.assertEqual(signed_curve_lookup(31,131072,coarse=coarse),256)
+        self.assertEqual(signed_curve_lookup(-33,0),-66)
+        self.assertEqual(signed_curve_lookup(32,0,full=full,coarse=coarse),7)
+        for value,limit in ((True,0),(131073,0),(0,-1)):
+            with self.assertRaises(ValueError):signed_curve_lookup(value,limit)
+        with self.assertRaises(ValueError):signed_curve_lookup(0,0,full=[0])
+
     def test_mixed_channel_exposure_truncates_before_signed_clipping(self):
         from camera_install.raw_recipe_reference import scale_mixed_channels
         self.assertEqual(scale_mixed_channels([-1,1,16385],8192,-131071,131071),[0,0,8192])

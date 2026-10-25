@@ -84,6 +84,28 @@ def scale_mixed_channels(values, factor, minimum, maximum):
     return output
 
 
+def signed_curve_lookup(value, positive_limit, full=None, coarse=None):
+    """Observed post-mix signed lookup, including reflection about lookup(0)."""
+    if type(value) is not int or not -131072 <= value <= 131072 or type(positive_limit) is not int or not 0 <= positive_limit <= 131072:
+        raise ValueError('Invalid signed lookup coordinate or positive limit')
+    table = full if full is not None else coarse
+    if table is not None:
+        length, maximum = (131073, 65535) if full is not None else (4097, 4095)
+        if len(table) != length or any(type(v) is not int or not 0 <= v <= maximum for v in table):
+            raise ValueError('Invalid signed lookup table')
+
+    def lookup(index):
+        if full is not None:
+            return full[index]
+        if coarse is not None:
+            return coarse[(index + 1) // 32] * 32
+        return index * 2
+
+    if value >= 0:
+        return lookup(min(value, positive_limit))
+    return 2 * lookup(0) - lookup(-value)
+
+
 def chroma_from_rgb16(rgb):
     if len(rgb)!=3 or any(type(v) is not int or not 0<=v<=65535 for v in rgb):
         raise ValueError('Require three unsigned RGB16 values')
