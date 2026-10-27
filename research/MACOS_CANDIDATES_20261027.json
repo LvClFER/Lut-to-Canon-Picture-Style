@@ -18,7 +18,18 @@
       "dmgSha256": "9ae82825750fe645b5989c4a105bb862064567e656df6f8739dc20d25027a837",
       "githubArtifactDigestMatched": true,
       "zipCrcPassed": true,
-      "nativeBuildJobPassed": true
+      "nativeBuildJobPassed": true,
+      "nativeDmgValidation": {
+        "architecture": "x86_64",
+        "sourceRunId": 40519938596,
+        "dmgSha256": "9ae82825750fe645b5989c4a105bb862064567e656df6f8739dc20d25027a837",
+        "nativeCocoaStartupPassed": true,
+        "signatureVerified": true,
+        "cameraAccess": false,
+        "releaseCreated": false,
+        "bundledBasicPf3HashesVerified": true,
+        "canonLogoPresent": true
+      }
     }
   ],
   "downloadedDmgValidationRunId": 40523856550,
