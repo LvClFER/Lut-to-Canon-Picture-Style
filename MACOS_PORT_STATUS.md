@@ -2,12 +2,13 @@
 
 ## Current source versus validated bundles — 27 October
 
-The current-source Apple Silicon job in
+Both current-source native jobs in
 [run 40519938596](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/actions/runs/40519938596)
-passed tests, packaging, bundle audit and frozen startup. Its DMG was downloaded
-and the artifact SHA-256 and ZIP CRC verified locally; see
-`research/MACOS_ARM_CANDIDATE_20261027.json`. The downloaded DMG still needs its
-separate native mount/signature/startup check. Intel is still running. Neither
+passed tests, packaging, bundle audit and frozen startup. Both DMGs were downloaded
+and their artifact SHA-256 and ZIP CRC verified locally; see
+`research/MACOS_CANDIDATES_20261027.json`. Their separate native
+mount/signature/startup checks are running in
+[run 40523856550](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/actions/runs/40523856550). Neither
 candidate is a release, and no camera was accessed.
 
 The DMG hashes below identify the 24 October source only. Later recipe-tone

@@ -1,0 +1,28 @@
+{
+  "sourceRunId": 40519938596,
+  "sourceCommit": "20d9741028ccc5177cb238854ae9e93bc419e25c",
+  "artifacts": [
+    {
+      "architecture": "arm64",
+      "artifactId": 12740609298,
+      "zipSha256": "6e0a290532dce31ed6d69285031a29352d2be117c0bcdbed502d1e64724b79a0",
+      "dmgSha256": "954da8a2a2c587e83ff833be8c105f60df09d48c3d1f1574eb9f81e695101979",
+      "githubArtifactDigestMatched": true,
+      "zipCrcPassed": true,
+      "nativeBuildJobPassed": true
+    },
+    {
+      "architecture": "x86_64",
+      "artifactId": 12742932297,
+      "zipSha256": "3d83e5e87239b5e9dd320bdcda9829492bc4c50c9dc41c0cb5f44db3e9b8dfec",
+      "dmgSha256": "9ae82825750fe645b5989c4a105bb862064567e656df6f8739dc20d25027a837",
+      "githubArtifactDigestMatched": true,
+      "zipCrcPassed": true,
+      "nativeBuildJobPassed": true
+    }
+  ],
+  "downloadedDmgValidationRunId": 40523856550,
+  "downloadedDmgNativeMountVerified": false,
+  "cameraAccess": false,
+  "releaseCreated": false
+}
