@@ -1,0 +1,68 @@
+{
+  "method": "Leave-one-scene-out gamma/scale diagnostic; portrait reference geometry corrected",
+  "results": [
+    {
+      "file": "IMG_2134",
+      "gamma": 1.13,
+      "scale": 1.6216523723230953,
+      "meanBefore": 61.26597777777777,
+      "meanAfter": 84.19485408350184,
+      "meanReference": 90.49805972222221,
+      "maeBefore": 30.63419861111111,
+      "maeAfter": 14.620753752421122,
+      "clippedFraction": 0.006401388888888889
+    },
+    {
+      "file": "IMG_2408",
+      "gamma": 1.14,
+      "scale": 1.6126825506573206,
+      "meanBefore": 74.10345694444445,
+      "meanAfter": 101.82140254806812,
+      "meanReference": 114.68885833333334,
+      "maeBefore": 40.89354027777778,
+      "maeAfter": 15.320856603242122,
+      "clippedFraction": 0.007593055555555555
+    },
+    {
+      "file": "IMG_2433",
+      "gamma": 1.0699999999999998,
+      "scale": 1.5950730350915687,
+      "meanBefore": 73.32353472222222,
+      "meanAfter": 107.48529589382626,
+      "meanReference": 89.84621805555555,
+      "maeBefore": 20.024511111111106,
+      "maeAfter": 18.258359150802107,
+      "clippedFraction": 0.004955555555555556
+    },
+    {
+      "file": "IMG_2438",
+      "gamma": 1.0699999999999998,
+      "scale": 1.554201971735446,
+      "meanBefore": 48.05055555555556,
+      "meanAfter": 66.87386017319197,
+      "meanReference": 59.00171944444443,
+      "maeBefore": 14.039033333333332,
+      "maeAfter": 11.754665234628812,
+      "clippedFraction": 0.0
+    },
+    {
+      "file": "IMG_2440",
+      "gamma": 1.1349999999999998,
+      "scale": 1.6522582716273455,
+      "meanBefore": 64.17284027777778,
+      "meanAfter": 91.24523259991118,
+      "meanReference": 91.59920000000001,
+      "maeBefore": 27.867220833333334,
+      "maeAfter": 9.185955479646982,
+      "clippedFraction": 0.0060375
+    }
+  ],
+  "limits": [
+    "Offline LibRaw 0.22.1, not Android LibRaw 0.22.2 execution.",
+    "Residual active-area, lens and demosaic differences remain.",
+    "A fitted brightness curve is not a Canon base renderer."
+  ],
+  "decision": "Do not ship the fitted gamma/scale as a Canon Standard renderer: residual errors and clipping remain.",
+  "sourceRawFilesModified": false,
+  "newApkBuilt": false
+}
