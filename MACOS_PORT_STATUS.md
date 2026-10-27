@@ -1,5 +1,18 @@
 # macOS port — local work, not a release
 
+## Current source versus validated bundles — 27 October
+
+The DMG hashes below identify the 24 October source only. Later recipe-tone
+changes and RAW reference research are not verified inside those bundles.
+On Windows, the current source passed 36 portability, discovery, PTP and
+recipe-tone tests (one native-only test skipped). Those checks use platform
+doubles where necessary and do not establish native Cocoa or camera behavior.
+The complete current-source suite also passed on Windows: 903 tests in 342
+seconds, with one skip, using Qt offscreen. This does not validate a frozen app.
+The existing candidate workflow discovers all tests, including the newer tone
+and RAW reference tests, when a new native candidate is built. No new native
+build or physical camera operation was performed for this local check.
+
 The 24 October smooth-v5 source candidate includes the reorganized editor menus
 and the corrected relative Nikon NP3 converter. Inversion retains extended RGB
 before clipping, starts from known forward samples and regularizes colour-table
