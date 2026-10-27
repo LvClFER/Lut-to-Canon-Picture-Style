@@ -30,6 +30,20 @@ public final class CandidateChecks extends Instrumentation {
             if(!conversion.equals("relative-flexible-v5"))throw new AssertionError("Stale NP3 conversion engine");
             python.getModule("nikon_import");python.getModule("nikon_profile_data");
             result.putString("np3ConversionVersion",conversion);
+            for(int i=0;i<6;i++)if(inputs.containsKey("baselineRaw"+i)) {
+                java.util.List<PyObject> developed=python.getModule("android_raw").callAttr("decode",
+                    inputs.getString("baselineRaw"+i),context.getCacheDir().toString()).asList();
+                PyObject metadata=developed.get(1);
+                double baseline=metadata.callAttr("__getitem__","canon_baseline_exposure_ev").toDouble();
+                double expected=Double.parseDouble(inputs.getString("baselineExpected"+i));
+                if(Math.abs(baseline-expected)>0.0000001
+                        || metadata.callAttr("__getitem__","canon_baseline_exposure_applied").toBoolean())
+                    throw new AssertionError("Canon Flavor baseline mismatch for fixture "+i);
+                result.putString("canonBaselineEv"+i,String.valueOf(baseline));
+                result.putString("canonBaselinePixelHash"+i,python.getModule("hashlib").callAttr("sha256",
+                    developed.get(0).callAttr("tobytes")).callAttr("hexdigest").toString());
+                developed.get(0).callAttr("close");
+            }
             for(int i=0;i<5;i++)if(inputs.containsKey("brightnessRaw"+i)) {
                 java.util.List<PyObject> developed=python.getModule("android_raw").callAttr("decode",
                     inputs.getString("brightnessRaw"+i),context.getCacheDir().toString()).asList();

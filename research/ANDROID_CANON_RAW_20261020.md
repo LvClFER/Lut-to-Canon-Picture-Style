@@ -1698,3 +1698,27 @@ The library helper decodes an already extracted payload: independent
 container traversal was verified in the private read probe, not yet
 integrated into the installed app. Other Flavor versions, missing tags,
 full RAW colour rendering and app integration remain outstanding.
+# Android Flavor metadata integration — 27 October 2026
+
+The native LibRaw decoder now reads Canon MakerNote tag 0x4005 through LibRaw's
+existing MakerNote callback. The bounded parser accepts only the verified
+0x2000000b Flavor version, checks the declared size and decodes the signed word
+at 0x43f4. Unsupported or malformed blocks produce no baseline value; conflicting
+duplicate values are reported as unavailable. No container parser or Canon
+runtime was added.
+
+JSON reports `canon_baseline_exposure_ev` (number or null) and
+`canon_baseline_exposure_applied=false`. This is metadata only: the existing
+LibRaw histogram normalization and rendering parameters are unchanged, and
+`canon_base_render_verified` remains false. Applying this correction before
+reconstructing the complete tone pipeline risks applying brightness twice.
+
+Both Android native architectures compiled. Compile-time C++ tests cover signed
+limits, zero, the observed values, truncated/mismatched sizes and an unsupported
+version. Fifty Python RAW/reference tests passed. The packaged x86_64 emulator
+test decoded all six supplied fixtures and matched the independent/native
+reference baseline values: 0.2613, 0.3326, 0.3326, 0, 0.3326 and 0.324 EV.
+The same instrumentation passed editor, project, PF3, LUT and tone checks.
+Private execution evidence: `raw-validation/flavor-android-native-20261027.txt`.
+ARM64 execution on a phone, other Flavor versions and full Canon RGB fidelity
+are not established by this test. No physical camera access occurred.

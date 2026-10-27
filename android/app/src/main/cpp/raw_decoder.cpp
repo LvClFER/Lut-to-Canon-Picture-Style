@@ -7,8 +7,27 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "canon_flavor.h"
 
 namespace {
+struct CanonMetadata {
+    canon::BaselineExposure baseline{false,0};
+    bool conflict=false;
+};
+void makerNote(void* context,int tag,int type,int length,unsigned int order,void* input,INT64) {
+    if((tag&0xffff)!=0x4005 || type!=7 || order!=0x4949
+            || length<0x43f6 || length>1024*1024)return;
+    auto& metadata=*static_cast<CanonMetadata*>(context);
+    auto* stream=static_cast<LibRaw_abstract_datastream*>(input);
+    // LibRaw restores the stream position after this callback, including ignored tags.
+    std::vector<unsigned char> bytes(static_cast<std::size_t>(length));
+    if(stream->read(bytes.data(),1,bytes.size())!=length)return;
+    const auto value=canon::flavorBaseline(bytes.data(),bytes.size());
+    if(!value.valid)return;
+    if(metadata.baseline.valid && metadata.baseline.tenThousandths!=value.tenThousandths)
+        metadata.conflict=true;
+    metadata.baseline=value;
+}
 std::string path(JNIEnv* env,jbyteArray encoded) {
     if(!encoded)throw std::runtime_error("Missing RAW path");
     const jsize length=env->GetArrayLength(encoded);
@@ -42,6 +61,8 @@ Java_org_canonstylestudio_mobile_NativeRaw_developNative(JNIEnv* env,jclass,jbyt
         std::string input=path(env,source);output=path(env,destination);
         if(input==output)throw std::runtime_error("RAW input cannot be overwritten");
         LibRaw processor;
+        CanonMetadata canonMetadata;
+        processor.set_makernotes_handler(makerNote,&canonMetadata);
         auto& params=processor.imgdata.params;
         processor.imgdata.rawparams.max_raw_memory_mb=256;
         params.half_size=1;
@@ -90,6 +111,9 @@ Java_org_canonstylestudio_mobile_NativeRaw_developNative(JNIEnv* env,jclass,jbyt
             +quoted(processor.imgdata.idata.make)+",\"camera_model\":"+quoted(processor.imgdata.idata.model)
             +",\"width\":"+std::to_string(image->width)+",\"height\":"+std::to_string(image->height)
             +",\"camera_crop_applied\":"+(cameraCrop?"true":"false")
+            +",\"canon_baseline_exposure_ev\":"+(canonMetadata.baseline.valid && !canonMetadata.conflict
+                ? std::to_string(canonMetadata.baseline.tenThousandths/10000.0) : "null")
+            +",\"canon_baseline_exposure_applied\":false"
             +",\"embedded_preview_used\":false,\"sensor_exposure_applied\":true,\"brightness_normalization\":\"LibRaw histogram\",\"output_transfer\":\"sRGB\",\"canon_base_render_verified\":false}";
         return env->NewStringUTF(metadata.c_str());
     } catch(const std::exception& error) {
