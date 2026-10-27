@@ -1,0 +1,54 @@
+{
+  "scope": "Android RAW brightness investigation, not Canon RGB calibration",
+  "reference": "Fresh owned DPP Standard / As Shot / 0 EV renders on 27 October, PNGs retained privately",
+  "android": "Recorded LibRaw 0.22.2 instrumented results on 25 October; same rendering parameters retained in 27 October metadata-only build",
+  "records": [
+    {
+      "file": "IMG_2134.CR3",
+      "sourceSha256": "472c5d6bf280c5295172e24b2a48f688c84b15d8bcb35a6bc9b4f183c2f5473f",
+      "sourceUnchanged": true,
+      "canonStandardMeanRgb8": 90.49842793367347,
+      "androidHistogramMeanRgb8": 93.43364167283039,
+      "meanDifferenceRgb8": 2.9352137391569215
+    },
+    {
+      "file": "IMG_2408.CR3",
+      "sourceSha256": "cbf7dcac4a3b55ab99b2440ac3dccc6c5349ed29333cc63a19838480cb526573",
+      "sourceUnchanged": true,
+      "canonStandardMeanRgb8": 98.58762241354876,
+      "androidHistogramMeanRgb8": 122.94751546063443,
+      "meanDifferenceRgb8": 24.359893047085677
+    },
+    {
+      "file": "IMG_2433.CR3",
+      "sourceSha256": "cc0a8cf9512d04a653008762db19229dc344deb81e8023a2aa35f6743d362efe",
+      "sourceUnchanged": true,
+      "canonStandardMeanRgb8": 89.84712850765307,
+      "androidHistogramMeanRgb8": 128.8124178172255,
+      "meanDifferenceRgb8": 38.96528930957244
+    },
+    {
+      "file": "IMG_2438.CR3",
+      "sourceSha256": "e3327fd2c08643f6a054ab8dacfe2656829a889a562897dff477f251dcf5a4eb",
+      "sourceUnchanged": true,
+      "canonStandardMeanRgb8": 59.00400262188209,
+      "androidHistogramMeanRgb8": 106.10423903887244,
+      "meanDifferenceRgb8": 47.10023641699035
+    },
+    {
+      "file": "IMG_2440.CR3",
+      "sourceSha256": "72c64d819ce032c79b3a5f03755cfb70ee75aabae52d320992fcf79ecacb3e10",
+      "sourceUnchanged": true,
+      "canonStandardMeanRgb8": 91.59766493055555,
+      "androidHistogramMeanRgb8": 105.15558796638724,
+      "meanDifferenceRgb8": 13.557923035831692
+    }
+  ],
+  "conclusion": "Histogram normalization is scene-dependent and does not reproduce Canon Standard. A single global exposure offset is not justified.",
+  "limits": [
+    "Whole-image mean is a coarse diagnostic, not pixel/color accuracy.",
+    "DPP references use 1680x1120 output; Android uses its sensor preview geometry.",
+    "No new phone execution or camera access.",
+    "No renderer change or new APK is claimed by this comparison."
+  ]
+}
