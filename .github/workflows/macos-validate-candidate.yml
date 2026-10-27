@@ -56,6 +56,11 @@ jobs:
                   assert manifest['architecture'] == architecture
                   assert manifest['buildId'] == '2026-10-24-WINDOWS-NP3-SMOOTH-CANDIDATE'
                   assert len(manifest['basicPf3Sha256']) == 6
+                  resources = app / 'Contents/Resources'
+                  assert (resources / 'assets/canon-logo.png').is_file()
+                  for name, expected in manifest['basicPf3Sha256'].items():
+                      assert Path(name).name == name and name.endswith('.pf3')
+                      assert hashlib.sha256((resources / 'basic_pf3' / name).read_bytes()).hexdigest() == expected
                   assert subprocess.check_output(['lipo', '-archs', str(executable)],
                       text=True, timeout=15).strip() == architecture
                   subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)],
@@ -68,6 +73,8 @@ jobs:
           proof = dict(architecture=architecture, sourceRunId=40519938596,
               dmgSha256=digest.hexdigest(), nativeCocoaStartupPassed=True,
               signatureVerified=True, cameraAccess=False, releaseCreated=False)
+          proof['bundledBasicPf3HashesVerified'] = True
+          proof['canonLogoPresent'] = True
           Path('GUI_STARTUP_' + architecture + '.json').write_text(json.dumps(proof, indent=2))
           PY
       - uses: actions/upload-artifact@v4
