@@ -1,0 +1,26 @@
+{
+  "checked_utc": "2026-10-27T14:11:59.122804+00:00",
+  "artifact": "C:\\Users\\Filipe\\Desktop\\CanonStyleStudio\\CanonStyleStudio.exe",
+  "sha256": "3a5503246ccf24a593f4d03f57c46982c56494700d76c61501068b8c3732c21a",
+  "manifest_sha256": "dd63fb0d24d50c144e37ae4ef0f429933c69ee86150e7996b188a61614ccfded",
+  "build_id": "2026-10-24-WINDOWS-NP3-SMOOTH-CANDIDATE",
+  "basic_pf3_sha256": {
+    "standard.pf3": "2457fa70a36719b7e70bfc1e0ab06819877254d29c634e414bf1587172e3adc3",
+    "portrait.pf3": "205487b04960f8b9f78b6435486581318fe4320cf0b5404fa15c21d2c1377074",
+    "landscape.pf3": "1310185dc4f2bbb5d1284c1a88a4e07a777c16231219f919c4ecf2db80c44433",
+    "neutral.pf3": "b8c6c060cdc44ad8c05a9a62732c34087de80f984a5408ed0f69a1ff1784373a",
+    "faithful.pf3": "6da1153a0cbb26d2a34d050af2d84b2ec9f2cd2002c8a5ef2a4d3a7cbf0089ca",
+    "fine_detail.pf3": "c176af73f75206c0b97540ff35baf16f3868d9bc51d949facf45098d06592e1e"
+  },
+  "runtime_audit_problems": [],
+  "required_frozen_modules_present": true,
+  "startup_smoke_exit_code": 0,
+  "startup_storage": "temporary isolated portable root",
+  "camera_access_performed": false,
+  "publication_performed": false,
+  "limits": [
+    "Startup smoke does not verify interactive editing, DPReview downloads or USB installation.",
+    "Current-source regression results do not prove those changes are present in this executable.",
+    "No native Mac runtime was checked in this audit."
+  ]
+}
