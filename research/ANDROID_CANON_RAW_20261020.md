@@ -1658,3 +1658,43 @@ gray values. Baseline property 0x1ff548 provenance remains unresolved;
 it must not be assumed to be an EXIF tag or hardcoded for all cameras.
 No native correction/profile table was bundled. Full colour rendering,
 installed applications and public releases remain unchanged.
+
+
+### Baseline EV is available in the CR3 Flavor metadata
+
+The inline-double property constructor 0x5a820 identified the original
+0x1ff548 write at DppCore 0x11d7f7, inside 0x117550..0x1239a8. It reads
+a signed 16-bit word at offset 0x43f4 of a source metadata buffer and
+divides by 10000. A private capture proved that buffer is byte-identical
+to file data, not generated calibration data. RP2408's buffer begins at
+file offset 12768093; the matching nearby 32-byte sequence occurs only at
+that expected metadata position.
+
+An independent BMFF/CTMD inspection locates the CTMD sample via stsd,
+stsz and stco/co64, then record type 8, tag 0x927c (TIFF), then TIFF tag
+0x4005. That tag is called Flavor in the primary ExifTool Canon table:
+https://github.com/exiftool/exiftool/blob/master/lib/Image/ExifTool/Canon.pm
+The source tag's first two little-endian dwords are its byte length and
+version 0x2000000b. All six fixtures have a 32476-byte payload.
+The independent decoder validates type, declared size, bounded length,
+version and field extent, and returns signed_word/10000. Unsupported
+versions fail explicitly rather than guessing the same offset.
+
+Direct RAW metadata results:
+IMG_2134 .2613; IMG_2408 .3326; IMG_2433 .3326; IMG_2438 0;
+IMG_2440 .3326; EOS R original.cr3 .324. Six fresh native reference renders
+confirm every value and source signed word exactly, including zero.
+Source SHA-256 preservation was checked for the independent reads and
+native probes. This establishes a per-file field, not a per-model
+constant: the RP fixtures already differ.
+
+Evidence: raw-flavor-baseline-independent-proof-20261027.json and
+raw-flavor-baseline-native-comparison-20261027.json; native process
+evidence is in raw-flavor-native-*-20261027 with source/render proofs.
+The previous broad statement that baseline provenance was unresolved is
+superseded for this observed Flavor layout. No proprietary calibration
+table or captured metadata blob is bundled; tests use synthetic payloads.
+The library helper decodes an already extracted payload: independent
+container traversal was verified in the private read probe, not yet
+integrated into the installed app. Other Flavor versions, missing tags,
+full RAW colour rendering and app integration remain outstanding.

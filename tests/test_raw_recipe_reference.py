@@ -439,3 +439,36 @@ class BaselineRangeCorrectionTests(unittest.TestCase):
                                 (1200, float('nan')), (1200, 1e9)):
             with self.subTest(pivot=pivot, baseline=baseline), self.assertRaises(ValueError):
                 correct_tone_range_baseline([14, 0, 16383, 1200, 0, 16383], pivot, baseline)
+
+
+class CanonFlavorBaselineTests(unittest.TestCase):
+    def make_payload(self, value, version=0x2000000b):
+        payload = bytearray(32476)
+        import struct
+        struct.pack_into('<II', payload, 0, len(payload), version)
+        struct.pack_into('<h', payload, 0x43f4, value)
+        return payload
+
+    def test_signed_fixed_point_baseline(self):
+        from camera_install.raw_recipe_reference import decode_canon_flavor_baseline
+        for encoded, expected in ((3326, .3326), (3240, .324), (2613, .2613),
+                                  (0, 0), (-10000, -1), (-32768, -3.2768), (32767, 3.2767)):
+            with self.subTest(encoded=encoded):
+                self.assertEqual(decode_canon_flavor_baseline(self.make_payload(encoded)), expected)
+
+    def test_reject_unknown_layout_or_truncation(self):
+        from camera_install.raw_recipe_reference import decode_canon_flavor_baseline
+        payload = self.make_payload(3326)
+        for invalid in (b'', payload[:-1], payload[:0x43f5],
+                        self.make_payload(3326, 0x2000000a), 'metadata', list(payload)):
+            with self.subTest(kind=type(invalid)), self.assertRaises(ValueError):
+                decode_canon_flavor_baseline(invalid)
+        payload[0] ^= 1
+        with self.assertRaises(ValueError):
+            decode_canon_flavor_baseline(payload)
+
+    def test_metadata_baseline_feeds_range_correction(self):
+        from camera_install.raw_recipe_reference import decode_canon_flavor_baseline, correct_tone_range_baseline
+        baseline = decode_canon_flavor_baseline(self.make_payload(3326))
+        self.assertEqual(correct_tone_range_baseline([14, 0, 16383, 1200, 0, 16383], 1200, baseline),
+                         [14, 0, 20630.797096898492, 1200, 0, 16383])

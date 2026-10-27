@@ -178,6 +178,17 @@ def prepare_tone_entry_ranges(fields):
 
 
 
+
+def decode_canon_flavor_baseline(data):
+    """Observed Canon Flavor version-11 signed baseline-EV metadata field."""
+    if not isinstance(data, (bytes, bytearray, memoryview)) or len(data) < 0x43f6:
+        raise ValueError('Require a complete Canon Flavor baseline field')
+    size, version = struct.unpack_from('<II', data)
+    if size != len(data) or size > 1048576 or version != 0x2000000b:
+        raise ValueError('Unsupported or malformed Canon Flavor metadata')
+    return struct.unpack_from('<h', data, 0x43f4)[0]/10000.0
+
+
 def correct_tone_range_baseline(fields, gray_pivot, baseline_ev):
     """Observed baseline-EV correction before user exposure compensation."""
     prepare_tone_entry_ranges(fields)
