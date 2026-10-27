@@ -1,0 +1,53 @@
+{
+  "cases": [
+    {
+      "probe": "raw-tone-point-warp-20261025",
+      "entries": 2048,
+      "mismatches": 0
+    },
+    {
+      "probe": "raw-tone-point-warp-rp2440-20261025",
+      "entries": 2048,
+      "mismatches": 0
+    },
+    {
+      "probe": "raw-tone-point-warp-eosr-20261025",
+      "entries": 2048,
+      "mismatches": 0
+    },
+    {
+      "probe": "raw-tone-exposure-minus2-20261025",
+      "entries": 2048,
+      "mismatches": 0
+    },
+    {
+      "probe": "raw-tone-exposure-minus-third-20261025",
+      "entries": 2048,
+      "mismatches": 0
+    },
+    {
+      "probe": "raw-tone-exposure-plus-third-20261025",
+      "entries": 2048,
+      "mismatches": 0
+    },
+    {
+      "probe": "raw-tone-exposure-plus1-20261025",
+      "entries": 2048,
+      "mismatches": 0
+    },
+    {
+      "probe": "raw-tone-exposure-plus2-20261025",
+      "entries": 2048,
+      "mismatches": 0
+    }
+  ],
+  "androidX86Instrumentation": {
+    "exactModelToneCases": 8,
+    "instrumentationCode": -1,
+    "editorProjectPf3LutChecksPassed": true
+  },
+  "hostTargetedTestsPassed": 51,
+  "privateCalibrationBundled": false,
+  "pixelRendererIntegration": false,
+  "physicalArm64Validated": false
+}

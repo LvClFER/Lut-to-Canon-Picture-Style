@@ -4,6 +4,21 @@ from camera_install.raw_recipe_reference import chroma_from_rgb16,rgb16_from_ycb
 
 
 class RawRecipeReferenceTests(unittest.TestCase):
+    def test_composed_model_tone_linear_curve_has_expected_domain_scaling(self):
+        from camera_install.raw_recipe_reference import generate_model_tone_lookup
+        knots=[0,4095,8190,16383]
+        arguments=dict(settings=[1,2,3,2,4,0],range_fields=[14,0,16383,1200,0,16383],
+                       raw_pivot=1200,baseline_ev=0,exposure_ev=0,scale_flag=0,
+                       post_knots=list(range(1024)),post_values=list(range(1024)))
+        actual=generate_model_tone_lookup(knots,knots,**arguments)
+        self.assertEqual(actual,[min(1023,2*i) for i in range(2048)])
+        self.assertEqual(knots,[0,4095,8190,16383])
+        self.assertEqual(arguments['range_fields'],[14,0,16383,1200,0,16383])
+        with self.assertRaisesRegex(ValueError,'increasing tail'):
+            generate_model_tone_lookup(knots,[0,0,0,0],**arguments)
+        with self.assertRaisesRegex(ValueError,'matching bounded'):
+            generate_model_tone_lookup(knots,[0,1],**arguments)
+
     def test_model_tone_style_indices(self):
         from camera_install.raw_recipe_reference import model_tone_style_index
         for style,index in ((0x21,7),(0x22,7),(0x23,7),(0x81,0),(0x82,1),

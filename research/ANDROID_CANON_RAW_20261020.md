@@ -1722,3 +1722,25 @@ The same instrumentation passed editor, project, PF3, LUT and tone checks.
 Private execution evidence: `raw-validation/flavor-android-native-20261027.txt`.
 ARM64 execution on a phone, other Flavor versions and full Canon RGB fidelity
 are not established by this test. No physical camera access occurred.
+
+### Composed tone generator on Android — 27 October
+
+`generate_model_tone_lookup` now composes baseline correction, editor exposure,
+range preparation, spline densification, coordinate warp, adaptive resampling
+and the final post-curve. The warp consumes the original dense X coordinates:
+its coefficients already incorporate the X range. Applying the separate X
+normalization again was rejected by the composed oracle comparison.
+
+Eight private native reference cases (RP2408, RP2440, EOS R and five nonzero
+editor exposures) match all 16,384 final integer entries exactly. The packaged
+Android x86-64 Python runtime also produced the eight exact table SHA-256s.
+The instrumentation reports `exactModelToneCases=8` and passes the existing
+editor/project/PF3/LUT checks. Fifty-one targeted host tests passed. The public
+test uses a synthetic linear curve and its analytical domain scaling; captured
+model curves remain private external test inputs and are not bundled.
+
+This generator is still a reference-stage API, not a caller in the Android
+pixel-development path. Model calibration provisioning, the full RGB/color
+pipeline and physical ARM64 execution remain unresolved. The installed preview
+must retain its uncalibrated-base label; this result does not justify applying
+the tone table to already gamma-encoded LibRaw RGB pixels.

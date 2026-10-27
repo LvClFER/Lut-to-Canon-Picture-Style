@@ -30,6 +30,21 @@ public final class CandidateChecks extends Instrumentation {
             if(!conversion.equals("relative-flexible-v5"))throw new AssertionError("Stale NP3 conversion engine");
             python.getModule("nikon_import");python.getModule("nikon_profile_data");
             result.putString("np3ConversionVersion",conversion);
+            if(inputs.containsKey("toneCases")) {
+                PyObject scope=python.getBuiltins().callAttr("dict");
+                scope.callAttr("__setitem__","tone_case_path",inputs.getString("toneCases"));
+                python.getBuiltins().callAttr("exec",
+                    "import json,hashlib,struct\nfrom pathlib import Path\n"
+                    +"from camera_install.raw_recipe_reference import generate_model_tone_lookup\n"
+                    +"case_file=Path(tone_case_path)\nassert case_file.stat().st_size<1024*1024\n"
+                    +"tone_cases=json.loads(case_file.read_text())\nassert 0<len(tone_cases)<=32\n"
+                    +"for case in tone_cases:\n"
+                    +" table=generate_model_tone_lookup(**case['arguments'])\n"
+                    +" assert len(table)==2048\n"
+                    +" assert hashlib.sha256(struct.pack('<2048I',*table)).hexdigest()==case['sha256'],case['name']\n",
+                    scope);
+                result.putInt("exactModelToneCases",scope.callAttr("__getitem__","tone_cases").asList().size());
+            }
             for(int i=0;i<6;i++)if(inputs.containsKey("baselineRaw"+i)) {
                 java.util.List<PyObject> developed=python.getModule("android_raw").callAttr("decode",
                     inputs.getString("baselineRaw"+i),context.getCacheDir().toString()).asList();

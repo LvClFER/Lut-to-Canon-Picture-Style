@@ -333,6 +333,34 @@ def resample_tone_curve(knots, values):
     return result
 
 
+def generate_model_tone_lookup(knots, values, *, settings, range_fields,
+                               raw_pivot, baseline_ev, exposure_ev,
+                               scale_flag, post_knots, post_values):
+    """Compose the observed model-curve stages; calibration data stays external."""
+    if not 2 <= len(knots) <= 64 or len(values) != len(knots):
+        raise ValueError('Require matching bounded model curve arrays')
+    dense_x, dense_y = densify_spline(knots, values)
+    end = len(values)-1
+    while end > 0 and values[end] <= values[end-1]:
+        end -= 1
+    if end == 0:
+        raise ValueError('Unsupported model curve without an increasing tail')
+    fields = correct_tone_range_baseline(range_fields, raw_pivot, baseline_ev)
+    fields = scale_tone_range_exposure(fields, exposure_ev)
+    lower, target, upper, y_lower, y_upper = prepare_tone_entry_ranges(fields)
+    _, normalized_y = normalize_tone_curve(
+        dense_x, dense_y, lower, upper, y_lower, y_upper)
+    parameters = derive_tone_warp_parameters(
+        settings, raw_pivot, target, lower, upper, scale_flag)
+    # The warp already incorporates the X range; normalizing X here applies it twice.
+    warped_x, warped_y = warp_tone_coordinates(
+        dense_x, normalized_y, raw_pivot=raw_pivot,
+        start_input=knots[0], end_input=knots[end], **parameters)
+    table = resample_tone_curve(warped_x, warped_y)
+    post = build_spline_lookup(post_knots, post_values, 1024, 1024)
+    return [post[value] for value in table]
+
+
 def _trunc_q12(value):
     return value//4096 if value>=0 else -((-value)//4096)
 
