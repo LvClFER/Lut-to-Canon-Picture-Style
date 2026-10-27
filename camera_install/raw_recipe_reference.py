@@ -525,3 +525,31 @@ def sample_tone64(values, coordinate):
     upper=min((coordinate+63)//64,2047)
     fraction=coordinate%64
     return values[lower]*(64-fraction)+values[upper]*fraction
+
+
+def apply_neutral_model_tone_rgb16(pixels, values):
+    """Bounded vector RGB-to-tone block; excludes optional gains/exposure planes."""
+    import numpy as np
+    source = np.asarray(pixels)
+    table = np.asarray(values)
+    if (source.ndim != 2 or source.shape[1] != 3 or not 1 <= len(source) <= 65536
+            or source.dtype.kind not in 'ui' or source.min() < 0 or source.max() > 65535):
+        raise ValueError('Require a bounded unsigned RGB16 pixel batch')
+    if (table.shape != (2048,) or table.dtype.kind not in 'ui'
+            or table.min() < 0 or table.max() > 1023):
+        raise ValueError('Require 2048 unsigned 10-bit tone values')
+    # Signed wide intermediates preserve the native vector floor for negative chroma.
+    red, green, blue = source.astype(np.int64).T
+    cb = (2048*blue-1356*green-691*red)//4096
+    cr = (2048*red-333*blue-1714*green)//4096
+    luma = (306*red+601*green+117*blue)//1024
+    coordinates = np.stack((
+        2*((4096*luma+5742*cr-2*cb+2048)//4096),
+        2*((4098*luma-2925*cr-1412*cb+2048)//4096),
+        2*((4095*luma+7254*cb+2048)//4096)),axis=1)
+    coordinates = np.clip(coordinates,0,131071)
+    lower = coordinates//64
+    upper = np.minimum((coordinates+63)//64,2047)
+    fraction = coordinates%64
+    table = table.astype(np.int64)
+    return (table[lower]*(64-fraction)+table[upper]*fraction).astype(np.uint16)

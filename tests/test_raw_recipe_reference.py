@@ -4,6 +4,25 @@ from camera_install.raw_recipe_reference import chroma_from_rgb16,rgb16_from_ycb
 
 
 class RawRecipeReferenceTests(unittest.TestCase):
+    def test_batched_neutral_model_tone_matches_scalar_pixel_reference(self):
+        import numpy as np
+        from camera_install.raw_recipe_reference import apply_neutral_model_tone_rgb16,pre_tone_rgb16
+        pixels=np.random.default_rng(31).integers(0,65536,size=(128,3),dtype=np.uint16)
+        pixels[:4]=[[0,0,0],[65535,65535,65535],[65535,0,0],[0,0,65535]]
+        table=[min(1023,i//2) for i in range(2048)]
+        original=pixels.copy()
+        expected=[[sample_tone64(table,max(0,min(131071,v)))
+                   for v in pre_tone_rgb16([int(c) for c in pixel],vectorized=True)] for pixel in pixels]
+        actual=apply_neutral_model_tone_rgb16(pixels,table)
+        np.testing.assert_array_equal(actual,expected)
+        np.testing.assert_array_equal(pixels,original)
+        self.assertEqual(actual.dtype,np.uint16)
+        for invalid in (pixels.astype(float),np.zeros((0,3),dtype=np.uint16),
+                        np.zeros((65537,3),dtype=np.uint16),[[True,False,True]],[[0,-1,0]],[[65536,0,0]]):
+            with self.assertRaises(ValueError):apply_neutral_model_tone_rgb16(invalid,table)
+        for invalid in (table[:-1],[True]*2048,[1024]*2048):
+            with self.assertRaises(ValueError):apply_neutral_model_tone_rgb16(pixels,invalid)
+
     def test_composed_model_tone_linear_curve_has_expected_domain_scaling(self):
         from camera_install.raw_recipe_reference import generate_model_tone_lookup
         knots=[0,4095,8190,16383]

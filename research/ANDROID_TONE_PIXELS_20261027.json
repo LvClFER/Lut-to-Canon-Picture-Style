@@ -1,0 +1,39 @@
+{
+  "cases": [
+    {
+      "probe": "raw-vector-tone-output-20261025",
+      "pixels": 2048,
+      "channelValues": 6144,
+      "mismatches": 0,
+      "generatedToneTable": true,
+      "capturedToneTableUsed": false
+    },
+    {
+      "probe": "raw-vector-tone-output-rp2440-20261025",
+      "pixels": 2048,
+      "channelValues": 6144,
+      "mismatches": 0,
+      "generatedToneTable": true,
+      "capturedToneTableUsed": false
+    },
+    {
+      "probe": "raw-vector-tone-output-eosr-20261025",
+      "pixels": 2048,
+      "channelValues": 6144,
+      "mismatches": 0,
+      "generatedToneTable": true,
+      "capturedToneTableUsed": false
+    }
+  ],
+  "androidX86": {
+    "exactModelToneCases": 8,
+    "exactModelTonePixelCases": 3,
+    "instrumentationCode": -1,
+    "editorProjectPf3LutChecksPassed": true
+  },
+  "hostTargetedTestsPassed": 52,
+  "maximumBatchPixels": 65536,
+  "calibrationOrCaptureVectorsBundled": false,
+  "productionPixelIntegration": false,
+  "physicalArm64Validated": false
+}

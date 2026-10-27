@@ -34,16 +34,23 @@ public final class CandidateChecks extends Instrumentation {
                 PyObject scope=python.getBuiltins().callAttr("dict");
                 scope.callAttr("__setitem__","tone_case_path",inputs.getString("toneCases"));
                 python.getBuiltins().callAttr("exec",
-                    "import json,hashlib,struct\nfrom pathlib import Path\n"
-                    +"from camera_install.raw_recipe_reference import generate_model_tone_lookup\n"
+                    "import json,hashlib,struct\nimport numpy as np\nfrom pathlib import Path\n"
+                    +"from camera_install.raw_recipe_reference import generate_model_tone_lookup,apply_neutral_model_tone_rgb16\n"
                     +"case_file=Path(tone_case_path)\nassert case_file.stat().st_size<1024*1024\n"
                     +"tone_cases=json.loads(case_file.read_text())\nassert 0<len(tone_cases)<=32\n"
                     +"for case in tone_cases:\n"
                     +" table=generate_model_tone_lookup(**case['arguments'])\n"
                     +" assert len(table)==2048\n"
-                    +" assert hashlib.sha256(struct.pack('<2048I',*table)).hexdigest()==case['sha256'],case['name']\n",
+                    +" assert hashlib.sha256(struct.pack('<2048I',*table)).hexdigest()==case['sha256'],case['name']\n"
+                    +" if 'pixels' in case:\n"
+                    +"  output=apply_neutral_model_tone_rgb16(np.asarray(case['pixels'],dtype=np.uint16),table)\n"
+                    +"  assert hashlib.sha256(output.astype('<u2').tobytes()).hexdigest()==case['pixelSha256'],case['name']\n",
                     scope);
                 result.putInt("exactModelToneCases",scope.callAttr("__getitem__","tone_cases").asList().size());
+                int pixelCases=0;
+                for(PyObject item:scope.callAttr("__getitem__","tone_cases").asList())
+                    if(item.callAttr("__contains__","pixels").toBoolean())pixelCases++;
+                result.putInt("exactModelTonePixelCases",pixelCases);
             }
             for(int i=0;i<6;i++)if(inputs.containsKey("baselineRaw"+i)) {
                 java.util.List<PyObject> developed=python.getModule("android_raw").callAttr("decode",

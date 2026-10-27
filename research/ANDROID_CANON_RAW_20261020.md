@@ -1744,3 +1744,25 @@ pixel-development path. Model calibration provisioning, the full RGB/color
 pipeline and physical ARM64 execution remain unresolved. The installed preview
 must retain its uncalibrated-base label; this result does not justify applying
 the tone table to already gamma-encoded LibRaw RGB pixels.
+
+### Generated table through RGB pixels on Android — 27 October
+
+`apply_neutral_model_tone_rgb16` implements the vector Q10/Q12 round trip,
+neutral clipping and step-64 tone interpolation in bounded batches of at most
+65,536 pixels. Signed int64 intermediates preserve negative-chroma flooring;
+output is RGB16. It validates integer input and table domains before computing.
+Optional gains and exposure planes are outside this function's scope.
+
+The generated table, rather than the privately captured final table, now feeds
+the RGB block. All 18,432 channel values match three native RP2408/RP2440/EOS R
+captures exactly. The packaged Android x86-64 runtime confirms the same three
+output hashes and all eight table hashes (`exactModelTonePixelCases=3`,
+`exactModelToneCases=8`). Fifty-two targeted host tests passed, including an
+independent scalar/batch comparison and invalid-domain checks.
+
+Evidence: `research/ANDROID_TONE_PIXELS_20261027.json` and the private
+`composed-tone-pixels-android-native-20261027.txt`. Source model curves and RGB
+capture vectors were supplied only as external test inputs, never APK assets.
+This validates the observed neutral RGB-to-tone block, not the preceding RAW
+development/color transformation or the complete output pipeline. The installed
+Android preview remains unchanged and explicitly uncalibrated.
