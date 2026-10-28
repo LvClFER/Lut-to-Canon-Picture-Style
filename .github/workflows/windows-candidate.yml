@@ -49,7 +49,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import hashlib, json, os, subprocess, tempfile
-          executable, = Path('windows-candidate').glob('*/CanonStyleStudio.exe')
+          executable, = Path('windows-candidate').glob('*/StyleStudio.exe')
           with tempfile.TemporaryDirectory() as temporary:
               root = Path(temporary)
               subprocess.run([str(executable.resolve()), '--startup-smoke'],
