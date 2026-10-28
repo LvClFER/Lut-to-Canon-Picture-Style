@@ -53,7 +53,7 @@ The editor uses the same six included basic PF3 files, independent serializers
 and editable project format as Windows. Native macOS state belongs in
 `~/Library/Application Support/CanonStyleStudio`, caches in
 `~/Library/Caches/CanonStyleStudio`, and user styles remain flat documents in
-`~/Documents/Canon Style Studio PF3`. The explicit portable-root override is
+`~/Documents/Style Studio PF3`. The explicit portable-root override is
 retained. Folder buttons use the system desktop service.
 
 `build_macos.py` builds an app bundle and a local disk image on macOS. Use an

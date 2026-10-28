@@ -1,4 +1,4 @@
-# Canon Style Studio Architecture Status
+# Style Studio Architecture Status
 
 Windows 1.0.0 release. The editor is stable; independent USB installation remains experimental outside the physically validated EOS RP.
 
@@ -30,7 +30,7 @@ Offline evidence covers the 77 catalog identifiers with synthetic live inputs an
 - `creative_controls.py`: normalized Tone Curve, Six Color-Axes, experimental Chrome-style transforms and deterministic creative 3D LUT generation.
 - `project_state.py`: atomic portable ZIP projects, embedded/deduplicated LUT assets, SHA-256/path validation, legacy JSON compatibility, `basePictureStyle`, snapshots and Undo/Redo.
 
-Style documents are flat files in the system Documents folder under `Canon Style Studio PF3/`. Each `.canonstyleproject` ZIP embeds its compiled PF3, base, adjustments and LUTs. Portable runtime state remains in `app_data/` beside the executable; camera PF3 extraction and reports use timestamped internal log folders. Duplicate style names receive numbered filenames instead of replacing prior exports. Legacy projects and plain PF3 remain readable.
+Style documents are flat files in the system Documents folder under `Style Studio PF3/`. Each `.canonstyleproject` ZIP embeds its compiled PF3, base, adjustments and LUTs. Portable runtime state remains in `app_data/` beside the executable; camera PF3 extraction and reports use timestamped internal log folders. Duplicate style names receive numbered filenames instead of replacing prior exports. Legacy projects and plain PF3 remain readable.
 
 The working path is deliberately:
 

@@ -1,10 +1,10 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title Canon Style Studio
+title Style Studio
 
 echo ============================================================
-echo Canon Style Studio
+echo Style Studio
 echo ============================================================
 echo.
 
@@ -46,8 +46,8 @@ set "APP_RC=%ERRORLEVEL%"
 
 echo.
 echo ============================================================
-echo Canon Style Studio terminou com codigo %APP_RC%.
-echo Log: "%LOCALAPPDATA%\CanonStyleStudio\logs\startup.log"
+echo Style Studio terminou com codigo %APP_RC%.
+echo Log: "%LOCALAPPDATA%\StyleStudio\logs\startup.log"
 echo ============================================================
 echo.
 echo Esta janela fica aberta de proposito.
