@@ -62,7 +62,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import json, os, subprocess, tempfile
-          executable, = Path('macos-candidate').glob('*/Canon Style Studio.app/Contents/MacOS/Canon Style Studio')
+          executable, = Path('macos-candidate').glob('*/StyleStudio.app/Contents/MacOS/StyleStudio')
           with tempfile.TemporaryDirectory() as temporary:
               root = Path(temporary)
               subprocess.run([str(executable.resolve()), '--startup-smoke'],

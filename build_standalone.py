@@ -12,11 +12,11 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from canon_runtime import BUILD_ID, PUBLIC_VERSION, BASIC_PF3_SHA256, basic_pf3_resource
+from canon_runtime import APP_NAME, BUILD_ID, PUBLIC_NAME, PUBLIC_VERSION, BASIC_PF3_SHA256, basic_pf3_resource
 
 
 HERE=Path(__file__).resolve().parent
-PUBLIC_RELEASE_NAME=f"CanonStyleStudio_{PUBLIC_VERSION}_Windows_x64"
+PUBLIC_RELEASE_NAME=f"StyleStudio_{PUBLIC_VERSION}_Windows_x64"
 CANON_FORBIDDEN_NAMES=(
     "dppcore.dll","edscfparse.dll","pseditor.exe","dppviewer.exe",
     "superia_selftest.pf3","superia_expected_block_8192.bin",
@@ -101,7 +101,7 @@ def build(output_root, folder_only=False):
         if not worker.is_file():raise RuntimeError("Standalone Canon worker was not generated")
         separator=";" if os.name=="nt" else ":"
         run([sys.executable,"-m","PyInstaller","--noconfirm","--clean","--onedir","--windowed",
-             "--name","CanonStyleStudio","--contents-directory","runtime",
+             "--name",APP_NAME,"--contents-directory","runtime",
              "--icon",str(HERE/"assets"/"app-icon.ico"),
              "--distpath",main_dist,"--workpath",temp/"main_work","--specpath",temp,
              "--add-binary",f"{worker}{separator}.",
@@ -109,15 +109,14 @@ def build(output_root, folder_only=False):
              "--add-data",f"{HERE/'example_luts'/'Lightroom_Hald_Template_512_64cube_sRGB_16bit.tif'}{separator}example_luts",
              "--add-data",f"{HERE/'camera_install'/'dynamic_camera_agent.js'}{separator}camera_install",
              "--add-data",f"{HERE/'basic_pf3'}{separator}basic_pf3",
-             "--add-data",f"{HERE/'assets'/'canon-logo.png'}{separator}assets",
              "--add-data",f"{HERE/'assets'/'app-icon.ico'}{separator}assets",
              "--add-data",f"{HERE/'assets'/'step-up.svg'}{separator}assets",
              "--add-data",f"{HERE/'assets'/'step-down.svg'}{separator}assets",
              "--add-data",f"{HERE/'assets'/'menu-down.svg'}{separator}assets",
              *[value for name in RESEARCH_ONLY_MODULES for value in ('--exclude-module',name)],
              HERE/"canon_style_studio.py"])
-        built=main_dist/"CanonStyleStudio"
-        if not (built/"CanonStyleStudio.exe").is_file():raise RuntimeError("Standalone application was not generated")
+        built=main_dist/APP_NAME
+        if not (built/f"{APP_NAME}.exe").is_file():raise RuntimeError("Standalone application was not generated")
         for debug_resource in (built/'runtime/PySide6/resources').glob('*.debug.*'):
             debug_resource.unlink()
         # Qt6Core on the supported Windows versions uses the Windows ICU
@@ -129,18 +128,18 @@ def build(output_root, folder_only=False):
             collected=built/"runtime"/dll_name
             if collected.is_file():collected.unlink()
         shutil.copytree(built,release)
-    for name in ("README.md","RELEASE_NOTES.md","TESTING_GUIDE.md","PUBLIC_ALPHA_RELEASE_NOTES.md","ARCHITECTURE_STATUS.md","CAMERA_COMPATIBILITY.md"):
+    for name in ("README.md","RELEASE_NOTES.md","TESTING_GUIDE.md","CAMERA_COMPATIBILITY.md"):
         shutil.copy2(HERE/name,release/name)
-    shutil.copytree(HERE/'docs',release/'docs')
-    (release/"START_CANON_STYLE_STUDIO.bat").write_text(
-        '@echo off\r\ncd /d "%~dp0"\r\nstart "" "CanonStyleStudio.exe"\r\n',encoding="ascii")
+    shutil.copytree(HERE/'docs',release/'docs',ignore=shutil.ignore_patterns('archive','images'))
+    (release/"START_STYLE_STUDIO.bat").write_text(
+        f'@echo off\r\ncd /d "%~dp0"\r\nstart "" "{APP_NAME}.exe"\r\n',encoding="ascii")
     manifest={"name":release_name,"version":PUBLIC_VERSION,"build_id":BUILD_ID,
               "created_utc":datetime.now(timezone.utc).isoformat(),"architecture":"Windows x64",
               "python_required":False,"java_required":False,"nodejs_required":False,"pse_required_for_canon_raw":True,
               "core_dependencies_bundled":True,"application_icon":"assets/app-icon.ico","new_project_base":"Standard",
-              "canon_resources_bundled":False,"entrypoint":"CanonStyleStudio.exe","distribution":"public",
+              "vendor_affiliation":"independent; Canon references are compatibility descriptions only","canon_resources_bundled":False,"entrypoint":f"{APP_NAME}.exe","distribution":"public",
               "camera_install":{"method":"target-PF3-scoped EdsCFParse acceptance correction; EOS Utility compiles and sends its original camera-native payload unchanged after live validation","model_specific_builders":False,"edsdk_payload_replaced":False,"edsdk_arguments_modified":False,"unvalidated_write_blocked_before_original_call":True,"compiler_symbol_resolution":"semantic signatures","validation":"live target PF3 plus exact compiler-to-EDSDK buffer comparison","offline_validated_transactions":["EOS 1300D / 16744","EOS RP / 16752","EOS R8 / 83076"],"physical_revalidation_required":True,"external_selftest_assets_required":False,"support_assets_bundled":False},
-              "portable_storage":{"settings":"app_data","camera_exports":"Documents/Canon Style Studio PF3","camera_logs":"app_data/logs/camera_install","style_format":"single .canonstyleproject archive"}}
+              "portable_storage":{"settings":"app_data","camera_exports":"Documents/Style Studio PF3","camera_logs":"app_data/logs/camera_install","style_format":"single .canonstyleproject archive"}}
     manifest['independent_camera_install']={
         'method':'independent PF3 compiler and isolated Windows WPD session',
         'experimental':True,'physical_validation':['EOS RP / NC and Aerochrome / User Def. 3','EOS RP / Aerochrome / User Def. 2 / RC5 readback and user visual confirmation'],
@@ -165,7 +164,7 @@ def build(output_root, folder_only=False):
     (release/"STANDALONE_MANIFEST.json").write_text(json.dumps(manifest,indent=2),encoding="utf-8")
     problems=audit(release)
     if problems:raise RuntimeError("Standalone audit found forbidden files:\n"+"\n".join(problems))
-    audit_modules(release/'CanonStyleStudio.exe')
+    audit_modules(release/f'{APP_NAME}.exe')
     if folder_only:
         print(f"[PASS] {release}")
         print("[PASS] Public folder only; no ZIP generated")

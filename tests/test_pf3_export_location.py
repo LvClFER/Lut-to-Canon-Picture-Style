@@ -13,7 +13,7 @@ class ExportLocationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, \
                 patch('canon_runtime.documents_dir', return_value=Path(directory)):
             folder = exported_styles_dir()
-            self.assertEqual(folder, Path(directory) / 'Canon Style Studio PF3')
+            self.assertEqual(folder, Path(directory) / 'Style Studio PF3')
             original = style_export_path('Classic Cuban')
             original.write_bytes(b'original')
             self.assertEqual(style_export_path('Classic Cuban').name, 'Classic Cuban (2).canonstyleproject')

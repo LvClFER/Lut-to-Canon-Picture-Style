@@ -12,8 +12,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
-APP_NAME = "CanonStyleStudio"
-PUBLIC_NAME = "Canon Style Studio"
+APP_NAME = "StyleStudio"
+PUBLIC_NAME = "Style Studio"
 PUBLIC_VERSION = "1.0.0"
 BUILD_ID = "2026-10-24-WINDOWS-NP3-SMOOTH-CANDIDATE"
 
@@ -74,7 +74,7 @@ def documents_dir() -> Path:
 
 
 def exported_styles_dir() -> Path:
-    path = documents_dir() / 'Canon Style Studio PF3'
+    path = documents_dir() / 'Style Studio PF3'
     path.mkdir(parents=True, exist_ok=True)
     return path
 

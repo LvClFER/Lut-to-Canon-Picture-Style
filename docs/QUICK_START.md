@@ -1,11 +1,11 @@
 # Quick start
 
 1. Download the Windows x64 ZIP from the [v1.0.0 release](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/releases/tag/v1.0.0).
-2. Extract the entire ZIP and run `CanonStyleStudio.exe`. Keep its `runtime` folder beside it.
+2. Extract the entire ZIP and run `StyleStudio.exe`. Keep its `runtime` folder beside it.
 3. Open a photo or supported RAW file. RAW Development is the first adjustment panel. Standard is the starting base style.
 4. Import a `.cube`/Hald LUT or create a look under **LUT GENERATOR · COLOR GRADING**. Use **Split** for before/after and **Compare LUTs…** to compare imported LUTs separately.
 5. Use **Save Project** / **Save style** for an editable `.canonstyleproject` and PF3 export. Use **Export .cube…** in the LUT generator for a generic sRGB colour LUT.
-6. Projects and styles default to **Documents / Canon Style Studio PF3**. Opening a style preserves reference photographs already loaded in the editor.
+6. Projects and styles default to **Documents / Style Studio PF3**. Opening a style preserves reference photographs already loaded in the editor.
 
 ## RAW rendering
 

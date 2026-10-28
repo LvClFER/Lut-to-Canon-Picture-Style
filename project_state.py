@@ -6,7 +6,7 @@ from dataclasses import dataclass, field, asdict
 from canon_runtime import app_data_dir, legacy_app_data_dir
 from creative_controls import DEFAULT_CREATIVE_CONTROLS, DEFAULT_RECIPE_WB
 
-APP_DIR_NAME = "CanonStyleStudio"
+APP_DIR_NAME = "StyleStudio"
 PORTABLE_FORMAT = "canon-style-studio-portable-project"
 PORTABLE_FORMAT_VERSION = 2
 MAX_LUT_FILES = 128

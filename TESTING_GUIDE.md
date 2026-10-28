@@ -1,4 +1,4 @@
-# Testing Canon Style Studio
+# Testing Style Studio
 
 ## Automated checks (no camera access)
 
@@ -20,7 +20,7 @@ The test suite lives in `tests/`. USB tests use injected transports and syntheti
 4. Use the LUT generator, import two LUTs, compare them independently, change layer strength/order, and test undo/redo plus A/B/C snapshots.
 5. Export a PF3 and .cube LUTs at 17/33/65 points. RAW development, camera base rendering and sharpening are excluded from .cube export.
 6. Save/reopen an editable project. Loading a different style must preserve photos already loaded in the editor; saved references are used when no photos are loaded.
-7. Verify exports appear directly in Documents / Canon Style Studio PF3 and duplicate names receive a numbered suggestion.
+7. Verify exports appear directly in Documents / Style Studio PF3 and duplicate names receive a numbered suggestion.
 8. If PSE is installed, test its RAW renderer with portrait/landscape CR2/CR3 files, exposure/WB and native basic controls. Without it, check the clearly distinct LibRaw fallback. Do not treat a camera's embedded JPEG as a neutral RAW reference.
 9. Optionally use RAW samples to open a DPReview gallery and download an available RAW. Any site verification is completed by the user. Confirm source and author credit remain visible.
 

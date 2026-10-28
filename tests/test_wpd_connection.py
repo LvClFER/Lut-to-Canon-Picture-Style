@@ -47,7 +47,7 @@ class WpdConnectionTests(unittest.TestCase):
             with connection:
                 sender = connection.commands
                 self.assertEqual(log, ['open', ('release', 2)])
-                self.assertEqual(name.call_args.args[2], 'Canon Style Studio')
+                self.assertEqual(name.call_args.args[2], 'Style Studio')
                 self.assertEqual(setters.call_args.args[2], 0x80000000)
             self.assertEqual(log, ['open', ('release', 2), 'close', ('release', 1), 'uninitialize'])
             with self.assertRaisesRegex(RuntimeError, 'closed'):

@@ -60,9 +60,8 @@ class EditorialLayoutTests(unittest.TestCase):
         sections=[self.window.side_layout.itemAt(i).widget() for i in range(self.window.side_layout.count())
             if isinstance(self.window.side_layout.itemAt(i).widget(),studio.CollapsibleSection)]
         self.assertIs(sections[0],self.window.raw_section)
-        self.assertFalse(self.window.brand_logo.pixmap().isNull())
-        self.assertEqual(self.window.brand_logo.pixmap().width(),102)
-        self.assertLess(self.window.brand_logo.pixmap().height(),25)
+        self.assertFalse(hasattr(self.window,'brand_logo'))
+        self.assertTrue(any(label.text() == 'STYLE STUDIO' for label in self.window.findChildren(studio.QLabel)))
 
     def test_adjustment_cards_still_update_the_exported_editor_state(self):
         window=self.window

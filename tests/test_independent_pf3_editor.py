@@ -289,7 +289,7 @@ class IndependentEditorTests(unittest.TestCase):
                 self.assertTrue(window.resolve_current_base()['independent'])
                 window.settings.data['last_export_folder'] = str(self.root / 'old' / 'nested' / 'folder')
                 dialog = ExportDialog(window)
-                self.assertEqual(Path(dialog.path.text()).parent, self.root / 'Documents' / 'Canon Style Studio PF3')
+                self.assertEqual(Path(dialog.path.text()).parent, self.root / 'Documents' / 'Style Studio PF3')
                 output = self.root / 'FromEditor.canonstyleproject'
                 dialog.path.setText(str(output))
                 dialog.start_export()
@@ -326,7 +326,7 @@ class IndependentEditorTests(unittest.TestCase):
                         camera_dialog.worker.function()
                         self.assertEqual(export.call_args.args[2].parent.parent,
                                          self.root / 'app_data' / 'logs' / 'camera_install')
-                        self.assertEqual(len(list((self.root / 'Documents' / 'Canon Style Studio PF3').iterdir())), 1)
+                        self.assertEqual(len(list((self.root / 'Documents' / 'Style Studio PF3').iterdir())), 1)
                         self.assertEqual(installer.return_value.prepare_and_arm.call_args.args[3].parent,
                                          self.root / 'app_data' / 'logs' / 'camera_install')
                 finally:

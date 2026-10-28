@@ -50,8 +50,8 @@ jobs:
               subprocess.run(['hdiutil', 'attach', '-readonly', '-nobrowse',
                   '-mountpoint', str(mount), str(image.resolve())], check=True, timeout=60)
               try:
-                  app = mount / 'Canon Style Studio.app'
-                  executable = app / 'Contents/MacOS/Canon Style Studio'
+                  app = mount / 'StyleStudio.app'
+                  executable = app / 'Contents/MacOS/StyleStudio'
                   manifest = json.loads((mount / 'BUILD_MANIFEST.json').read_text())
                   assert manifest['architecture'] == architecture
                   assert manifest['buildId'] == '2026-10-24-WINDOWS-NP3-SMOOTH-CANDIDATE'

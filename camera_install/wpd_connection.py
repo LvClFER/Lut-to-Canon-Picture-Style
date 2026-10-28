@@ -94,7 +94,7 @@ class WpdConnection:
             client = self._client
             if not self._device.value or not client.value:
                 raise RuntimeError('COM creation returned null interface')
-            api._set_string(client, api._PropertyKey.create(api._CLIENT_CATEGORY, 2), 'Canon Style Studio')
+            api._set_string(client, api._PropertyKey.create(api._CLIENT_CATEGORY, 2), 'Style Studio')
             for pid, value in ((3, 1), (4, 0), (5, 0),
                                (9, api._GENERIC_READ_WRITE if self._write or self._control else api._GENERIC_READ)):
                 api._set_unsigned(client, api._PropertyKey.create(api._CLIENT_CATEGORY, pid), value)

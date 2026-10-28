@@ -10,11 +10,10 @@ import subprocess
 import sys
 import tempfile
 
-from canon_runtime import BASIC_PF3_SHA256,BUILD_ID,PUBLIC_VERSION,basic_pf3_resource
+from canon_runtime import APP_NAME,BASIC_PF3_SHA256,BUILD_ID,PUBLIC_NAME,PUBLIC_VERSION,basic_pf3_resource
 from build_standalone import RESEARCH_ONLY_MODULES,audit,audit_modules,require_raw_decoder
 
 HERE=Path(__file__).resolve().parent
-APP_NAME='Canon Style Studio'
 ARCHITECTURES=('arm64','x86_64','universal2')
 
 
@@ -47,7 +46,6 @@ def commands(work,arch):
         'org.canonstylestudio.app','--distpath',str(work/'app'),
         '--add-binary',str(work/'worker/canon_dpp_worker')+':.',
         '--add-data',str(HERE/'basic_pf3')+':basic_pf3',
-        '--add-data',str(HERE/'assets/canon-logo.png')+':assets',
         '--add-data',str(HERE/'assets/app-icon.ico')+':assets',
         '--add-data',str(HERE/'assets/step-up.svg')+':assets',
         '--add-data',str(HERE/'assets/step-down.svg')+':assets',
@@ -67,7 +65,7 @@ def build(output,arch):
     decoder=require_raw_decoder()
     native_camera=require_native_camera_api()
     output=Path(output).resolve();output.mkdir(parents=True,exist_ok=True)
-    destination=output/(f'CanonStyleStudio_{PUBLIC_VERSION}_macOS_{arch}')
+    destination=output/(f'{APP_NAME}_{PUBLIC_VERSION}_macOS_{arch}')
     if destination.exists():raise FileExistsError('Candidate folder already exists')
     image=output/(destination.name+'.dmg')
     if image.exists():raise FileExistsError('Disk image already exists')

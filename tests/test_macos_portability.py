@@ -15,8 +15,8 @@ class MacPortabilityTests(unittest.TestCase):
             with patch('canon_runtime.sys.platform','darwin'),patch.dict(os.environ,{},clear=True), \
                     patch.object(Path,'home',return_value=home), \
                     patch('canon_runtime.application_root',side_effect=AssertionError('App bundle is read-only')):
-                self.assertEqual(runtime.app_data_dir(),home/'Library/Application Support/CanonStyleStudio')
-                self.assertEqual(runtime.cache_dir(),home/'Library/Caches/CanonStyleStudio')
+                self.assertEqual(runtime.app_data_dir(),home/'Library/Application Support/StyleStudio')
+                self.assertEqual(runtime.cache_dir(),home/'Library/Caches/StyleStudio')
                 self.assertEqual(runtime.logs_dir().parent,runtime.app_data_dir())
 
     def test_portable_override_remains_available_on_mac_and_windows(self):
@@ -47,7 +47,7 @@ class MacPortabilityTests(unittest.TestCase):
                 self.assertEqual(worker[worker.index('--target-arch')+1],arch)
                 self.assertEqual(app[app.index('--target-arch')+1],arch)
                 self.assertIn(str(build_macos.HERE/'basic_pf3')+':basic_pf3',app)
-                self.assertIn(str(build_macos.HERE/'assets/canon-logo.png')+':assets',app)
+                self.assertFalse(any('canon-logo.png' in value for value in app))
                 self.assertIn('--windowed',app)
                 self.assertIn('camera_install.macos_ptp',app)
                 self.assertFalse(any('upload' in value or 'publish' in value for value in worker+app))

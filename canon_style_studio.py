@@ -887,11 +887,7 @@ class CanonStyleStudioQt(QMainWindow):
     def build_ui(self):
         root=QWidget(); self.setCentralWidget(root); main=QVBoxLayout(root); main.setContentsMargins(0,0,0,0); main.setSpacing(0)
         top=QFrame(); top.setObjectName("TopBar"); top.setFixedHeight(76); tl=QHBoxLayout(top); tl.setContentsMargins(32,12,32,12); tl.setSpacing(10)
-        self.brand_logo=QLabel();self.brand_logo.setAccessibleName('Canon');self.brand_logo.setToolTip(APP_VERSION)
-        # The supplied artwork has transparent padding; crop only its displayed source rectangle.
-        logo=QPixmap(str(HERE/'assets/canon-logo.png')).copy(38,326,1193,248)
-        self.brand_logo.setPixmap(logo.scaledToWidth(102,Qt.TransformationMode.SmoothTransformation));tl.addWidget(self.brand_logo)
-        app=QLabel("STYLE STUDIO");app.setObjectName("AppTitle");tl.addWidget(app);tl.addSpacing(16)
+        app=QLabel("STYLE STUDIO");app.setObjectName("AppTitle");app.setToolTip(APP_VERSION);tl.addWidget(app);tl.addSpacing(16)
         self.open_btn=QPushButton("Open");self.open_btn.clicked.connect(self.open_dialog);tl.addWidget(self.open_btn)
         self.save_btn=QPushButton("Save Project");self.save_btn.clicked.connect(self.save_project_action);tl.addWidget(self.save_btn)
         self.open_btn.setObjectName('NavButton');self.save_btn.setObjectName('NavButton')
@@ -1198,10 +1194,10 @@ class CanonStyleStudioQt(QMainWindow):
             "• Sharpness preview (approximate)\n"
             "• Tone Curve, Six Color-Axes and Chrome-style controls (LUT-baked)\n"
             "• Compatibility with untested Canon bodies\n\n"
-            "Canon software and libraries are not distributed with Canon Style Studio.\n"
+            "Canon software and libraries are not distributed with Style Studio.\n"
             "Send to Camera corrects arbitrary-table acceptance inside Canon's compiler for the selected PF3; EOS Utility builds and sends its original camera-native payload unchanged. EOS RP and EOS R8 have been physically exercised; other bodies remain experimental until tested.\n"
             "No external support binaries or Manual Loader package is required; live compiler validation uses the Canon software installed on this PC.\n"
-            "Canon Style Studio is independent experimental software and is not affiliated with or endorsed by Canon.")
+            "Style Studio is independent experimental software and is not affiliated with or endorsed by Canon.")
 
     def test_report_payload(self):
         source=Path(self.current_source_path) if self.current_source_path else None
@@ -1274,7 +1270,7 @@ class CanonStyleStudioQt(QMainWindow):
         if include:
             answer=QMessageBox.warning(self,"Include source RAW","The original RAW will be included in the report ZIP. Continue?",QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No,QMessageBox.StandardButton.No)
             if answer!=QMessageBox.StandardButton.Yes:return
-        default=reports_dir()/f"CanonStyleStudio_TestReport_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        default=reports_dir()/f"StyleStudio_TestReport_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
         path,_=QFileDialog.getSaveFileName(self,"Save Test Report",str(default),"ZIP archive (*.zip)")
         if not path:return
         try:
@@ -2053,8 +2049,8 @@ def _write_startup_error(text):
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("Canon Style Studio")
-    app.setOrganizationName("CanonStyleStudio")
+    app.setApplicationName(PUBLIC_NAME)
+    app.setOrganizationName("StyleStudio")
     app.setStyle("Fusion")
     app.setStyleSheet(app_stylesheet())
 
@@ -2065,7 +2061,7 @@ def main():
         tb = traceback.format_exc()
         error_path=_write_startup_error(tb)
         try:
-            QMessageBox.critical(None, "Canon Style Studio · startup error",
+            QMessageBox.critical(None, f"{PUBLIC_NAME} · startup error",
                                  "A aplicação falhou durante o arranque.\n\n"
                                  f"O erro foi guardado em:\n{error_path or 'startup_error.log'}\n\n" + tb)
         except Exception:
