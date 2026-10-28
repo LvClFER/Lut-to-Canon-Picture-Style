@@ -10,6 +10,21 @@ The bundles use the Style Studio identity. These are test candidates, not a
 macOS release. No physical camera access was performed. The older evidence
 below applies only to its named commits and runs.
 
+Both downloaded DMGs also passed a separate native mount, architecture,
+signature, six-base PF3 hash, logo-absence and Cocoa startup check in
+[run 40780684939](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/actions/runs/40780684939).
+The local files match the DMG hashes recorded by those native checks:
+
+| Architecture | DMG SHA-256 |
+| --- | --- |
+| arm64 | `42a286a3cbd7922136e11e8c1e92744a0f7ca9eea1fea54581da9ecd98e9da73` |
+| x86_64 | `e9c8a2e8da6453d25fb447e694e14c379bf06933985e49f247a8dd8e4eea753a` |
+
+Signature verification here does not establish Apple notarization or a
+Developer ID signature. Real-user editing, download/quarantine behavior and
+physical USB camera operation still need validation on a Mac. These checks
+do not broaden the physically validated camera list.
+
 ## Current source versus validated bundles — 27 October
 
 Both current-source native jobs in
