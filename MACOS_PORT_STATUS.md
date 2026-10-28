@@ -1,5 +1,15 @@
 # macOS port — local work, not a release
 
+## Latest candidate — 28 October 2026
+
+Both native architectures passed integration tests, the complete test suite,
+packaging, bundle audit, and frozen GUI/worker startup in
+[run 40775782035](https://github.com/LvClFER/Lut-to-Canon-Picture-Style/actions/runs/40775782035),
+at source commit `392a424b66a9182085eefe95583de46e287bdf51`.
+The bundles use the Style Studio identity. These are test candidates, not a
+macOS release. No physical camera access was performed. The older evidence
+below applies only to its named commits and runs.
+
 ## Current source versus validated bundles — 27 October
 
 Both current-source native jobs in
