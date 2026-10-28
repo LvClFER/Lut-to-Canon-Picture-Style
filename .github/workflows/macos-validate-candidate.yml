@@ -26,7 +26,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: macos-candidate-${{ matrix.arch }}
-          run-id: 40519938596
+          run-id: 40775782035
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: candidate
       - name: Verify the DMG and start the native Cocoa interface
@@ -57,7 +57,7 @@ jobs:
                   assert manifest['buildId'] == '2026-10-24-WINDOWS-NP3-SMOOTH-CANDIDATE'
                   assert len(manifest['basicPf3Sha256']) == 6
                   resources = app / 'Contents/Resources'
-                  assert (resources / 'assets/canon-logo.png').is_file()
+                  assert not (resources / 'assets/canon-logo.png').exists()
                   for name, expected in manifest['basicPf3Sha256'].items():
                       assert Path(name).name == name and name.endswith('.pf3')
                       assert hashlib.sha256((resources / 'basic_pf3' / name).read_bytes()).hexdigest() == expected
@@ -70,11 +70,11 @@ jobs:
                           CANON_STYLE_STUDIO_PORTABLE_ROOT=str(root / 'gui-state')))
               finally:
                   subprocess.run(['hdiutil', 'detach', str(mount)], check=True, timeout=30)
-          proof = dict(architecture=architecture, sourceRunId=40519938596,
+          proof = dict(architecture=architecture, sourceRunId=40775782035,
               dmgSha256=digest.hexdigest(), nativeCocoaStartupPassed=True,
               signatureVerified=True, cameraAccess=False, releaseCreated=False)
           proof['bundledBasicPf3HashesVerified'] = True
-          proof['canonLogoPresent'] = True
+          proof['canonLogoPresent'] = False
           Path('GUI_STARTUP_' + architecture + '.json').write_text(json.dumps(proof, indent=2))
           PY
       - uses: actions/upload-artifact@v4
